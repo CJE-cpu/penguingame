@@ -323,6 +323,111 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
 
+    def test_action_frames_and_paused_instruction_timers(self):
+        g = self.game
+        for action in ('slide','swim'):
+            g.animation.clock = 0
+            first = g.animation.action_image(action,True)
+            g.animation.clock = 0.23
+            second = g.animation.action_image(action,True)
+            self.assertNotEqual(pg.image.tobytes(first,'RGBA'),pg.image.tobytes(second,'RGBA'))
+            self.assertGreater(first.get_width(),first.get_height())
+        g.coach.enabled = True
+        g.coach.explain('slide')
+        g.effects['speed'] = 5
+        g.content.escape_active = True
+        g.content.escape_left = 12
+        g.content.diving = True
+        position,time,oxygen = g.player.copy(),g.time,g.content.oxygen
+        enemy = g.enemies[0].rect.copy()
+        g.update(2,1,True,True,1)
+        self.assertEqual(g.player,position)
+        self.assertEqual(g.enemies[0].rect,enemy)
+        self.assertEqual(g.time,time)
+        self.assertEqual(g.effects['speed'],5)
+        self.assertEqual(g.content.escape_left,12)
+        self.assertEqual(g.content.oxygen,oxygen)
+        g.handle_key(pg.K_e)
+        self.assertIsNotNone(g.coach.modal)
+        self.assertFalse(g.handle_key(pg.K_SPACE))
+        self.assertIsNone(g.coach.modal)
+        g.update(1)
+        self.assertEqual(g.content.oxygen,oxygen-1)
+        self.assertFalse(g.coach.explain('slide'))
+        self.assertIsNone(g.coach.modal)
+
+    def test_complete_tutorial_with_real_controls(self):
+        g = self.game
+        g.reset()
+        g.handle_key(pg.K_RETURN)
+        t = g.tutorial
+        self.assertIsNotNone(t)
+        self.assertIsNotNone(g.coach.modal)
+        g.handle_key(pg.K_RETURN)
+        for _ in range(120):
+            g.update(1/60,1)
+            if t.step==1:
+                break
+        self.assertEqual(t.step,1)
+        g.handle_key(pg.K_RETURN)
+        for frame in range(120):
+            g.update(1/60,1,frame==0)
+            if t.step==2:
+                break
+        self.assertEqual(t.step,2)
+        g.handle_key(pg.K_RETURN)
+        for _ in range(180):
+            g.update(1/60,1,slide=True)
+            if t.step==3:
+                break
+        self.assertEqual(t.step,3)
+        g.handle_key(pg.K_RETURN)
+        for _ in range(60):
+            g.update(1/60,1)
+            if abs(t.player.centerx-t.baby.centerx)<50:
+                break
+        g.handle_key(pg.K_e)
+        self.assertTrue(t.carrying)
+        for _ in range(100):
+            g.update(1/60,1)
+            if t.step==4:
+                break
+        self.assertEqual(t.step,4)
+        g.handle_key(pg.K_RETURN)
+        g.handle_key(pg.K_TAB)
+        self.assertTrue(g.content.book_open)
+        g.draw(self.screen)
+        g.handle_key(pg.K_TAB)
+        self.assertEqual(t.step,5)
+        g.handle_key(pg.K_RETURN)
+        for _ in range(150):
+            g.update(1/60,1)
+            if abs(t.player.centerx-t.hole.centerx)<40:
+                break
+        g.handle_key(pg.K_e)
+        self.assertTrue(t.diving)
+        for _ in range(200):
+            dx,dy = 470-t.swimmer.x,350-t.swimmer.y
+            g.update(1/60,0 if abs(dx)<3 else (1 if dx>0 else -1),swim_vertical=0 if abs(dy)<3 else (1 if dy>0 else -1))
+            if t.swim_fish:
+                break
+        self.assertTrue(t.swim_fish)
+        g.draw(self.screen)
+        for _ in range(200):
+            dx,dy = 100-t.swimmer.x,170-t.swimmer.y
+            g.update(1/60,0 if abs(dx)<3 else (1 if dx>0 else -1),swim_vertical=0 if abs(dy)<3 else (1 if dy>0 else -1))
+            if t.swimmer.distance_to((100,170))<60:
+                break
+        g.handle_key(pg.K_e)
+        self.assertTrue(t.finished)
+        g.handle_key(pg.K_RETURN)
+        self.assertIsNone(g.tutorial)
+        self.assertTrue(g.started)
+        self.assertEqual(g.score,0)
+        self.assertEqual(g.content.wallet,0)
+        self.assertFalse(any(j['found'] for j in g.content.journals))
+        self.assertEqual(g.player.topleft,(55,498))
+
     def test_rescue_quests_sliding_and_feed(self):
         g = self.game
         g.enemies = []
@@ -367,7 +472,7 @@ class AdventureChecks(unittest.TestCase):
         shore = g.player.midbottom
         c.action(g)
         self.assertTrue(c.diving)
-        self.assertEqual(c.oxygen,18)
+        self.assertEqual(c.oxygen,35)
         c.swimmer.update(c.ocean_fish[0][1].center)
         g.update(1/60,1,swim_vertical=1)
         self.assertEqual(len(c.ocean_fish),5)

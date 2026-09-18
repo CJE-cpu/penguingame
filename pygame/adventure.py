@@ -10,6 +10,7 @@ JOURNALS = [
     ('빙붕 탈출 기록', '무너지는 빙붕을 건너면 보금자리가 보인다.'),
     ('함께 만든 집', '돌아온 친구들과 작은 둥지를 꾸미기로 했다.')]
 HOME_UPGRADES = [('따뜻한 둥지', 5), ('탐험 깃발', 8), ('얼음 꽃밭', 10)]
+OXYGEN_DURATION = 35.0
 
 
 class AdventureContent:
@@ -30,7 +31,7 @@ class AdventureContent:
         self.lever = pg.Rect(platform.left+20, platform.top-34, 25, 34)
         self.hole = pg.Rect(670, 533, 64, 17)
         self.diving = False
-        self.oxygen = 18.0
+        self.oxygen = OXYGEN_DURATION
         self.swimmer = pg.Vector2(100, 115)
         self.dive_return = None
         self.ocean_fish = [(kind, pg.Rect(x,y,36,24)) for kind,x,y in
@@ -78,10 +79,11 @@ class AdventureContent:
                 self.say('친구를 먼저 이글루에 데려다 주세요.')
             else:
                 self.diving = True
-                self.oxygen = 18.0
+                self.oxygen = OXYGEN_DURATION
                 self.swimmer.update(100,115)
                 self.dive_return = game.player.midbottom
                 self.say('잠수! 방향키로 수영 · 왼쪽 위 구멍에서 E로 나가기')
+                game.coach.explain('swim')
             return
         home = game.checkpoints[-1]
         if self.nearby(game,home):
@@ -155,6 +157,7 @@ class AdventureContent:
                 self.say('빙붕 탈출 시간 초과! 입구에서 다시 도전하세요.')
 
     def swim(self, game, dt, direction, vertical):
+        game.animation.clock += dt
         self.notice_left = max(0,self.notice_left-dt)
         self.oxygen -= dt
         movement = pg.Vector2(direction,vertical)
@@ -189,7 +192,7 @@ class AdventureContent:
         if not self.quests[2] and self.nearby(game,self.lever):
             return 'E: 길 안내 깃발 세우기'
         if self.nearby(game,self.hole):
-            return 'E: 바닷속 탐험 · 산소 18초 · 구멍으로 돌아오기'
+            return 'E: 바닷속 탐험 · 산소 35초 · 구멍으로 돌아오기'
         if self.nearby(game,game.checkpoints[-1]):
             if not game.fish and game.rescued==3 and not self.escape_cleared:
                 return 'E: 마지막 빙붕 탈출 도전'
@@ -290,12 +293,18 @@ class AdventureContent:
             pg.draw.circle(screen,(104,181,211),(x,y),3,1)
         for kind,rect in self.ocean_fish:
             screen.blit(game.fish_images[kind],rect.move(-camera,round(math.sin(game.time*4+rect.x)*4)))
-        image = pg.transform.rotate(game.animation.image(False,game.facing_right),-70 if game.facing_right else 70)
+        image = game.animation.action_image('swim',game.facing_right)
         screen.blit(image,image.get_rect(center=(round(self.swimmer.x-camera),round(self.swimmer.y))))
+        for i in range(5):
+            phase = (game.animation.clock*1.4+i/5)%1
+            side = -1 if game.facing_right else 1
+            x = round(self.swimmer.x-camera+side*(35+phase*40))
+            y = round(self.swimmer.y-5-phase*12)
+            pg.draw.circle(screen,(136,210,234),(x,y),max(1,round(3*(1-phase))),1)
         game.ui.panel(screen,(12,12,776,56))
         game.ui.text(screen,f'남극 바닷속 탐험 · 산소 {max(0,self.oxygen):.1f}초',(29,24),game.ui.body)
         game.ui.text(screen,f'먹이 {self.wallet} · 보너스 물고기 {6-len(self.ocean_fish)}/6',(520,26),game.ui.small)
-        pg.draw.rect(screen,(107,218,239),(30,54,round(450*max(0,self.oxygen)/18),5))
+        pg.draw.rect(screen,(107,218,239),(30,54,round(450*max(0,self.oxygen)/OXYGEN_DURATION),5))
         game.ui.panel(screen,(12,563,776,30))
         game.ui.text(screen,'방향키 / WASD 수영 · 왼쪽 위 구멍에서 E로 나가기 · 산소가 떨어지기 전에 귀환!',(28,569),game.ui.small)
         game.ui.text(screen,'출구 E' if camera<140 else '← 출구로 귀환',

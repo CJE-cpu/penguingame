@@ -117,13 +117,13 @@ class IceUI:
         self.panel(screen, (32, 24, 736, 550))
         self.icon(screen, game.penguin_right, (100, 83), (49, 66))
         self.text(screen, '남극 펭귄의 모험', (146, 43), self.title)
-        self.text(screen, '여섯 개의 얼음 지대를 탐험하고 친구들을 집으로 데려오세요.', (147, 98), self.small, MUTED)
+        self.text(screen, '연습 해안에서 조작을 배우고, 여섯 지대의 친구들을 구해주세요.', (147, 98), self.small, MUTED)
         self.panel(screen, (54, 136, 692, 58), dark=True)
         self.text(screen, '물고기 30마리 + 친구 3마리 구조 + 빙붕 탈출 후 귀환', (400, 154), self.body, 'white', center=True)
         self.text(screen, '친구의 부탁을 해결하면 동행 시작 · 이글루에 데려다 주면 +100점', (400, 177), self.small, (224,248,255), center=True)
         cards = [
             (game.penguin_right, '배로 미끄러지기', '↓ + 이동: 빠른 활주 · 얼음 껍질 돌파'),
-            (game.fish_images['blue'], '잠수 탐험 · 산소 18초', '해안 구멍 E · 방향키 수영 · 구멍으로 귀환'),
+            (game.fish_images['blue'], '잠수 탐험 · 산소 35초', '해안 구멍 E · 방향키 수영 · 구멍으로 귀환'),
             (game.baby_image, '친구마다 다른 구조 미션', '얼음 깨기 · 먹이 3마리 · 깃발 레버 E'),
             (game.chest_image, '숨겨진 길과 탐험 일지', '동굴 E: 지름길 · 옆길 일지: TAB 읽기'),
             (game.igloo_image, '친구들과 꾸미는 보금자리', '마지막 이글루 E · 물고기로 둥지와 장식'),
@@ -136,8 +136,8 @@ class IceUI:
             self.text(screen, detail, (x+60,y+38), self.small, MUTED)
         self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료', (400, 456), self.small, MUTED, center=True)
         self.panel(screen, (149, 483, 502, 49), dark=True)
-        self.text(screen, 'ENTER 또는 SPACE로 모험 시작', (400, 507), self.heading, 'white', center=True)
-        self.text(screen, '물약: 성장 · 가속 · 좌우 반전 8초   |   잠수·일지·집 꾸미기는 선택 탐험', (400, 552), self.small, MUTED, center=True)
+        self.text(screen, 'ENTER 튜토리얼 시작 · N 바로 모험', (400, 507), self.heading, 'white', center=True)
+        self.text(screen, '설명창이 뜨면 게임 정지 · ENTER / SPACE 확인   |   잠수·일지·집 꾸미기는 선택', (400, 552), self.small, MUTED, center=True)
 
     def finish(self, game, screen):
         self.veil(screen)

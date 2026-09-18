@@ -55,6 +55,33 @@ class PenguinAnimation:
             return pg.transform.scale(image, (image.get_width(), height))
         return image
 
+    def action_image(self, action, right):
+        """Horizontal body, cycling kicks and articulated flipper strokes."""
+        phase = self.clock*(7 if action == 'swim' else 4)
+        frame = f'walk-{int(self.clock/0.14)%8+1}' if action == 'swim' else 'jump'
+        source = self.cache[frame,False,right]
+        source = source.subsurface(source.get_bounding_rect()).copy()
+        body = pg.transform.rotate(source,-90 if right else 90)
+        body = pg.transform.scale(body,(62,28))
+        canvas = pg.Surface((80,42),pg.SRCALPHA)
+        direction = 1 if right else -1
+        stroke = math.sin(phase)
+        if action == 'swim':
+            for back in (True,False):
+                flipper = pg.Surface((30,12),pg.SRCALPHA)
+                pg.draw.ellipse(flipper,(39,52,67),(0,1,28,9))
+                pg.draw.ellipse(flipper,(78,106,128),(0,1,28,9),1)
+                flipper = pg.transform.rotate(flipper,direction*(28+stroke*38)*(1 if back else -1))
+                canvas.blit(flipper,flipper.get_rect(center=(37,16 if back else 28)))
+                if back:
+                    canvas.blit(body,body.get_rect(center=(40,22)))
+            return pg.transform.rotate(canvas,stroke*3)
+        canvas.blit(body,body.get_rect(midbottom=(40,38)))
+        # The flipper sweeps backward while the belly stays on the snow.
+        px = round(39-direction*stroke*4)
+        pg.draw.polygon(canvas,(34,48,62),[(px,21),(px-direction*20,round(29+stroke*3)),(px-direction*11,32),(px+direction*5,25)])
+        return canvas
+
     def draw_puffs(self, screen, camera_x):
         layer = pg.Surface(screen.get_size(), pg.SRCALPHA)
         for x,y,life in self.puffs:

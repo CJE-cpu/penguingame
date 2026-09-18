@@ -29,12 +29,13 @@ class InteractionEffects:
             self.size_scale += (target-self.size_scale)*(1-math.exp(-11*dt))
             self.trail_clock += dt
             if game.effects['speed'] and abs(game.velocity_x)>20 and self.trail_clock>=0.045:
-                image = game.animation.image(False,game.facing_right)
+                image = self.player_image(game)
                 self.trails.append((game.player.midbottom,image,0.3))
                 self.trail_clock = 0
 
     def player_image(self, game):
-        image = game.animation.image(False,game.facing_right)
+        image = (game.animation.action_image('slide',game.facing_right) if game.content.sliding
+                 else game.animation.image(False,game.facing_right))
         return pg.transform.scale(image,(round(image.get_width()*self.size_scale),
                                          round(image.get_height()*self.size_scale)))
 

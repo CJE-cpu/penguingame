@@ -8,6 +8,7 @@ from enemies import Enemy, ENEMY_INFO
 from feedback import InteractionEffects
 from motion import CombatMotion, BabyCompanion
 from adventure import AdventureContent
+from tutorial import Coach, TutorialStage
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1200
@@ -121,6 +122,8 @@ class Game:
         self.reset()
 
     def reset(self):
+        self.coach = Coach()
+        self.tutorial = None
         self.animation.reset()
         self.feedback.reset()
         self.combat.reset()
@@ -196,6 +199,69 @@ class Game:
         self.content = AdventureContent(self)
         self.max_score += 6*60 + 170 + 200
         self.arrange_potions(placements)
+
+    def start(self, practice=True):
+        self.started = True
+        self.coach.enabled = True
+        if practice:
+            self.tutorial = TutorialStage(self)
+        else:
+            self.region_banner = 2.4
+            self.coach.explain('move')
+
+    def finish_tutorial(self):
+        learned = self.coach.seen.copy()
+        self.reset()
+        self.started = True
+        self.coach.enabled = True
+        self.coach.seen = learned
+        self.region_banner = 2.4
+
+    def handle_key(self, key):
+        if not self.started:
+            if key in (pg.K_RETURN,pg.K_SPACE,pg.K_t):
+                self.start(True)
+            elif key == pg.K_n:
+                self.start(False)
+            return False
+        if key == pg.K_r:
+            self.reset()
+            return False
+        if key == pg.K_n and self.tutorial:
+            self.finish_tutorial()
+            self.coach.explain('move')
+            return False
+        if self.coach.modal:
+            if key in (pg.K_RETURN,pg.K_SPACE):
+                self.coach.modal = None
+                if self.tutorial and self.tutorial.finished:
+                    self.finish_tutorial()
+            return False
+        if self.tutorial:
+            self.tutorial.key(self,key)
+            return key in (pg.K_SPACE,pg.K_UP,pg.K_w) and not self.content.book_open
+        if key == pg.K_TAB:
+            if not self.content.book_open and self.coach.explain('book'):
+                return False
+            self.content.book_open = not self.content.book_open
+        elif key == pg.K_e:
+            self.finish_open = False
+            self.content.action(self)
+        elif key == pg.K_RETURN and self.won:
+            self.finish_open = False
+        elif key in (pg.K_SPACE,pg.K_UP,pg.K_w):
+            return not self.content.diving and not self.content.book_open and not self.coach.explain('jump')
+        return False
+
+    def explain_nearby(self, slide):
+        if slide and self.coach.explain('slide'):
+            return
+        if self.content.nearby(self,self.checkpoints[-1]):
+            self.coach.explain('home')
+        elif 4800 <= self.player.centerx <= 4930 and not self.content.escape_cleared:
+            self.coach.explain('escape')
+        elif self.content.context(self):
+            self.coach.explain('interact')
 
     def potion_obstacles(self):
         obstacles = [rect for kind, rect in self.fish]
@@ -379,8 +445,17 @@ class Game:
     def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0):
         if not self.started:
             return
+        if self.coach.modal:
+            return
+        if self.tutorial:
+            self.tutorial.update(self,dt,direction,jump,slide,swim_vertical)
+            return
         if self.content.book_open:
             return
+        if not self.content.diving and not self.combat.hurt:
+            self.explain_nearby(slide)
+            if self.coach.modal:
+                return
         self.time += dt
         if self.content.diving:
             self.content.swim(self,dt,direction,swim_vertical)
@@ -528,10 +603,15 @@ class Game:
         if not self.started:
             self.draw_intro(screen)
             return
+        if self.tutorial:
+            self.tutorial.draw(self,screen)
+            self.coach.draw(self,screen)
+            return
         if self.content.diving:
             self.content.draw_ocean(self,screen)
             if self.content.book_open:
                 self.content.draw_book(self,screen)
+            self.coach.draw(self,screen)
             return
         self.draw_background(screen)
         # Show water in the ground gaps so falls are visually clear.
@@ -558,8 +638,6 @@ class Game:
         self.content.draw_world(self,screen)
         image = self.combat.pose(self.feedback.player_image(self))
         if self.content.sliding:
-            image = pg.transform.rotate(image,-75 if self.facing_right else 75)
-            image = pg.transform.scale(image,(round(image.get_width()*1.1),30))
             if self.on_ground and abs(self.velocity_x)>40:
                 rect = self.player.move(-self.camera_x,0)
                 for i in range(3):
@@ -592,6 +670,7 @@ class Game:
             self.ui.finish(self, screen)
         if self.content.book_open:
             self.content.draw_book(self,screen)
+        self.coach.draw(self,screen)
 
     def draw_adventure(self, screen):
         region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
@@ -693,21 +772,8 @@ def main():
                 elif event.type == pg.KEYDOWN:
                     if event.key == pg.K_ESCAPE:
                         running = False
-                    elif not game.started:
-                        if event.key in (pg.K_RETURN, pg.K_SPACE):
-                            game.started = True
-                            game.region_banner = 2.4
-                    elif event.key == pg.K_r:
-                        game.reset()
-                    elif event.key == pg.K_TAB:
-                        game.content.book_open = not game.content.book_open
-                    elif event.key == pg.K_e:
-                        game.finish_open = False
-                        game.content.action(game)
-                    elif event.key == pg.K_RETURN and game.won:
-                        game.finish_open = False
-                    elif event.key in (pg.K_SPACE, pg.K_UP, pg.K_w):
-                        jump = True
+                    else:
+                        jump = game.handle_key(event.key) or jump
             keys = pg.key.get_pressed()
             direction = int(keys[pg.K_RIGHT] or keys[pg.K_d]) - int(keys[pg.K_LEFT] or keys[pg.K_a])
             vertical = int(keys[pg.K_DOWN] or keys[pg.K_s])-int(keys[pg.K_UP] or keys[pg.K_w] or keys[pg.K_SPACE])
