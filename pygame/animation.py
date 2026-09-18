@@ -1,4 +1,5 @@
 """Penguin sprite animation without altering the physics body."""
+import math
 import pygame as pg
 from art import atlas_cells, fit_cycle
 
@@ -31,6 +32,25 @@ class PenguinAnimation:
         self.landing = 0.0
         self.state_clock = 0.0
         self.puffs = []
+        self.swim_clock = 0.0
+        self.swim_angle = 0.0
+        self.swim_movement = pg.Vector2()
+
+    def update_swim(self, dt, movement, right):
+        self.clock += dt
+        self.swim_movement = pg.Vector2(movement)
+        moving = self.swim_movement.length_squared()>0
+        self.swim_clock += dt*(1 if moving else 0.35)
+        target = -self.swim_movement.y*30*(1 if right else -1) if moving else 0
+        self.swim_angle += (target-self.swim_angle)*(1-math.exp(-dt*10))
+
+    def swim_image(self, right):
+        frames = (self.right_cycles if right else self.cycles)['swim']
+        image = frames[int(self.swim_clock/0.18)%len(frames)]
+        return pg.transform.rotate(image,self.swim_angle)
+
+    def swim_bob(self):
+        return math.sin(self.clock*2.5)*(1.5 if self.swim_movement.length_squared() else 3)
 
     def update(self, dt, player, velocity_y, grounded, was_grounded, distance):
         old_state = self.state

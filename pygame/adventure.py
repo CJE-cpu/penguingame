@@ -45,6 +45,7 @@ class AdventureContent:
         self.oxygen = OXYGEN_DURATION
         self.swimmer = pg.Vector2(100, 115)
         self.dive_return = None
+        self.ocean_rings = []
         self.ocean_fish = [(kind, pg.Rect(x,y,36,24)) for kind,x,y in
                            [('orange',300,230),('blue',550,390),('orange',800,220),
                             ('gold',1040,450),('blue',1300,280),('gold',1540,400)]]
@@ -92,6 +93,8 @@ class AdventureContent:
                 self.diving = True
                 self.oxygen = OXYGEN_DURATION
                 self.swimmer.update(100,115)
+                game.animation.swim_angle = 0.0
+                game.animation.swim_movement.update(0,0)
                 self.dive_return = game.player.midbottom
                 self.say('잠수! 방향키로 수영 · 왼쪽 위 구멍에서 E로 나가기')
                 game.coach.explain('swim')
@@ -187,7 +190,6 @@ class AdventureContent:
                 self.say('빙붕 탈출 시간 초과! 입구에서 다시 도전하세요.')
 
     def swim(self, game, dt, direction, vertical):
-        game.animation.clock += dt
         self.notice_left = max(0,self.notice_left-dt)
         self.oxygen -= dt
         movement = pg.Vector2(direction,vertical)
@@ -195,9 +197,11 @@ class AdventureContent:
             movement.normalize_ip()
         self.swimmer += movement*235*dt
         self.swimmer.x = max(35,min(1765,self.swimmer.x))
-        self.swimmer.y = max(100,min(525,self.swimmer.y))
+        self.swimmer.y = max(125,min(500,self.swimmer.y))
         if direction:
             game.facing_right = direction>0
+        game.animation.update_swim(dt,movement,game.facing_right)
+        self.ocean_rings = [(pos,life-dt) for pos,life in self.ocean_rings if life>dt]
         rect = pg.Rect(0,0,52,35)
         rect.center = self.swimmer
         remaining = []
@@ -206,6 +210,7 @@ class AdventureContent:
                 points = {'orange':10,'blue':25,'gold':50}[kind]
                 game.score += points
                 self.wallet += 1
+                self.ocean_rings.append((fish.center,0.65))
                 self.say(f'바닷속 물고기 발견! +{points}점')
             else:
                 remaining.append((kind,fish))
@@ -333,10 +338,25 @@ class AdventureContent:
                 game.ui.text(screen,line,(106,185+index*24),game.ui.body)
         game.ui.text(screen,f'← → 페이지 {self.book_page+1}/7 · TAB / E 닫기 · 모험 일시정지',(400,504),game.ui.small,center=True)
 
+    def draw_water_light(self, screen, time, camera):
+        light = pg.Surface(screen.get_size(),pg.SRCALPHA)
+        for i in range(7):
+            x = round(i*310-camera*0.35+math.sin(time*0.3+i)*22)
+            pg.draw.polygon(light,(160,232,247,16),[(x,85),(x+40,85),(x+155,560),(x+40,560)])
+        for y in range(90,600,6):
+            pg.draw.rect(light,(4,28,62,round((y-90)/510*48)),(0,y,800,6))
+        screen.blit(light,(0,0))
+
     def draw_ocean(self, game, screen):
         camera = max(0,min(1000,self.swimmer.x-400))
         screen.blit(game.ocean_background,(-round(camera),0))
+        self.draw_water_light(screen,game.time,camera)
         game.art.place(screen,'dive-hole',(100-camera,94))
+        # A breathing ring connects the surface opening to its interaction area.
+        if camera<170:
+            exit_center = (round(100-camera),115)
+            pg.draw.ellipse(screen,(162,238,239),(exit_center[0]-47,103,94,24),2)
+            game.ui.text(screen,'E 귀환',(max(45,exit_center[0]),150),game.ui.small,'white',center=True)
         for i in range(10):
             x = i*190-camera+70
             game.art.place(screen,'ocean-rock' if i%3==0 else 'seaweed',(x,560))
@@ -345,22 +365,51 @@ class AdventureContent:
             y = round(540-(game.time*28+i*37)%425)
             pg.draw.circle(screen,(104,181,211),(x,y),3,1)
         for kind,rect in self.ocean_fish:
-            screen.blit(game.art.fish(kind,game.time+rect.x*0.01),rect.move(-camera,round(math.sin(game.time*4+rect.x)*4)))
-        image = game.animation.action_image('swim',game.facing_right)
-        screen.blit(image,image.get_rect(center=(round(self.swimmer.x-camera),round(self.swimmer.y))))
-        for i in range(5):
+            image = game.art.fish(kind,game.time+rect.x*0.01)
+            center = (round(rect.centerx-camera),round(rect.centery+math.sin(game.time*2+rect.x)*3))
+            screen.blit(image,image.get_rect(center=center))
+        image = game.animation.swim_image(game.facing_right)
+        screen.blit(image,image.get_rect(center=(round(self.swimmer.x-camera),round(self.swimmer.y+game.animation.swim_bob()))))
+        for i in range(5 if game.animation.swim_movement.length_squared() else 2):
             phase = (game.animation.clock*1.4+i/5)%1
             side = -1 if game.facing_right else 1
             x = round(self.swimmer.x-camera+side*(35+phase*40))
             y = round(self.swimmer.y-5-phase*12)
             pg.draw.circle(screen,(136,210,234),(x,y),max(1,round(3*(1-phase))),1)
-        game.ui.panel(screen,(12,12,776,56))
-        game.ui.text(screen,f'남극 바닷속 탐험 · 산소 {max(0,self.oxygen):.1f}초',(29,24),game.ui.body)
-        game.ui.text(screen,f'먹이 {self.wallet} · 보너스 물고기 {6-len(self.ocean_fish)}/6',(520,26),game.ui.small)
-        pg.draw.rect(screen,(107,218,239),(30,54,round(450*max(0,self.oxygen)/OXYGEN_DURATION),5))
-        game.ui.panel(screen,(12,563,776,30))
-        game.ui.text(screen,'방향키 / WASD 수영 · 왼쪽 위 구멍에서 E로 나가기 · 산소가 떨어지기 전에 귀환!',(28,569),game.ui.small)
-        game.ui.text(screen,'출구 E' if camera<140 else '← 출구로 귀환',
-                     (max(18,round(75-camera)),75 if camera<140 else 100),game.ui.small,'white')
+        for pos,life in self.ocean_rings:
+            center = (round(pos[0]-camera),pos[1])
+            radius = round(12+(0.65-life)*65)
+            pg.draw.circle(screen,(167,241,244),center,radius,2)
+            for i in range(8):
+                angle = i*math.pi/4
+                dot = (round(center[0]+math.cos(angle)*radius),round(center[1]+math.sin(angle)*radius))
+                pg.draw.circle(screen,(255,230,141),dot,max(1,round(life*5)))
+        return_seconds = self.swimmer.distance_to((100,115))/235+3
+        warning = self.oxygen<return_seconds+6
+        oxygen_color = (216,110,82) if warning else (51,155,175)
+        game.ui.panel(screen,(12,12,776,72))
+        game.ui.text(screen,'남극 해양 탐험',(29,23),game.ui.heading)
+        game.ui.text(screen,f'물고기 {6-len(self.ocean_fish)}/6 · 먹이 {self.wallet}',(570,27),game.ui.body)
+        game.ui.text(screen,f'산소 {max(0,self.oxygen):04.1f}초',(29,57),game.ui.small,oxygen_color)
+        pg.draw.rect(screen,(200,222,226),(142,62,400,8),border_radius=4)
+        pg.draw.rect(screen,oxygen_color,(142,62,round(400*max(0,min(1,self.oxygen/OXYGEN_DURATION))),8),border_radius=4)
+        game.ui.text(screen,f'{game.score} 점',(570,56),game.ui.small)
+        near_exit = self.swimmer.distance_to((100,115))<85
+        game.ui.panel(screen,(528,95,260,38),dark=True)
+        cue = 'E를 눌러 해안으로 귀환' if near_exit else '← ↑ 출구로 돌아가세요' if warning else '왼쪽 위 얼음 구멍이 출구예요'
+        game.ui.text(screen,cue,(658,114),game.ui.small,'white',center=True,max_width=236)
+        game.ui.panel(screen,(12,526,676,31))
+        game.ui.text(screen,'방향키 / WASD 수영 · SPACE 상승 · 출구 근처 E 귀환',(28,532),game.ui.small)
+        game.ui.panel(screen,(12,564,776,29))
+        game.ui.text(screen,'탐험 경로',(26,570),game.ui.small)
+        start,end,y = 130,760,578
+        pg.draw.line(screen,(161,206,215),(start,y),(end,y),3)
+        pg.draw.circle(screen,(62,150,150),(start+35,y),5)
+        for kind,rect in self.ocean_fish:
+            pg.draw.circle(screen,(217,160,55) if kind=='gold' else (67,134,171),(start+round(rect.centerx/1800*(end-start)),y),3)
+        marker = start+round(self.swimmer.x/1800*(end-start))
+        pg.draw.circle(screen,(25,57,76),(marker,y),5)
+        pg.draw.circle(screen,'white',(marker,y),2)
         if self.notice_left:
-            game.ui.text(screen,self.notice,(400,535),game.ui.small,'white',center=True)
+            game.ui.panel(screen,(130,480,540,34),dark=True)
+            game.ui.text(screen,self.notice,(400,497),game.ui.small,'white',center=True,max_width=510)

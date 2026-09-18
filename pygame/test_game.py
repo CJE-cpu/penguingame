@@ -669,6 +669,38 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(c.wallet,1)
         self.assertEqual(len(c.ocean_fish),5)
 
+    def test_swimming_pose_turns_smoothly_and_slows_when_idle(self):
+        animation = self.game.animation
+        animation.update_swim(0.01,pg.Vector2(1,-1),True)
+        self.assertTrue(0<animation.swim_angle<30)
+        for _ in range(60):
+            animation.update_swim(1/60,pg.Vector2(1,-1),True)
+        self.assertAlmostEqual(animation.swim_angle,30,places=2)
+        self.assertGreater(animation.swim_image(True).get_height(),42)
+        before = animation.swim_clock
+        animation.update_swim(1,pg.Vector2(),True)
+        self.assertAlmostEqual(animation.swim_clock-before,0.35)
+        self.assertLess(abs(animation.swim_angle),0.01)
+        animation.update_swim(0.2,pg.Vector2(-1,-1),False)
+        self.assertLess(animation.swim_angle,0)
+
+    def test_ocean_collection_effect_and_visible_swimming_bounds(self):
+        g = self.game
+        c = g.content
+        c.diving = True
+        c.swimmer.update(c.ocean_fish[0][1].center)
+        g.update(1/60)
+        self.assertEqual(len(c.ocean_rings),1)
+        c.swimmer.update(100,590)
+        g.update(0.1)
+        self.assertEqual(c.swimmer.y,500)
+        c.swimmer.update(100,80)
+        g.update(0.1)
+        self.assertEqual(c.swimmer.y,125)
+        c.draw_ocean(g,self.screen)
+        g.update(0.7)
+        self.assertFalse(c.ocean_rings)
+
     def test_journals_shortcut_home_and_escape(self):
         g = self.game
         c = g.content

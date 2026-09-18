@@ -1,35 +1,41 @@
 """Ice-themed Korean interface, drawn at native resolution."""
 import math
+from pathlib import Path
 import pygame as pg
 
-INK = (28, 64, 87)
-MUTED = (70, 111, 135)
-ICE = (227, 246, 252)
-EDGE = (127, 199, 224)
-BLUE = (39, 130, 172)
+INK = (25, 57, 76)
+MUTED = (67, 99, 117)
+ICE = (235, 247, 248)
+EDGE = (161, 206, 215)
+BLUE = (36, 101, 127)
 
 
 class IceUI:
     def __init__(self):
-        regular = pg.font.match_font('malgungothic,nanumgothic')
-        bold = pg.font.match_font('malgungothic,nanumgothic', bold=True)
-        self.small = pg.font.Font(regular, 14)
-        self.body = pg.font.Font(regular, 18)
-        self.heading = pg.font.Font(bold or regular, 24)
-        self.title = pg.font.Font(bold or regular, 36)
+        fonts = Path(__file__).resolve().parent/'data'/'fonts'
+        regular = fonts/'GowunDodum-Regular.ttf'
+        rounded = fonts/'Jua-Regular.ttf'
+        fallback = pg.font.match_font('malgungothic,nanumgothic')
+        self.small = pg.font.Font(str(regular) if regular.exists() else fallback,15)
+        self.body = pg.font.Font(str(regular) if regular.exists() else fallback,18)
+        self.heading = pg.font.Font(str(rounded) if rounded.exists() else fallback,25)
+        self.title = pg.font.Font(str(rounded) if rounded.exists() else fallback,38)
 
     def panel(self, screen, rect, dark=False):
         rect = pg.Rect(rect)
         shadow = pg.Surface((rect.width + 8, rect.height + 8), pg.SRCALPHA)
-        pg.draw.rect(shadow, (17, 51, 79, 65), (4, 5, rect.width, rect.height), border_radius=15)
+        pg.draw.rect(shadow, (17, 51, 79, 48), (3, 4, rect.width, rect.height), border_radius=11)
         screen.blit(shadow, rect.topleft)
-        pg.draw.rect(screen, BLUE if dark else ICE, rect, border_radius=14)
-        pg.draw.rect(screen, (171, 226, 244) if dark else EDGE, rect, 2, border_radius=14)
-        pg.draw.line(screen, (218, 246, 255) if dark else (255, 255, 255),
-                     (rect.left + 16, rect.top + 4), (rect.right - 16, rect.top + 4), 2)
+        pg.draw.rect(screen, BLUE if dark else ICE, rect, border_radius=10)
+        pg.draw.rect(screen, (134, 188, 204) if dark else EDGE, rect, 1, border_radius=10)
 
-    def text(self, screen, text, pos, font=None, color=INK, center=False):
+    def text(self, screen, text, pos, font=None, color=INK, center=False, max_width=None):
+        if font in (self.heading,self.title):
+            text = text.replace('·',' / ')
         image = (font or self.body).render(text, True, color)
+        if max_width and image.get_width()>max_width:
+            ratio = max_width/image.get_width()
+            image = pg.transform.smoothscale(image,(max_width,max(1,round(image.get_height()*ratio))))
         screen.blit(image, image.get_rect(center=pos) if center else pos)
 
     def icon(self, screen, image, center, size=(30, 30)):
@@ -47,7 +53,9 @@ class IceUI:
         self.panel(screen, (12, 12, 776, 73))
         region = min(len(regions)-1, game.player.centerx//game.region_width)
         self.text(screen, regions[region][0], (28, 21), self.body)
-        self.text(screen, f'탐험 {region+1}/6 · 저장 지점 {game.checkpoint_index+1}', (28, 49), self.small, MUTED)
+        self.text(screen, f'탐험 {region+1}/6 · 이글루 {game.checkpoint_index+1}', (28, 49), self.small, MUTED)
+        for x in (225,370,510,635):
+            pg.draw.line(screen,EDGE,(x,29),(x,68))
         self.icon(screen, game.fish_images['gold'], (249, 46))
         self.text(screen, str(game.score), (274, 20), self.heading)
         self.text(screen, '모은 점수', (274, 51), self.small, MUTED)
@@ -58,7 +66,7 @@ class IceUI:
         self.text(screen, f'{game.rescued}/3', (553, 20), self.heading)
         self.text(screen, '구조 완료', (553, 51), self.small, MUTED)
         self.text(screen, f'추락 {game.falls} · 피격 {game.hits}', (652, 25), self.small, MUTED)
-        self.text(screen, '아기 동행 중' if game.carried_baby is not None else '이글루로 돌아가세요', (652, 48), self.small)
+        self.text(screen, '아기 동행 중' if game.carried_baby is not None else '친구를 찾아보세요', (652, 48), self.small,max_width=122)
         for index, kind in enumerate(k for k,v in game.effects.items() if v > 0):
             x = 12 + index*157
             self.panel(screen, (x, 94, 147, 43))

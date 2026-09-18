@@ -102,7 +102,6 @@ class TutorialStage:
             return
         self.time += dt
         if self.diving:
-            game.animation.clock += dt
             movement = pg.Vector2(direction,vertical)
             if movement.length_squared()>1:
                 movement.normalize_ip()
@@ -111,6 +110,7 @@ class TutorialStage:
             self.swimmer.y = max(125,min(490,self.swimmer.y))
             if direction:
                 self.right = direction>0
+            game.animation.update_swim(dt,movement,self.right)
             if self.swimmer.distance_to((470,350))<40:
                 self.swim_fish = True
             return
@@ -175,8 +175,9 @@ class TutorialStage:
             game.ui.text(screen,'출구 E',(70,123),game.ui.small,'white')
             if not self.swim_fish:
                 screen.blit(game.art.fish('blue',self.time),(452,338))
-            image = game.animation.action_image('swim',self.right)
-            screen.blit(image,image.get_rect(center=self.swimmer))
+            game.content.draw_water_light(screen,self.time,0)
+            image = game.animation.swim_image(self.right)
+            screen.blit(image,image.get_rect(center=(self.swimmer.x,self.swimmer.y+game.animation.swim_bob())))
             game.ui.text(screen,'연습 바다 · 산소 제한 없음',(400,520),game.ui.body,'white',center=True)
         else:
             for platform in self.platforms:
