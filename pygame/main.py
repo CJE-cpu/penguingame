@@ -10,6 +10,7 @@ from motion import CombatMotion, BabyCompanion
 from adventure import AdventureContent
 from tutorial import Coach, TutorialStage
 from art import WorldArt
+from window import GameWindow
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1800
@@ -811,7 +812,7 @@ class Game:
 
 def main():
     pg.init()
-    screen = pg.display.set_mode((WIDTH, HEIGHT))
+    window = GameWindow()
     pg.display.set_caption('Antarctic Penguin - Fish Adventure')
     game = Game()
     pg.display.set_icon(game.penguin_right)
@@ -822,6 +823,9 @@ def main():
             dt = min(clock.tick(60) / 1000, 1 / 30)
             jump = False
             for event in pg.event.get():
+                if window.handle(event,game):
+                    jump = False
+                    continue
                 if event.type == pg.QUIT:
                     game.ask_exit()
                     jump = False
@@ -830,16 +834,18 @@ def main():
                     if game.exit_open:
                         jump = False
                 elif event.type == pg.MOUSEBUTTONDOWN and event.button==1:
-                    game.handle_click(event.pos)
+                    pos = window.game_position(event.pos)
+                    if pos is not None:
+                        game.handle_click(pos)
             if game.quit_requested:
                 running = False
                 continue
             keys = pg.key.get_pressed()
             direction = int(keys[pg.K_RIGHT] or keys[pg.K_d]) - int(keys[pg.K_LEFT] or keys[pg.K_a])
             vertical = int(keys[pg.K_DOWN] or keys[pg.K_s])-int(keys[pg.K_UP] or keys[pg.K_w] or keys[pg.K_SPACE])
-            game.update(dt, direction, jump, bool(keys[pg.K_DOWN] or keys[pg.K_s]),vertical)
-            game.draw(screen)
-            pg.display.flip()
+            if not window.open:
+                game.update(dt, direction, jump, bool(keys[pg.K_DOWN] or keys[pg.K_s]),vertical)
+            window.present(game)
     finally:
         pg.quit()
 

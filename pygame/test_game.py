@@ -6,6 +6,7 @@ import unittest
 import math
 import pygame as pg
 from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy
+from window import GameWindow
 
 
 class AdventureChecks(unittest.TestCase):
@@ -21,6 +22,34 @@ class AdventureChecks(unittest.TestCase):
     def setUp(self):
         self.game = Game()
         self.game.started = True
+
+    def test_resized_window_preserves_ratio_and_mouse_coordinates(self):
+        window = GameWindow()
+        window.screen = pg.Surface((1200,600))
+        self.assertEqual(window.viewport(),pg.Rect(200,0,800,600))
+        self.assertIsNone(window.game_position((100,300)))
+        self.assertEqual(window.game_position((600,300)),(400,300))
+        window.screen = pg.Surface((640,480))
+        self.assertEqual(window.game_position((320,240)),(400,300))
+        window.open = True
+        window.present(self.game)
+
+    def test_window_options_keyboard_and_scaled_click(self):
+        window = GameWindow()
+        self.assertTrue(window.handle(pg.event.Event(pg.KEYDOWN,key=pg.K_F2),self.game))
+        self.assertTrue(window.open)
+        window.handle(pg.event.Event(pg.KEYDOWN,key=pg.K_UP),self.game)
+        window.handle(pg.event.Event(pg.KEYDOWN,key=pg.K_RETURN),self.game)
+        self.assertEqual(window.screen.get_size(),(640,480))
+        self.assertFalse(window.open)
+        window.open = True
+        center = window.rows()[1].center
+        window.handle(pg.event.Event(pg.MOUSEBUTTONDOWN,button=1,pos=(center[0]*0.8,center[1]*0.8)),self.game)
+        self.assertEqual(window.screen.get_size(),(800,600))
+        window.open = True
+        window.handle(pg.event.Event(pg.KEYDOWN,key=pg.K_ESCAPE),self.game)
+        self.assertFalse(window.open)
+        self.assertFalse(self.game.exit_open)
 
     def place(self, platform, center, velocity=0, grown=False):
         g = self.game
