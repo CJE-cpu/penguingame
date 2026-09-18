@@ -16,3 +16,5 @@ Adventure art update, built-in image_gen tool. Prompt: consistent Antarctic pixe
 Fish prompt (built-in image_gen): transparent single-row atlas, isolated orange, cyan-blue and golden fish with distinct silhouettes and crisp dark outlines, all facing left. Outputs: orange-fish.png, blue-fish.png, gold-fish.png.
 
 Animation: built-in image_gen with penguin-adult-left.png as identity reference. Prompt: transparent 4x2 pixel-art atlas, four left-facing walk frames with alternating feet and flipper swing, idle, ascent with spread flippers, descent and crouched landing. Same identity/proportions. Extracted frames use one shared scale and foot baseline on 64x56 transparent canvases.
+
+Built-in image_gen update: eight-phase left-facing walk cycle, alternating feet/flipper sway, consistent adult-penguin identity, transparent 4x2 atlas. Enemy atlas prompt: transparent 3x2 pixel-art poses for leopard seal patrol/charge, Antarctic skua wings up/down, ice spirit standing/jumping. Outputs are named by contents and preserved in this directory.

@@ -98,10 +98,10 @@ class IceUI:
         self.text(screen, '아기를 만나면 동행 시작! 이글루에 도착하면 구조 완료 · +100점', (400, 177), self.small, (224,248,255), center=True)
         cards = [
             (game.igloo_image, '이글루 체크포인트', '닿으면 저장 · 실패하면 이곳에서 복귀'),
-            (game.crab_image, '게를 조심하세요', '위에서 밟으면 +30점 · 옆에서는 피격'),
-            (game.item_images['grow'], '성장 물약 · 8초', '몸이 커지고 게 돌파 · 좁은 길 통과'),
+            (game.enemy_images['seal'][0], '행동이 다른 네 종류의 적', '게 · 물범 · 갈매기 · 튀는 얼음 정령'),
+            (game.item_images['grow'], '성장 물약 · 8초', '몸이 커지고 적 돌파 · 좁은 길 통과'),
             (game.item_images['speed'], '속도 물약 · 8초', '이동 속도 1.6배 · 얼음에서는 관성'),
-            (game.item_images['reverse'], '반전 물약 · 8초', '좌우 키가 반대로! 바람에도 주의'),
+            (game.item_images['reverse'], '반전 물약 · 8초', '2곳에 배치 · 중복은 시간만 갱신'),
             (game.chest_image, '동굴과 얼음 발판', '보물 +100점 · 금 간 발판은 곧 붕괴')]
         for index, (image, title, detail) in enumerate(cards):
             x, y = 54+(index%2)*352, 206+(index//2)*77
@@ -121,6 +121,6 @@ class IceUI:
         self.text(screen, '모험을 마쳤어요!', (400, 227), self.title, center=True)
         self.text(screen, '모든 물고기를 찾고 친구들을 안전하게 데려왔습니다.', (400, 269), self.body, MUTED, center=True)
         self.text(screen, f'{game.score}점', (400, 315), self.title, BLUE, center=True)
-        self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 게 처치 {game.defeated}마리', (400, 360), self.small, MUTED, center=True)
+        self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 360), self.small, MUTED, center=True)
         self.panel(screen, (220, 395, 360, 51), dark=True)
         self.text(screen, 'R 키로 새로운 모험 시작', (400, 420), self.body, 'white', center=True)

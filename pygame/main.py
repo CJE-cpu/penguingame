@@ -4,6 +4,8 @@ import math
 import pygame as pg
 from ui import IceUI
 from animation import PenguinAnimation
+from enemies import Enemy, ENEMY_INFO
+from feedback import InteractionEffects
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1200
@@ -35,10 +37,12 @@ GRAVITY = 1800
 MOVE_SPEED = 270
 JUMP_SPEED = -650
 ITEM_DURATION = 8.0
-ENEMY_POINTS = 30
 ITEM_STYLE = {'grow': ((126, 224, 126), '+', 'BIG'),
               'speed': ((255, 212, 92), '>>', 'FAST'),
               'reverse': ((221, 142, 255), '<>', 'REVERSE')}
+REGION_HINTS = ['해안 · 게 순찰, 물범 돌진', '빙하 · 긴 관성, 튀는 정령',
+                '동굴 · 어둠과 탐험 조명', '눈보라 · 돌풍과 도둑갈매기',
+                '빙붕 · 무너지는 다리 주의', '보금자리 · 이글루 주변은 안전지대']
 
 
 def load_image(name, size=None, keep_aspect=False):
@@ -56,29 +60,6 @@ def load_image(name, size=None, keep_aspect=False):
     return pg.transform.scale(image, size) if size else image
 
 
-class Enemy:
-    """A crab that patrols its platform without falling off the edge."""
-    def __init__(self, platform, speed):
-        self.rect = pg.Rect(platform.centerx - 22, platform.top - 30, 44, 30)
-        self.x = float(self.rect.x)
-        self.left, self.right = platform.left + 8, platform.right - 8
-        self.speed = speed
-
-    def update(self, dt):
-        self.x += self.speed * dt
-        if self.x <= self.left:
-            self.x = float(self.left)
-            self.speed = abs(self.speed)
-        elif self.x >= self.right - self.rect.width:
-            self.x = float(self.right - self.rect.width)
-            self.speed = -abs(self.speed)
-        self.rect.x = round(self.x)
-
-    def draw(self, screen, camera_x, image):
-        rect = self.rect.move(-camera_x, 0)
-        screen.blit(image if self.speed < 0 else pg.transform.flip(image, True, False), rect)
-
-
 class Game:
     def __init__(self):
         self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
@@ -88,6 +69,7 @@ class Game:
         self.big_penguin_left = load_image('penguin-adult-left.png', (60, 78), keep_aspect=True)
         self.big_penguin_right = pg.transform.flip(self.big_penguin_left, True, False)
         self.animation = PenguinAnimation(DATA)
+        self.feedback = InteractionEffects()
         self.fish_images = {}
         for kind, (filename, tint, points) in FISH_TYPES.items():
             image = load_image(filename, (36, 24), keep_aspect=True)
@@ -99,6 +81,11 @@ class Game:
         self.intro_title_font = self.ui.title
         self.baby_image = load_image('penguin-baby-left.png', (24, 31), keep_aspect=True)
         self.crab_image = load_image('crab-enemy.png', (44, 30), keep_aspect=True)
+        self.enemy_images = {'crab':[self.crab_image]}
+        for kind, filenames in [('seal', ['seal-patrol','seal-charge']),
+                                ('skua',['skua-wings-up','skua-wings-down']),
+                                ('spirit',['ice-spirit-standing','ice-spirit-jumping'])]:
+            self.enemy_images[kind] = [load_image(name+'.png', ENEMY_INFO[kind][1], keep_aspect=True) for name in filenames]
         self.igloo_image = load_image('igloo-checkpoint.png', (112, 85), keep_aspect=True)
         self.cave_image = load_image('ice-cave-entrance.png', (180, 135), keep_aspect=True)
         self.chest_image = load_image('golden-treasure-chest.png', (36, 30), keep_aspect=True)
@@ -129,6 +116,7 @@ class Game:
 
     def reset(self):
         self.animation.reset()
+        self.feedback.reset()
         self.player = pg.Rect(55, 498, 40, 52)
         self.x, self.y = float(self.player.x), float(self.player.y)
         self.velocity_y = 0.0
@@ -148,9 +136,22 @@ class Game:
         self.total = len(self.fish)
         self.score = 0
         self.max_score = sum(FISH_TYPES[kind][2] for kind, rect in self.fish)
-        self.enemies = [Enemy(self.region_grounds[region][-1], 65 + region * 8)
-                        for region in range(len(REGIONS))]
-        self.max_score += len(self.enemies) * ENEMY_POINTS
+        self.enemies = []
+        for region, kinds in enumerate([('crab','seal'), ('seal','spirit'), ('spirit','spirit'),
+                                       ('skua','skua'), ('spirit','seal'), ('crab','skua')]):
+            for index, kind in enumerate(kinds):
+                platform = (self.region_ledges[region][1] if index and kind == 'spirit'
+                            else self.region_grounds[region][0 if index else -1])
+                if index and kind == 'seal':
+                    platform = self.region_grounds[region][min(1,len(self.region_grounds[region])-1)]
+                enemy = Enemy(platform, 55+region*7, kind)
+                # Keep ground enemies out of the checkpoint's immediate vicinity.
+                if platform == self.region_grounds[region][0]:
+                    enemy.left = platform.left+150
+                    enemy.x = float(enemy.left)
+                    enemy.rect.x = enemy.left
+                self.enemies.append(enemy)
+        self.max_score += sum(enemy.points for enemy in self.enemies)
         self.defeated = 0
         self.hits = 0
         self.invincible = 0.0
@@ -167,6 +168,8 @@ class Game:
             for kind, platform, shift in [('grow', self.region_grounds[region][0], 120),
                                           ('speed', self.region_ledges[region][0], 35),
                                           ('reverse', self.region_grounds[region][-1], 65)]:
+                if kind == 'reverse' and region not in (2,4):
+                    continue
                 self.items.append((kind, pg.Rect(platform.x + shift, platform.top - 36, 30, 36)))
         self.checkpoints = [pg.Rect(i * REGION_WIDTH + 30, 490, 95, 60)
                             for i in range(len(REGIONS))]
@@ -182,6 +185,7 @@ class Game:
                                 'rescued': False})
         self.carried_baby = None
         self.rescued = 0
+        self.in_sanctuary = False
         self.max_score += len(self.babies) * 100 + len(self.caves) * 100
 
     def active_platforms(self):
@@ -208,6 +212,12 @@ class Game:
             self.region_banner = 2.4
 
     def update_adventure(self, dt):
+        sanctuary = self.player.colliderect(self.checkpoints[-1].inflate(90,60))
+        if sanctuary:
+            self.invincible = max(self.invincible,0.15)
+            if not self.in_sanctuary:
+                self.feedback.emit(self.player.midtop,'보금자리의 안전지대',(160,239,193))
+        self.in_sanctuary = sanctuary
         for key, (elapsed, hidden) in list(self.crumbles.items()):
             if hidden > 0:
                 hidden = max(0, hidden - dt)
@@ -225,6 +235,8 @@ class Game:
             self.crumbles[key] = (elapsed, hidden)
         for index, checkpoint in enumerate(self.checkpoints):
             if self.player.colliderect(checkpoint):
+                if index != self.checkpoint_index:
+                    self.feedback.emit(checkpoint.midtop, '저장 완료', (169,235,255))
                 self.checkpoint_index = index
                 self.spawn = (checkpoint.x + 25, 498)
                 if self.carried_baby is not None:
@@ -232,10 +244,12 @@ class Game:
                     self.carried_baby = None
                     self.rescued += 1
                     self.score += 100
+                    self.feedback.emit(checkpoint.midtop, '친구 구조! +100', (157,238,183))
         for index, baby in enumerate(self.babies):
             if (not baby['rescued'] and self.carried_baby is None
                     and self.player.colliderect(baby['rect'])):
                 self.carried_baby = index
+                self.feedback.emit(baby['rect'].midtop, '이글루로 데려가요!', (178,227,255))
         for cave in self.caves:
             if self.player.colliderect(cave['rect']):
                 cave['found'] = True
@@ -243,9 +257,11 @@ class Game:
                 if not cave['treasure'] and self.player.colliderect(chest):
                     cave['treasure'] = True
                     self.score += 100
+                    self.feedback.emit(chest.midtop, '보물 발견! +100', (255,228,142))
 
     def respawn(self, hit=False):
         self.animation.reset()
+        self.feedback.reset()
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.player.size = (40, 52)
         self.player.topleft = self.spawn
@@ -261,6 +277,7 @@ class Game:
         else:
             self.falls += 1
         self.invincible = 2.0
+        self.feedback.emit(self.player.midtop, '피격! 저장 지점 복귀' if hit else '저장 지점에서 다시!', (205,235,255))
         self.camera_x = max(0, min(WORLD_WIDTH - WIDTH, self.player.centerx - WIDTH // 2))
         self.display_region = self.player.centerx // REGION_WIDTH
         self.region_banner = 0.0
@@ -272,12 +289,13 @@ class Game:
         if self.won:
             return
         self.invincible = max(0.0, self.invincible - dt)
+        self.feedback.update(dt)
         was_grounded = self.on_ground
         previous_x = self.player.x
         self.update_adventure(dt)
         previous_bottom = self.player.bottom
         for enemy in self.enemies:
-            enemy.update(dt)
+            enemy.update(dt, self.player)
         for kind in self.effects:
             self.effects[kind] = max(0.0, self.effects[kind] - dt)
         if self.effects['reverse']:
@@ -297,7 +315,7 @@ class Game:
                 self.velocity_x *= math.exp(-1.5 * dt)
         else:
             self.velocity_x = direction * speed
-        wind = -75 * dict(self.scene_weights()).get(3, 0)
+        wind = -(65+30*math.sin(self.time*1.2)) * dict(self.scene_weights()).get(3, 0)
         movement = self.velocity_x + wind
         self.x += movement * dt
         self.player.x = round(self.x)
@@ -340,9 +358,10 @@ class Game:
         for enemy in list(self.enemies):
             if not self.player.colliderect(enemy.rect):
                 continue
-            if self.effects['grow'] or (self.velocity_y > 0 and previous_bottom <= enemy.rect.top + 3):
+            if self.effects['grow'] or (self.velocity_y > 0 and previous_bottom <= enemy.previous_top + 3):
                 self.enemies.remove(enemy)
-                self.score += ENEMY_POINTS
+                self.score += enemy.points
+                self.feedback.emit(enemy.rect.midtop, f'{ENEMY_INFO[enemy.kind][0]} 처치 +{enemy.points}', (255,219,132))
                 self.defeated += 1
                 if not self.effects['grow']:
                     self.player.bottom = enemy.rect.top
@@ -356,6 +375,7 @@ class Game:
         for kind, rect in self.fish:
             if self.player.colliderect(rect):
                 self.score += FISH_TYPES[kind][2]
+                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind][2]}', (255,232,151))
             else:
                 remaining_fish.append((kind, rect))
         self.fish = remaining_fish
@@ -364,7 +384,13 @@ class Game:
             if not self.player.colliderect(rect):
                 remaining_items.append((kind, rect))
             else:
+                # Idempotent: a second reversal refreshes its timer, never flips twice.
+                repeated = self.effects[kind] > 0
                 self.effects[kind] = ITEM_DURATION
+                name = {'grow':'성장! 적 돌파', 'speed':'가속! 속도 증가', 'reverse':'주의! 좌우 반전'}[kind]
+                if repeated:
+                    name = {'grow':'성장', 'speed':'가속', 'reverse':'반전'}[kind]+' 시간 갱신'
+                self.feedback.emit(rect.center, name, ITEM_STYLE[kind][0])
         self.items = remaining_items
         self.update_adventure(0)
         if not self.fish and self.rescued == len(self.babies):
@@ -408,11 +434,15 @@ class Game:
             bob = round(math.sin(self.time * 4 + index) * 3)
             screen.blit(self.fish_images[kind], fish.move(-self.camera_x, bob))
         for enemy in self.enemies:
-            enemy.draw(screen, self.camera_x, self.crab_image)
+            enemy.draw(screen, self.camera_x, self.enemy_images)
         for kind, rect in self.items:
             rect = rect.move(-self.camera_x, 0)
-            screen.blit(self.item_images[kind], rect)
+            bob = round(math.sin(self.time*3+rect.x*0.01)*3)
+            color = ITEM_STYLE[kind][0]
+            pg.draw.ellipse(screen, color, (rect.x+2,rect.bottom-3,26,5),2)
+            screen.blit(self.item_images[kind], rect.move(0,bob))
         image = self.animation.image(self.effects['grow'], self.facing_right)
+        self.feedback.draw_aura(self, screen)
         self.animation.draw_puffs(screen, self.camera_x)
         if not self.invincible or int(self.time * 10) % 2 == 0:
             rect = self.player.move(-self.camera_x, 0)
@@ -420,8 +450,14 @@ class Game:
         if self.carried_baby is not None:
             rect = self.player.move(-self.camera_x, 0)
             screen.blit(self.baby_image, (rect.centerx - 12, rect.bottom - image.get_height() - 29))
+        self.draw_region_atmosphere(screen)
+        self.feedback.draw(self, screen)
         self.ui.hud(self, screen, REGIONS)
         self.ui.transition(self, screen, REGIONS)
+        if self.region_banner > 0:
+            label = self.ui.small.render(REGION_HINTS[self.display_region],True,(28,64,87))
+            self.ui.panel(screen,(490,149,298,31))
+            screen.blit(label,(499,154))
         if self.won:
             self.ui.finish(self, screen)
 
@@ -435,6 +471,8 @@ class Game:
                 screen.blit(self.chest_image, chest)
         for index, checkpoint in enumerate(self.checkpoints):
             rect = checkpoint.move(-self.camera_x, 0)
+            if index == len(self.checkpoints)-1:
+                pg.draw.ellipse(screen,(151,222,190),rect.inflate(70,12),2)
             screen.blit(self.igloo_image, self.igloo_image.get_rect(midbottom=rect.midbottom))
             if index == self.checkpoint_index:
                 pg.draw.circle(screen, (111, 255, 151), (rect.centerx, rect.top-32), 5)
@@ -452,6 +490,23 @@ class Game:
                 y = int((i * 83 + self.time * 45) % HEIGHT)
                 pg.draw.line(snow, (238, 249, 255, round(255*snow_weight)), (x, y), (x - 12, y + 4), 2)
             screen.blit(snow, (0, 0))
+
+    def draw_region_atmosphere(self, screen):
+        weights = dict(self.scene_weights())
+        cave = weights.get(2,0)
+        if cave:
+            shade = pg.Surface((WIDTH,HEIGHT),pg.SRCALPHA)
+            shade.fill((4,14,35,round(105*cave)))
+            center = (round(self.player.centerx-self.camera_x),self.player.centery)
+            for radius,alpha in [(220,70),(170,42),(115,15)]:
+                pg.draw.ellipse(shade,(4,14,35,round(alpha*cave)),
+                                (center[0]-radius,center[1]-radius,radius*2,radius*2))
+            screen.blit(shade,(0,0))
+        if weights.get(0,0):
+            for i in range(12):
+                x = round((i*79+self.time*20)%WIDTH)
+                y = 557+round(math.sin(self.time*2+i)*3)
+                pg.draw.line(screen,(166,227,245),(x,y),(x+22,y),2)
     def draw_intro(self, screen):
         self.ui.intro(self, screen)
 
@@ -477,6 +532,7 @@ def main():
                     elif not game.started:
                         if event.key in (pg.K_RETURN, pg.K_SPACE):
                             game.started = True
+                            game.region_banner = 2.4
                     elif event.key == pg.K_r:
                         game.reset()
                     elif event.key in (pg.K_SPACE, pg.K_UP, pg.K_w):

@@ -5,7 +5,7 @@ import pygame as pg
 
 class PenguinAnimation:
     def __init__(self, data):
-        names = ['walk-1', 'walk-2', 'walk-3', 'walk-4', 'idle', 'jump', 'fall', 'land']
+        names = [f'walk-{i}' for i in range(1,9)] + ['idle', 'jump', 'fall', 'land']
         self.frames = {name: pg.image.load(str(data / f'penguin-animation-{name}.png')).convert_alpha()
                        for name in names}
         self.cache = {}
@@ -20,6 +20,7 @@ class PenguinAnimation:
         self.state = 'idle'
         self.clock = 0.0
         self.distance = 0.0
+        self.walk_clock = 0.0
         self.landing = 0.0
         self.puffs = []
 
@@ -37,12 +38,16 @@ class PenguinAnimation:
         elif distance > 0.2:
             self.state = 'walk'
             self.distance += abs(distance)
+            # One cycle lasts about 0.95s normally, capped at 0.73s when boosted.
+            rate = max(0.75, min(1.3, distance/max(dt, 0.001)/270))
+            self.walk_clock += dt*rate
         else:
             self.state = 'idle'
             self.distance = 0
+            self.walk_clock = 0
 
     def image(self, grown, right):
-        name = f'walk-{int(self.distance/11)%4+1}' if self.state == 'walk' else self.state
+        name = f'walk-{int(self.walk_clock/0.12)%8+1}' if self.state == 'walk' else self.state
         image = self.cache[name, bool(grown), right]
         if self.state == 'idle':
             # Subtle breathing; the feet stay anchored on the platform.

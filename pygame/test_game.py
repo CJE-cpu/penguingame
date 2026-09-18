@@ -202,11 +202,11 @@ class AdventureChecks(unittest.TestCase):
         g.update(1/60)
         self.assertEqual(g.animation.state, 'idle')
         frames = set()
-        for _ in range(16):
-            g.update(1/60, 1)
+        for _ in range(64):
+            g.animation.update(1/60,g.player,0,True,True,4.5)
             self.assertEqual(g.animation.state, 'walk')
             frames.add(pg.image.tobytes(g.animation.image(False, True), 'RGBA'))
-        self.assertEqual(len(frames), 4)
+        self.assertEqual(len(frames), 8)
         self.place(g.region_grounds[0][0], 75)
         g.animation.reset()
         states = set()
@@ -227,6 +227,69 @@ class AdventureChecks(unittest.TestCase):
         g.respawn()
         self.assertEqual(g.animation.state, 'idle')
         self.assertFalse(g.animation.puffs)
+
+    def test_reverse_pickups_and_feedback(self):
+        g = self.game
+        self.assertEqual(sum(kind=='reverse' for kind,rect in g.items),2)
+        g.enemies = []
+        self.place(g.region_grounds[0][0],75)
+        rect = g.player.copy()
+        g.items = [('reverse',rect.copy()), ('reverse',rect.copy())]
+        g.update(1/60)
+        self.assertEqual(g.effects['reverse'],8)
+        self.assertEqual(g.items,[])
+        self.assertTrue(any('갱신' in b['text'] for b in g.feedback.bursts))
+        old = g.player.x
+        g.update(1/60,1)
+        self.assertLess(g.player.x,old)
+        g.items = [('reverse',g.player.copy())]
+        g.update(1/60)
+        old = g.player.x
+        g.update(1/60,1)
+        self.assertLess(g.player.x,old)
+        g.effects['reverse'] = 0.001
+        old = g.player.x
+        g.update(1/60,1)
+        self.assertGreater(g.player.x,old)
+        g.feedback.draw(g,self.screen)
+        g.feedback.update(2)
+        self.assertEqual(g.feedback.bursts,[])
+
+    def test_enemy_behaviors_and_walk_rate(self):
+        g = self.game
+        self.assertEqual({e.kind for e in g.enemies},{'crab','seal','skua','spirit'})
+        platform = pg.Rect(0,550,400,50)
+        seal = Enemy(platform,60,'seal')
+        seal.cooldown = 0
+        player = pg.Rect(260,498,40,52)
+        old = seal.x
+        seal.update(1/60,player)
+        self.assertGreater(seal.warning,0)
+        self.assertEqual(seal.x,old)
+        for _ in range(34):
+            seal.update(1/60,player)
+        self.assertGreater(seal.charge,0)
+        old = seal.x
+        seal.update(1/60,player)
+        self.assertGreater(abs(seal.x-old),3)
+        skua = Enemy(platform,60,'skua')
+        positions = []
+        for _ in range(60):
+            skua.update(1/60)
+            positions.append(skua.rect.y)
+            self.assertTrue(skua.left<=skua.rect.left and skua.rect.right<=skua.right)
+        self.assertGreater(max(positions)-min(positions),20)
+        spirit = Enemy(platform,60,'spirit')
+        spirit.cooldown = 0
+        spirit.update(1/60)
+        self.assertLess(spirit.rect.y,spirit.base_y)
+        for _ in range(60):
+            spirit.update(1/60)
+        self.assertEqual(spirit.rect.y,spirit.base_y)
+        g.animation.reset()
+        for _ in range(60):
+            g.animation.update(1/60,g.player,0,True,True,20)
+        self.assertAlmostEqual(g.animation.walk_clock,1.3)
 
 
 if __name__ == '__main__':
