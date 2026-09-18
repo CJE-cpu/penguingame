@@ -98,6 +98,7 @@ class WorldArt:
                     (72,24),(180,110),(100,65),(38,62)]
 
     def __init__(self, data):
+        self.contact_rows = {}
         babies = atlas_cells(data/'baby-motion-atlas-v2.png',4,2)
         frames = fit_cycle(babies,(32,40),padding=0)
         self.babies = {name:[frames[i] for i in indices] for name,indices in
@@ -125,4 +126,29 @@ class WorldArt:
 
     def place(self, screen, name, feet):
         image = self.objects[name]
-        screen.blit(image,image.get_rect(midbottom=(round(feet[0]),round(feet[1]))))
+        if name in ('journal','journal-open','ocean-rock','seaweed'):
+            screen.blit(image,image.get_rect(midbottom=(round(feet[0]),round(feet[1]))))
+        else:
+            self.grounded(screen,image,feet,snow=name!='dive-hole')
+
+    def contact_row(self, image):
+        key = id(image)
+        if key not in self.contact_rows:
+            mask = pg.mask.from_surface(image,128)
+            bounds = image.get_bounding_rect(128)
+            threshold = max(2,round(bounds.w*0.2))
+            rows = [y for y in range(bounds.top,bounds.bottom)
+                    if sum(mask.get_at((x,y)) for x in range(bounds.left,bounds.right))>=threshold]
+            self.contact_rows[key] = rows[-1] if rows else bounds.bottom-1
+        return self.contact_rows[key]
+
+    def grounded(self, screen, image, feet, snow=True):
+        x,y = round(feet[0]),round(feet[1])
+        bounds = image.get_bounding_rect(128)
+        rect = image.get_rect(midbottom=(x,y+image.get_height()-self.contact_row(image)))
+        if snow:
+            pg.draw.ellipse(screen,(146,195,207),(x-bounds.w//2,y-1,bounds.w,6))
+        screen.blit(image,rect)
+        if snow:
+            pg.draw.line(screen,(231,249,252),(x-bounds.w//3,y+3),(x+bounds.w//3,y+3),2)
+        return rect

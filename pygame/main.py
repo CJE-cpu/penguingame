@@ -11,6 +11,7 @@ from adventure import AdventureContent
 from tutorial import Coach, TutorialStage
 from art import WorldArt
 from window import GameWindow
+from cave import CaveExpedition
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1800
@@ -128,6 +129,7 @@ class Game:
         self.quit_requested = False
         self.coach = Coach()
         self.tutorial = None
+        self.cave_expedition = None
         self.animation.reset()
         self.feedback.reset()
         self.combat.reset()
@@ -188,6 +190,7 @@ class Game:
         self.checkpoints = [pg.Rect(grounds[0].left + 30, grounds[0].top-60, 95, 60)
                             for grounds in self.region_grounds]
         self.checkpoint_index = 0
+        self.visited_checkpoints = {0}
         self.spawn = (55, 498)
         self.crumbles = {}  # key -> (elapsed since stepped on, time left hidden)
         self.caves = [{'rect': pg.Rect(self.region_grounds[i][-1].right - 210, self.region_grounds[i][-1].top-130, 180, 130),
@@ -200,9 +203,11 @@ class Game:
         self.carried_baby = None
         self.rescued = 0
         self.in_sanctuary = False
+        self.sanctuary_seen = False
         self.max_score += len(self.babies) * 100 + len(self.caves) * 100
         self.content = AdventureContent(self)
         self.max_score += 6*60 + 170 + 200 + 6*40 + 500
+        self.max_score += 300 + 2*(30+50) # Optional cavern completion and guardians.
         self.arrange_potions(placements)
 
     def start(self, practice=True):
@@ -258,6 +263,17 @@ class Game:
                 if self.tutorial and self.tutorial.finished:
                     self.finish_tutorial()
             return False
+        if self.cave_expedition:
+            if key == pg.K_TAB:
+                self.content.book_open = not self.content.book_open
+            elif key == pg.K_e:
+                if self.content.book_open:
+                    self.content.book_open = False
+                else:
+                    self.cave_expedition.action(self)
+            elif self.content.book_open and key in (pg.K_LEFT,pg.K_RIGHT):
+                self.content.book_page = (self.content.book_page+(1 if key==pg.K_RIGHT else -1))%7
+            return key in (pg.K_SPACE,pg.K_UP,pg.K_w) and not self.content.book_open
         if self.tutorial:
             self.tutorial.key(self,key)
             return key in (pg.K_SPACE,pg.K_UP,pg.K_w) and not self.content.book_open
@@ -404,8 +420,9 @@ class Game:
         sanctuary = self.player.colliderect(self.checkpoints[-1].inflate(90,60))
         if sanctuary:
             self.invincible = max(self.invincible,0.15)
-            if not self.in_sanctuary:
+            if not self.sanctuary_seen:
                 self.feedback.emit(self.player.midtop,'보금자리의 안전지대',(160,239,193))
+                self.sanctuary_seen = True
         self.in_sanctuary = sanctuary
         for key, (elapsed, hidden) in list(self.crumbles.items()):
             if hidden > 0:
@@ -424,8 +441,9 @@ class Game:
             self.crumbles[key] = (elapsed, hidden)
         for index, checkpoint in enumerate(self.checkpoints):
             if self.player.colliderect(checkpoint):
-                if index != self.checkpoint_index:
+                if index not in self.visited_checkpoints:
                     self.feedback.emit(checkpoint.midtop, '저장 완료', (169,235,255))
+                    self.visited_checkpoints.add(index)
                 self.checkpoint_index = index
                 self.spawn = (checkpoint.x + 25, checkpoint.bottom-self.player.height)
                 if self.carried_baby is not None:
@@ -445,11 +463,6 @@ class Game:
         for cave in self.caves:
             if self.player.colliderect(cave['rect']):
                 cave['found'] = True
-                chest = pg.Rect(cave['rect'].right - 45, cave['rect'].bottom-35, 30, 30)
-                if not cave['treasure'] and self.player.colliderect(chest):
-                    cave['treasure'] = True
-                    self.score += 100
-                    self.feedback.emit(chest.midtop, '보물 발견! +100', (255,228,142))
 
     def respawn(self, hit=False):
         self.animation.reset()
@@ -491,6 +504,9 @@ class Game:
             self.tutorial.update(self,dt,direction,jump,slide,swim_vertical)
             return
         if self.content.book_open:
+            return
+        if self.cave_expedition:
+            self.cave_expedition.update(self,dt,direction,jump,slide)
             return
         if not self.content.diving and not self.combat.hurt:
             self.explain_nearby(slide)
@@ -654,6 +670,12 @@ class Game:
         if not self.started:
             self.draw_intro(screen)
             return
+        if self.cave_expedition:
+            self.cave_expedition.draw(self,screen)
+            if self.content.book_open:
+                self.content.draw_book(self,screen)
+            self.coach.draw(self,screen)
+            return
         if self.tutorial:
             self.tutorial.draw(self,screen)
             self.coach.draw(self,screen)
@@ -667,7 +689,6 @@ class Game:
         self.draw_background(screen)
         # Show water in the ground gaps so falls are visually clear.
         pg.draw.rect(screen, (24, 88, 130), (0, 550, WIDTH, 50))
-        self.draw_adventure(screen)
         for platform in self.active_platforms():
             rect = self.platform_draw_rect(platform)
             kind = self.platform_kinds[tuple(platform)]
@@ -675,6 +696,7 @@ class Game:
             if kind == 'crumble' and tuple(platform) in self.crumbles:
                 progress = min(1, self.crumbles[tuple(platform)][0] / 0.8)
                 pg.draw.rect(screen, (245, 92, 125), (rect.x, rect.y-4, int(rect.width*progress), 3))
+        self.draw_adventure(screen)
         for index, (kind, fish) in enumerate(self.fish):
             bob = round(math.sin(self.time * 4 + index) * 3)
             screen.blit(self.art.fish(kind,self.time+index*0.17), fish.move(-self.camera_x, bob))
@@ -731,15 +753,12 @@ class Game:
         region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
         for cave in self.caves:
             rect = cave['rect'].move(-self.camera_x, 0)
-            screen.blit(self.cave_image, self.cave_image.get_rect(midbottom=(rect.centerx, rect.bottom+5)))
-            if cave['found'] and not cave['treasure']:
-                chest = pg.Rect(rect.right - 45, rect.bottom-35, 30, 30)
-                screen.blit(self.chest_image, chest)
+            self.art.grounded(screen,self.cave_image,rect.midbottom)
         for index, checkpoint in enumerate(self.checkpoints):
             rect = checkpoint.move(-self.camera_x, 0)
             if index == len(self.checkpoints)-1:
                 pg.draw.ellipse(screen,(151,222,190),rect.inflate(70,12),2)
-            screen.blit(self.igloo_image, self.igloo_image.get_rect(midbottom=(rect.centerx, rect.bottom+5)))
+            self.art.grounded(screen,self.igloo_image,rect.midbottom)
             if index == self.checkpoint_index:
                 pg.draw.circle(screen, (111, 255, 151), (rect.centerx, rect.top-32), 5)
         for index, baby in enumerate(self.babies):

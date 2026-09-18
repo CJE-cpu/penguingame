@@ -5,7 +5,7 @@ import pygame as pg
 JOURNALS = [
     ('해안의 첫 발자국', '첫 이글루 오른쪽의 넓은 눈밭 끝에서 잠수 구멍을 찾았다. E로 들어가면 왼쪽 위에 출구가 있다.\n산소 35초 안에 귀환해야 한다. 깊은 곳의 황금 물고기를 찾더라도 산소가 절반 남으면 귀환을 준비하자.\n↓를 누르며 이동하면 1.35배로 활주한다. 서두르지 말고 순찰하는 적과 거리를 두자.'),
     ('얼음에 갇힌 친구', '빙하의 가장 높은 발판 오른쪽에 아기 펭귄이 얼음 껍질에 갇혀 있다. 발판 위에 착지한 뒤 ↓를 누르며 가까이 이동하면 껍질이 깨진다.\n친구가 따라오기 시작하면 가까운 이글루로 데려가자. 몸에 닿는 것만으로 구조가 완료되지는 않는다.\n거대 물약은 8초간 적을 돌파한다. 종료 직후에는 1.5초의 보호 시간이 있어 안전한 곳으로 이동할 수 있다.'),
-    ('동굴의 비밀', '동굴 구역의 오른쪽 땅에는 큰 얼음 입구가 있다. 입구 근처에서 E를 누르면 높은 옆길로 이어지는 지름길을 탄다.\n보물 상자는 입구 오른쪽 아래에 있다. 상자에 직접 닿으면 100점을 얻는다. 일지는 두 번째 위쪽 발판 왼쪽에 놓여 있다.\n반전 물약은 오른쪽 위 옆길에 한 개 있다. 효과가 8초 동안 이어지므로 발판 가장자리에서 입력 방향을 확인하자.'),
+    ('동굴의 비밀', '동굴 구역과 빙붕 구역 오른쪽 땅의 얼음 입구에서 E를 누르면 별도의 내부를 탐험한다. 푸른 동굴은 낮은 활주 통로, 빙붕 동굴은 무너지는 다리가 특징이다.\n봉인석 3개를 찾아 오른쪽 레버에서 E로 보물방을 연다. 상자에서 E로 100점을 얻고, 끝의 출구에서 E로 나오면 150점과 먹이 3개, 높은 옆길로 이어지는 지름길을 얻는다.\n입구 근처 E로 언제든 돌아올 수 있다. 찾은 봉인석과 보물 기록은 유지되고, 같은 보상은 두 번 지급되지 않는다. 반전 물약은 바깥 동굴 구역의 오른쪽 위 옆길에 한 개 있다.'),
     ('눈보라 속 식사', '눈보라 구역의 가장 높은 발판 오른쪽에서 배고픈 친구를 만났다. 먹이 3마리를 가진 채 가까이서 E를 누르면 친구가 따라온다.\n먹이는 물고기 한 마리를 주울 때 한 개씩 늘어난다. 나눠 줘도 점수와 30마리 수집 목표는 줄어들지 않는다.\n바람은 왼쪽으로 분다. 속도 물약과 활주를 이용하되, 갈매기가 낮게 내려올 때는 잠시 기다리자.'),
     ('빙붕 탈출 기록', '갈라진 빙붕 입구부터 오른쪽 끝까지 32초 안에 건너면 탈출 성공이다. 발판은 밟은 뒤 0.8초에 무너지고 4초 뒤 복구된다.\n위쪽 길의 결정은 선택 수집품이다. 탈출 도중 억지로 돌아가지 말고, 완료 기록을 남긴 후 천천히 다시 찾아도 된다.\n추락하거나 시간이 끝나도 물고기, 일지와 구조 기록은 유지된다. 입구에서 도전을 다시 시작할 수 있다.'),
     ('함께 만든 집', '보금자리의 가장 높은 발판 왼쪽에 길 안내 레버가 있다. 가까이서 E를 눌러 초록 깃발을 세운 뒤 오른쪽 친구를 만나자.\n마지막 이글루에서는 먹이 5개로 둥지, 8개로 깃발, 10개로 꽃밭을 만든다. 연구 의뢰 보상도 먹이로 사용할 수 있다.\n물고기 30마리와 친구 3마리, 탈출 완료 기록을 모두 갖추고 이곳에 돌아오면 모험 성공이다. Enter로 계속 탐험할 수 있다.')]
@@ -129,15 +129,12 @@ class AdventureContent:
             return
         for index,cave in enumerate(game.caves):
             if self.nearby(game,cave['rect'],105):
-                ledges = game.region_ledges[2 if index==0 else 4]
-                platform = min(ledges,key=lambda p:p.y)
-                game.player.midbottom = (platform.left+28,platform.top)
-                game.x, game.y = map(float,game.player.topleft)
-                game.velocity_x = game.velocity_y = 0
-                game.on_ground = True
-                game.invincible = max(game.invincible,1)
-                game.companion.reset()
-                self.say('숨겨진 동굴 통로를 발견했어요!')
+                if game.carried_baby is not None:
+                    self.say('친구를 먼저 이글루에 데려다 주세요.')
+                    return
+                from cave import CaveExpedition
+                game.cave_expedition = CaveExpedition(game,index)
+                cave['found'] = True
                 return
 
     def leave_ocean(self, game):
@@ -241,7 +238,7 @@ class AdventureContent:
                 return f'E: {name} 만들기 · 물고기 {cost}마리'
             return '우리 보금자리 완성! TAB: 탐험 일지'
         if any(self.nearby(game,c['rect'],105) for c in game.caves):
-            return 'E: 동굴의 숨겨진 위쪽 통로'
+            return 'E: 동굴 탐험 · 봉인석 3개와 보물 찾기'
         return ''
 
     def draw_world(self, game, screen):
@@ -260,8 +257,6 @@ class AdventureContent:
             game.art.place(screen,'journal',rect.midbottom)
         hole = self.hole.move(-game.camera_x,0)
         game.art.place(screen,'dive-hole',hole.midbottom)
-        if -100<hole.x<900:
-            game.ui.text(screen,'잠수 E',(hole.x-3,hole.y-23),game.ui.small)
         for index,baby in enumerate(game.babies):
             if self.quests[index] or baby['rescued']:
                 continue
@@ -297,8 +292,8 @@ class AdventureContent:
         if self.escape_active:
             message = f'빙붕 탈출 {max(0,self.escape_left):.1f}초 · 오른쪽 끝까지!'
         if message:
-            game.ui.panel(screen,(100,510,600,39),dark=True)
-            game.ui.text(screen,message,(400,529),game.ui.small,'white',center=True)
+            game.ui.panel(screen,(100,202,600,35),dark=True)
+            game.ui.text(screen,message,(400,219),game.ui.small,'white',center=True,max_width=570)
 
     def draw_book(self, game, screen):
         game.ui.veil(screen)
@@ -356,7 +351,6 @@ class AdventureContent:
         if camera<170:
             exit_center = (round(100-camera),115)
             pg.draw.ellipse(screen,(162,238,239),(exit_center[0]-47,103,94,24),2)
-            game.ui.text(screen,'E 귀환',(max(45,exit_center[0]),150),game.ui.small,'white',center=True)
         for i in range(10):
             x = i*190-camera+70
             game.art.place(screen,'ocean-rock' if i%3==0 else 'seaweed',(x,560))
@@ -411,5 +405,5 @@ class AdventureContent:
         pg.draw.circle(screen,(25,57,76),(marker,y),5)
         pg.draw.circle(screen,'white',(marker,y),2)
         if self.notice_left:
-            game.ui.panel(screen,(130,480,540,34),dark=True)
-            game.ui.text(screen,self.notice,(400,497),game.ui.small,'white',center=True,max_width=510)
+            game.ui.panel(screen,(130,151,540,34),dark=True)
+            game.ui.text(screen,self.notice,(400,168),game.ui.small,'white',center=True,max_width=510)

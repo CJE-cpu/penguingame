@@ -133,7 +133,7 @@ class IceUI:
             (game.penguin_right, '배로 미끄러지기', '↓ + 이동: 빠른 활주 · 얼음 껍질 돌파'),
             (game.fish_images['blue'], '잠수 탐험 · 산소 35초', '해안 구멍 E · 방향키 수영 · 구멍으로 귀환'),
             (game.baby_image, '친구마다 다른 구조 미션', '얼음 깨기 · 먹이 3마리 · 깃발 레버 E'),
-            (game.chest_image, '숨겨진 길과 탐험 일지', '동굴 E: 지름길 · 옆길 일지: TAB 읽기'),
+            (game.chest_image, '봉인된 동굴의 보물', '동굴 E · 봉인석 3개 → 레버 → 보물'),
             (game.igloo_image, '친구들과 꾸미는 보금자리', '마지막 이글루 E · 물고기로 둥지와 장식'),
             (game.platform_images['crumble'], '빙붕 탈출과 연구 의뢰', '탈출 32초 · 결정 6개 · TAB 의뢰 확인')]
         for index, (image, title, detail) in enumerate(cards):

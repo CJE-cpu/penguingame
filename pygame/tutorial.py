@@ -172,7 +172,6 @@ class TutorialStage:
         if self.diving:
             screen.blit(game.ocean_background,(0,0))
             game.art.place(screen,'dive-hole',(100,120))
-            game.ui.text(screen,'출구 E',(70,123),game.ui.small,'white')
             if not self.swim_fish:
                 screen.blit(game.art.fish('blue',self.time),(452,338))
             game.content.draw_water_light(screen,self.time,0)
@@ -184,7 +183,7 @@ class TutorialStage:
                 screen.blit(game.platform_texture('snow',platform.size),platform.move(-self.camera,0))
             arch = self.arch.move(-self.camera,0)
             image = game.art.objects['practice-arch']
-            screen.blit(image,image.get_rect(midbottom=(arch.centerx,550)))
+            game.art.grounded(screen,image,(arch.centerx,550))
             if self.step<=1:
                 screen.blit(game.fish_images['blue'],(390-self.camera,410))
                 screen.blit(game.fish_images['orange'],(260-self.camera,515))
@@ -195,7 +194,7 @@ class TutorialStage:
             baby_state = ('jump' if self.vy<0 else 'fall') if self.carrying and not self.grounded else 'walk' if self.carrying else 'idle'
             baby_image = game.art.baby(baby_state,self.time,self.right if self.carrying else False)
             screen.blit(baby_image,baby_image.get_rect(midbottom=(round(baby_x-self.camera),self.player.bottom if self.carrying else self.baby.bottom)))
-            screen.blit(game.igloo_image,game.igloo_image.get_rect(midbottom=(round(self.home.centerx-self.camera),555)))
+            game.art.grounded(screen,game.igloo_image,(self.home.centerx-self.camera,self.home.bottom))
             game.art.place(screen,'dive-hole',self.hole.move(-self.camera,0).midbottom)
         game.ui.panel(screen,(12,12,776,73))
         game.ui.text(screen,f'연습 해안 · 튜토리얼 {self.step+1}/6',(29,21),game.ui.heading)

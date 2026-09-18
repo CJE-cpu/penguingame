@@ -7,6 +7,7 @@ import math
 import pygame as pg
 from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy
 from window import GameWindow
+from cave import CaveExpedition
 
 
 class AdventureChecks(unittest.TestCase):
@@ -62,6 +63,102 @@ class AdventureChecks(unittest.TestCase):
         g.effects = {'grow': 100 if grown else 0, 'speed': 0, 'reverse': 0}
         g.crumbles.clear()
         g.won = False
+
+    def test_checkpoint_effect_only_on_first_visit_but_spawn_still_changes(self):
+        g = self.game
+        for index in (1,2,1,2,0,1):
+            g.player.midbottom = g.checkpoints[index].midbottom
+            g.update_adventure(0)
+            self.assertEqual(g.checkpoint_index,index)
+        saves = [b for b in g.feedback.bursts if b['text']=='저장 완료']
+        self.assertEqual(len(saves),2)
+        self.assertEqual(g.visited_checkpoints,{0,1,2})
+        g.respawn()
+        g.update_adventure(0)
+        self.assertFalse(any(b['text']=='저장 완료' for b in g.feedback.bursts))
+
+    def test_grounded_objects_use_visible_base_as_floor(self):
+        g = self.game
+        for image in (g.igloo_image,g.cave_image,g.chest_image,
+                      g.art.objects['nest'],g.art.objects['home-flag'],g.art.objects['lever-down']):
+            rect = g.art.grounded(self.screen,image,(300,450))
+            self.assertEqual(rect.y+g.art.contact_row(image),450)
+
+    def test_cavern_puzzle_persists_and_rewards_only_once(self):
+        g = self.game
+        for index in range(2):
+            g.player.midbottom = g.caves[index]['rect'].midbottom
+            g.content.action(g)
+            cave = g.cave_expedition
+            self.assertIsNotNone(cave)
+            cave.enemies = []
+            cave.player.midbottom = cave.lever.midbottom
+            cave.action(g)
+            self.assertFalse(cave.state['lever'])
+            for stone in cave.stones:
+                cave.player.midbottom = stone.midbottom
+                cave.x,cave.y = map(float,cave.player.topleft)
+                cave.vy = 0
+                g.update(0)
+            self.assertEqual(len(cave.state['stones']),3)
+            cave.player.midbottom = (80,550)
+            cave.action(g)
+            self.assertIsNone(g.cave_expedition)
+            g.content.action(g)
+            cave = g.cave_expedition
+            cave.enemies = []
+            self.assertEqual(len(cave.state['stones']),3)
+            g.content.book_open = True
+            position,time = cave.player.copy(),cave.time
+            g.update(1,1,True)
+            self.assertEqual((cave.player,cave.time),(position,time))
+            g.content.book_open = False
+            g.ask_exit()
+            g.update(1,1,True)
+            self.assertEqual(cave.time,time)
+            g.handle_key(pg.K_ESCAPE)
+            cave.player.midbottom = cave.lever.midbottom
+            g.handle_key(pg.K_e)
+            self.assertTrue(cave.state['lever'])
+            score,wallet = g.score,g.content.wallet
+            cave.player.midbottom = cave.chest.midbottom
+            cave.action(g)
+            cave.action(g)
+            self.assertEqual(g.score,score+100)
+            self.assertTrue(g.caves[index]['treasure'])
+            g.draw(self.screen)
+            cave.player.midbottom = cave.exit.midbottom
+            cave.action(g)
+            self.assertIsNone(g.cave_expedition)
+            self.assertEqual(g.score,score+250)
+            self.assertEqual(g.content.wallet,wallet+3)
+            self.assertEqual(g.player.bottom,min(g.region_ledges[2 if index==0 else 4],key=lambda p:p.y).top)
+            cave = CaveExpedition(g,index)
+            g.cave_expedition = cave
+            cave.player.midbottom = cave.chest.midbottom
+            cave.action(g)
+            cave.player.midbottom = cave.exit.midbottom
+            cave.action(g)
+            self.assertEqual(g.score,score+250)
+
+    def test_cavern_gate_and_low_passage_match_collisions(self):
+        g = self.game
+        cave = CaveExpedition(g,0)
+        g.cave_expedition = cave
+        cave.enemies = []
+        cave.player.midbottom = (cave.arch.left-24,550)
+        cave.x,cave.y = map(float,cave.player.topleft)
+        for _ in range(10):
+            cave.update(g,1/60,1,False,False)
+        self.assertEqual(cave.player.right,cave.arch.left)
+        for _ in range(30):
+            cave.update(g,1/60,1,False,True)
+        self.assertGreater(cave.player.left,cave.arch.right)
+        cave.player.midbottom = (cave.gate.left-25,550)
+        cave.x,cave.y = map(float,cave.player.topleft)
+        for frame in range(35):
+            cave.update(g,1/60,1,frame==0,False)
+        self.assertLessEqual(cave.player.right,cave.gate.left)
 
     def test_growth_preserves_passage_and_attacks(self):
         g = self.game
@@ -152,8 +249,8 @@ class AdventureChecks(unittest.TestCase):
         for cave in g.caves:
             g.player.topleft = (cave['rect'].right-45, 498)
             g.update_adventure(0)
-            self.assertTrue(cave['treasure'])
-        self.assertEqual(g.score, 300)
+            self.assertFalse(cave['treasure'])
+        self.assertEqual(g.score, 100)
         g.fish = []
         g.update(1/60)
         self.assertFalse(g.won)
@@ -719,7 +816,9 @@ class AdventureChecks(unittest.TestCase):
         c.book_open = False
         g.player.midbottom = g.caves[0]['rect'].midbottom
         c.action(g)
-        self.assertEqual(g.player.bottom,min(g.region_ledges[2],key=lambda p:p.y).top)
+        self.assertIsNotNone(g.cave_expedition)
+        g.cave_expedition.action(g)
+        self.assertIsNone(g.cave_expedition)
         self.place(g.region_grounds[5][0],g.checkpoints[-1].centerx)
         c.wallet = 23
         for i in range(3):
