@@ -3,6 +3,7 @@ from pathlib import Path
 import math
 import pygame as pg
 from ui import IceUI
+from animation import PenguinAnimation
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1200
@@ -86,6 +87,7 @@ class Game:
         self.penguin_right = pg.transform.flip(self.penguin_left, True, False)
         self.big_penguin_left = load_image('penguin-adult-left.png', (60, 78), keep_aspect=True)
         self.big_penguin_right = pg.transform.flip(self.big_penguin_left, True, False)
+        self.animation = PenguinAnimation(DATA)
         self.fish_images = {}
         for kind, (filename, tint, points) in FISH_TYPES.items():
             image = load_image(filename, (36, 24), keep_aspect=True)
@@ -126,6 +128,7 @@ class Game:
         self.reset()
 
     def reset(self):
+        self.animation.reset()
         self.player = pg.Rect(55, 498, 40, 52)
         self.x, self.y = float(self.player.x), float(self.player.y)
         self.velocity_y = 0.0
@@ -242,6 +245,7 @@ class Game:
                     self.score += 100
 
     def respawn(self, hit=False):
+        self.animation.reset()
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.player.size = (40, 52)
         self.player.topleft = self.spawn
@@ -268,6 +272,8 @@ class Game:
         if self.won:
             return
         self.invincible = max(0.0, self.invincible - dt)
+        was_grounded = self.on_ground
+        previous_x = self.player.x
         self.update_adventure(dt)
         previous_bottom = self.player.bottom
         for enemy in self.enemies:
@@ -365,6 +371,9 @@ class Game:
             self.won = True
         if self.player.top > HEIGHT:
             self.respawn()
+            return
+        self.animation.update(dt, self.player, self.velocity_y, self.on_ground,
+                              was_grounded, abs(self.player.x-previous_x))
         self.update_presentation(dt)
 
     def draw(self, screen):
@@ -403,10 +412,8 @@ class Game:
         for kind, rect in self.items:
             rect = rect.move(-self.camera_x, 0)
             screen.blit(self.item_images[kind], rect)
-        if self.effects['grow']:
-            image = self.big_penguin_right if self.facing_right else self.big_penguin_left
-        else:
-            image = self.penguin_right if self.facing_right else self.penguin_left
+        image = self.animation.image(self.effects['grow'], self.facing_right)
+        self.animation.draw_puffs(screen, self.camera_x)
         if not self.invincible or int(self.time * 10) % 2 == 0:
             rect = self.player.move(-self.camera_x, 0)
             screen.blit(image, image.get_rect(midbottom=rect.midbottom))

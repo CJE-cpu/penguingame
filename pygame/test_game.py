@@ -194,6 +194,40 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(g.region_banner, 0)
         self.assertEqual(g.camera_x, 0)
 
+    def test_penguin_animation_states(self):
+        g = self.game
+        g.items = []
+        g.enemies = []
+        self.place(g.region_grounds[0][0], 75)
+        g.update(1/60)
+        self.assertEqual(g.animation.state, 'idle')
+        frames = set()
+        for _ in range(16):
+            g.update(1/60, 1)
+            self.assertEqual(g.animation.state, 'walk')
+            frames.add(pg.image.tobytes(g.animation.image(False, True), 'RGBA'))
+        self.assertEqual(len(frames), 4)
+        self.place(g.region_grounds[0][0], 75)
+        g.animation.reset()
+        states = set()
+        for tick in range(60):
+            g.update(1/60, 0, tick == 0)
+            states.add(g.animation.state)
+            if g.animation.state == 'land':
+                self.assertTrue(g.animation.puffs)
+        self.assertTrue({'jump', 'fall', 'land', 'idle'} <= states)
+        g.animation.state = 'jump'
+        normal = g.animation.image(False, False)
+        right = g.animation.image(False, True)
+        self.assertEqual(pg.image.tobytes(pg.transform.flip(normal, True, False), 'RGBA'),
+                         pg.image.tobytes(right, 'RGBA'))
+        self.assertEqual(normal.get_size(), (64, 56))
+        self.assertEqual(g.animation.image(True, False).get_size(), (96, 84))
+        self.assertEqual(g.player.size, (40, 52))
+        g.respawn()
+        self.assertEqual(g.animation.state, 'idle')
+        self.assertFalse(g.animation.puffs)
+
 
 if __name__ == '__main__':
     unittest.main()

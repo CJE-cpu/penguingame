@@ -14,3 +14,5 @@ Files:
 
 Adventure art update, built-in image_gen tool. Prompt: consistent Antarctic pixel-art 4x3 object atlas (adult penguin, baby, crab, igloo, cave entrance, chest, growth/speed/reverse potions, snow/smooth/cracked ice blocks), transparent background, isolated sprites. Alpha extraction edit: remove background and halos, preserve sprites and opaque doorways. Background prompt: six-panel pixel-art landscapes: snowy coast, glacier canyon, ice cave interior, blizzard plateau, fractured shelf, sunset nesting coast. Final cropped PNG files are in this directory.
 Fish prompt (built-in image_gen): transparent single-row atlas, isolated orange, cyan-blue and golden fish with distinct silhouettes and crisp dark outlines, all facing left. Outputs: orange-fish.png, blue-fish.png, gold-fish.png.
+
+Animation: built-in image_gen with penguin-adult-left.png as identity reference. Prompt: transparent 4x2 pixel-art atlas, four left-facing walk frames with alternating feet and flipper swing, idle, ascent with spread flippers, descent and crouched landing. Same identity/proportions. Extracted frames use one shared scale and foot baseline on 64x56 transparent canvases.
