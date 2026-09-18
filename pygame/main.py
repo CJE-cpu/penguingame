@@ -6,6 +6,7 @@ from ui import IceUI
 from animation import PenguinAnimation
 from enemies import Enemy, ENEMY_INFO
 from feedback import InteractionEffects
+from motion import CombatMotion, BabyCompanion
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1200
@@ -71,6 +72,8 @@ class Game:
         self.big_penguin_right = pg.transform.flip(self.big_penguin_left, True, False)
         self.animation = PenguinAnimation(DATA)
         self.feedback = InteractionEffects()
+        self.combat = CombatMotion()
+        self.companion = BabyCompanion()
         self.fish_images = {}
         for kind, (filename, tint, points) in FISH_TYPES.items():
             image = load_image(filename, (36, 24), keep_aspect=True)
@@ -119,6 +122,8 @@ class Game:
     def reset(self):
         self.animation.reset()
         self.feedback.reset()
+        self.combat.reset()
+        self.companion.reset()
         self.player = pg.Rect(55, 498, 40, 52)
         self.x, self.y = float(self.player.x), float(self.player.y)
         self.velocity_y = 0.0
@@ -170,12 +175,12 @@ class Game:
         placements = [('grow',0,False,0,120), ('speed',1,True,0,95),
                       ('reverse',2,True,-1,105), ('speed',3,True,-1,100),
                       ('grow',4,False,0,120)]
-        self.checkpoints = [pg.Rect(i * REGION_WIDTH + 30, 490, 95, 60)
-                            for i in range(len(REGIONS))]
+        self.checkpoints = [pg.Rect(grounds[0].left + 30, grounds[0].top-60, 95, 60)
+                            for grounds in self.region_grounds]
         self.checkpoint_index = 0
         self.spawn = (55, 498)
         self.crumbles = {}  # key -> (elapsed since stepped on, time left hidden)
-        self.caves = [{'rect': pg.Rect(self.region_grounds[i][-1].right - 210, 420, 180, 130),
+        self.caves = [{'rect': pg.Rect(self.region_grounds[i][-1].right - 210, self.region_grounds[i][-1].top-130, 180, 130),
                        'found': False, 'treasure': False} for i in (2, 4)]
         self.babies = []
         for region in (1, 3, 5):
@@ -314,10 +319,11 @@ class Game:
                 if index != self.checkpoint_index:
                     self.feedback.emit(checkpoint.midtop, '저장 완료', (169,235,255))
                 self.checkpoint_index = index
-                self.spawn = (checkpoint.x + 25, 498)
+                self.spawn = (checkpoint.x + 25, checkpoint.bottom-self.player.height)
                 if self.carried_baby is not None:
                     self.babies[self.carried_baby]['rescued'] = True
                     self.carried_baby = None
+                    self.companion.reset()
                     self.rescued += 1
                     self.score += 100
                     self.feedback.emit(checkpoint.midtop, '친구 구조! +100', (157,238,183))
@@ -325,11 +331,12 @@ class Game:
             if (not baby['rescued'] and self.carried_baby is None
                     and self.player.colliderect(baby['rect'])):
                 self.carried_baby = index
+                self.companion.start(self, baby)
                 self.feedback.emit(baby['rect'].midtop, '이글루로 데려가요!', (178,227,255))
         for cave in self.caves:
             if self.player.colliderect(cave['rect']):
                 cave['found'] = True
-                chest = pg.Rect(cave['rect'].right - 45, 515, 30, 30)
+                chest = pg.Rect(cave['rect'].right - 45, cave['rect'].bottom-35, 30, 30)
                 if not cave['treasure'] and self.player.colliderect(chest):
                     cave['treasure'] = True
                     self.score += 100
@@ -338,6 +345,8 @@ class Game:
     def respawn(self, hit=False):
         self.animation.reset()
         self.feedback.reset()
+        self.combat.reset()
+        self.companion.reset()
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.player.size = (40, 52)
         self.player.topleft = self.spawn
@@ -366,6 +375,12 @@ class Game:
             return
         self.invincible = max(0.0, self.invincible - dt)
         self.feedback.update(dt,self)
+        was_hurt = self.combat.hurt > 0
+        self.combat.update(dt)
+        if was_hurt:
+            if not self.combat.hurt:
+                self.respawn(hit=True)
+            return
         was_grounded = self.on_ground
         previous_x = self.player.x
         self.update_adventure(dt)
@@ -436,6 +451,7 @@ class Game:
                 continue
             if self.effects['grow'] or (self.velocity_y > 0 and previous_bottom <= enemy.previous_top + 3):
                 self.enemies.remove(enemy)
+                self.combat.defeat(enemy, self.enemy_images)
                 self.score += enemy.points
                 self.feedback.emit(enemy.rect.midtop, f'{ENEMY_INFO[enemy.kind][0]} 처치 +{enemy.points}', (255,219,132))
                 self.defeated += 1
@@ -445,7 +461,8 @@ class Game:
                     self.velocity_y = -420
                     self.on_ground = False
             elif not self.invincible:
-                self.respawn(hit=True)
+                self.combat.hit(self.player, enemy)
+                self.feedback.emit(self.player.midtop, '피격!', (255,153,153))
                 return
         remaining_fish = []
         for kind, rect in self.fish:
@@ -479,6 +496,7 @@ class Game:
         self.animation.update(dt, self.player, self.velocity_y, self.on_ground,
                               was_grounded, abs(self.player.x-previous_x))
         self.update_presentation(dt)
+        self.companion.update(self, dt)
 
     def draw(self, screen):
         if not self.started:
@@ -506,15 +524,18 @@ class Game:
             color = ITEM_STYLE[kind][0]
             pg.draw.ellipse(screen, color, (rect.x+2,rect.bottom-3,26,5),2)
             screen.blit(self.item_images[kind], rect.move(0,bob))
-        image = self.feedback.player_image(self)
+        image = self.combat.pose(self.feedback.player_image(self))
         self.feedback.draw_aura(self, screen)
         self.animation.draw_puffs(screen, self.camera_x)
-        if not self.invincible or int(self.time * 10) % 2 == 0:
+        if self.combat.hurt or not self.invincible or int(self.time * 10) % 2 == 0:
             rect = self.player.move(-self.camera_x, 0)
+            if self.combat.hurt:
+                age = 0.45-self.combat.hurt
+                rect.move_ip(round(self.combat.hit_direction*math.sin(age/0.45*math.pi)*22),
+                             -round(math.sin(age/0.45*math.pi)*15))
             screen.blit(image, image.get_rect(midbottom=rect.midbottom))
-        if self.carried_baby is not None:
-            rect = self.player.move(-self.camera_x, 0)
-            screen.blit(self.baby_image, (rect.centerx - 16, rect.bottom - image.get_height() - 38))
+        self.companion.draw(self, screen)
+        self.combat.draw(self, screen)
         self.draw_region_atmosphere(screen)
         self.draw_baby_markers(screen)
         self.feedback.draw(self, screen)
@@ -532,15 +553,15 @@ class Game:
         region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
         for cave in self.caves:
             rect = cave['rect'].move(-self.camera_x, 0)
-            screen.blit(self.cave_image, self.cave_image.get_rect(midbottom=rect.midbottom))
+            screen.blit(self.cave_image, self.cave_image.get_rect(midbottom=(rect.centerx, rect.bottom+5)))
             if cave['found'] and not cave['treasure']:
-                chest = pg.Rect(rect.right - 45, 515, 30, 30)
+                chest = pg.Rect(rect.right - 45, rect.bottom-35, 30, 30)
                 screen.blit(self.chest_image, chest)
         for index, checkpoint in enumerate(self.checkpoints):
             rect = checkpoint.move(-self.camera_x, 0)
             if index == len(self.checkpoints)-1:
                 pg.draw.ellipse(screen,(151,222,190),rect.inflate(70,12),2)
-            screen.blit(self.igloo_image, self.igloo_image.get_rect(midbottom=rect.midbottom))
+            screen.blit(self.igloo_image, self.igloo_image.get_rect(midbottom=(rect.centerx, rect.bottom+5)))
             if index == self.checkpoint_index:
                 pg.draw.circle(screen, (111, 255, 151), (rect.centerx, rect.top-32), 5)
         for index, baby in enumerate(self.babies):

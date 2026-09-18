@@ -3,6 +3,7 @@ import os
 os.environ['SDL_VIDEODRIVER'] = 'dummy'
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
 import unittest
+import math
 import pygame as pg
 from main import Game, REGION_WIDTH, REGIONS, Enemy
 
@@ -318,6 +319,70 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw_aura(g,self.screen)
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
+
+    def test_combat_animation_and_delayed_respawn(self):
+        g = self.game
+        enemy = g.enemies[0]
+        g.effects['grow'] = 8
+        g.player.center = enemy.rect.center
+        g.x, g.y = map(float, g.player.topleft)
+        g.update(1/60)
+        self.assertNotIn(enemy,g.enemies)
+        self.assertTrue(g.combat.defeated)
+        self.assertGreater(g.combat.kick,0)
+        g.combat.draw(g,self.screen)
+        g.combat.update(1)
+        self.assertFalse(g.combat.defeated)
+        g.effects['grow'] = 0
+        enemy = g.enemies[0]
+        g.player.center = enemy.rect.center
+        g.x, g.y = map(float,g.player.topleft)
+        g.velocity_y = 0
+        g.update(1/60)
+        self.assertGreater(g.combat.hurt,0)
+        hit_pos = g.player.topleft
+        g.update(0.1,1,True)
+        self.assertEqual(g.player.topleft,hit_pos)
+        self.assertEqual(g.hits,0)
+        g.draw(self.screen)
+        g.update(0.4)
+        self.assertEqual(g.hits,1)
+        self.assertEqual(g.player.topleft,g.spawn)
+        self.assertFalse(g.combat.hurt)
+
+    def test_companion_route_and_building_grounding(self):
+        g = self.game
+        for checkpoint in g.checkpoints:
+            self.assertTrue(any(p.top==checkpoint.bottom and p.left<=checkpoint.left and p.right>=checkpoint.right for p in g.grounds))
+        for cave in g.caves:
+            r = cave['rect']
+            self.assertTrue(any(p.top==r.bottom and p.left<=r.left and p.right>=r.right for p in g.grounds))
+        g.carried_baby = 0
+        g.player.midbottom = (55,550)
+        g.on_ground = True
+        g.babies[0]['rect'].midbottom = g.player.midbottom
+        g.companion.start(g,g.babies[0])
+        recorded = set()
+        followed = set()
+        for frame in range(100):
+            g.time += 1/60
+            x = 55+min(frame,70)*4
+            y = round(550-math.sin(min(frame,70)/70*math.pi)*90)
+            g.player.midbottom = (x,y)
+            g.on_ground = frame in (0,70) or frame>70
+            recorded.add(g.player.midbottom)
+            g.companion.update(g,1/60)
+            followed.add(tuple(g.companion.pos))
+            if g.companion.airborne:
+                self.assertIn(tuple(g.companion.pos),recorded)
+            g.companion.draw(g,self.screen)
+        self.assertGreater(len(followed),20)
+        self.assertGreaterEqual(math.dist(g.companion.pos,g.player.midbottom),36)
+        self.assertFalse(g.companion.airborne)
+        self.assertEqual(g.companion.pos[1],550)
+        g.respawn()
+        self.assertIsNone(g.companion.pos)
+        self.assertFalse(g.companion.route)
 
     def test_clear_potions_panorama_and_shaking(self):
         g = self.game
