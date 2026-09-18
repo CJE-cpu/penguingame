@@ -98,8 +98,8 @@ class TutorialStage:
         if game.content.book_open:
             return
         self.time += dt
-        game.animation.clock += dt
         if self.diving:
+            game.animation.clock += dt
             movement = pg.Vector2(direction,vertical)
             if movement.length_squared()>1:
                 movement.normalize_ip()
@@ -111,6 +111,8 @@ class TutorialStage:
             if self.swimmer.distance_to((470,350))<40:
                 self.swim_fish = True
             return
+        was_grounded = self.grounded
+        previous_x = self.player.x
         if direction:
             self.right = direction>0
         self.sliding = bool(slide and self.grounded and not jump)
@@ -160,16 +162,16 @@ class TutorialStage:
             self.carrying = False
             self.advance(game)
         self.camera = max(0,min(900,self.player.centerx-400))
+        game.animation.update(dt,self.player,self.vy,self.grounded,was_grounded,abs(self.player.x-previous_x))
 
     def draw(self, game, screen):
         screen.blit(game.scene_backgrounds[0],(-round(self.camera*0.2),0))
         if self.diving:
-            screen.fill((15,67,109))
-            pg.draw.rect(screen,(208,239,248),(0,80,800,30))
-            pg.draw.ellipse(screen,(90,181,211),(60,90,80,25))
+            screen.blit(game.ocean_background,(0,0))
+            game.art.place(screen,'dive-hole',(100,120))
             game.ui.text(screen,'출구 E',(70,123),game.ui.small,'white')
             if not self.swim_fish:
-                screen.blit(game.fish_images['blue'],(452,338))
+                screen.blit(game.art.fish('blue',self.time),(452,338))
             image = game.animation.action_image('swim',self.right)
             screen.blit(image,image.get_rect(center=self.swimmer))
             game.ui.text(screen,'연습 바다 · 산소 제한 없음',(400,520),game.ui.body,'white',center=True)
@@ -177,17 +179,20 @@ class TutorialStage:
             for platform in self.platforms:
                 screen.blit(game.platform_texture('snow',platform.size),platform.move(-self.camera,0))
             arch = self.arch.move(-self.camera,0)
-            screen.blit(game.platform_texture('ice',self.arch.size),arch)
+            image = game.art.objects['practice-arch']
+            screen.blit(image,image.get_rect(midbottom=(arch.centerx,550)))
             if self.step<=1:
                 screen.blit(game.fish_images['blue'],(390-self.camera,410))
                 screen.blit(game.fish_images['orange'],(260-self.camera,515))
-            image = game.animation.action_image('slide',self.right) if self.sliding else game.animation.cache['jump' if not self.grounded else 'walk-'+str(int(self.time/0.12)%8+1),False,self.right]
+            image = game.animation.action_image('slide',self.right) if self.sliding else game.animation.image(False,self.right)
             rect = self.player.move(-self.camera,0)
             screen.blit(image,image.get_rect(midbottom=rect.midbottom))
             baby_x = self.player.centerx-45 if self.carrying else self.baby.centerx
-            screen.blit(game.baby_image,game.baby_image.get_rect(midbottom=(round(baby_x-self.camera),self.player.bottom if self.carrying else self.baby.bottom)))
+            baby_state = ('jump' if self.vy<0 else 'fall') if self.carrying and not self.grounded else 'walk' if self.carrying else 'idle'
+            baby_image = game.art.baby(baby_state,self.time,self.right if self.carrying else False)
+            screen.blit(baby_image,baby_image.get_rect(midbottom=(round(baby_x-self.camera),self.player.bottom if self.carrying else self.baby.bottom)))
             screen.blit(game.igloo_image,game.igloo_image.get_rect(midbottom=(round(self.home.centerx-self.camera),555)))
-            pg.draw.ellipse(screen,(13,69,112),self.hole.move(-self.camera,0))
+            game.art.place(screen,'dive-hole',self.hole.move(-self.camera,0).midbottom)
         game.ui.panel(screen,(12,12,776,73))
         game.ui.text(screen,f'연습 해안 · 튜토리얼 {self.step+1}/6',(29,21),game.ui.heading)
         game.ui.text(screen,self.TASKS[self.step],(29,55),game.ui.body)

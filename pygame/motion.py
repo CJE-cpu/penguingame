@@ -15,11 +15,7 @@ class CombatMotion:
         self.hit_direction = 1
 
     def defeat(self, enemy, images):
-        frames = images[enemy.kind]
-        index = int(enemy.clock*5)%2 if enemy.kind == 'skua' else int(bool(enemy.charge or enemy.warning)) if enemy.kind == 'seal' else int(enemy.rect.y < enemy.base_y)
-        image = frames[min(index, len(frames)-1)]
-        if enemy.speed > 0:
-            image = pg.transform.flip(image, True, False)
+        image = enemy.sprite_image(images)
         self.defeated.append((enemy.rect.center, image.copy(), 0.0, 1 if enemy.speed > 0 else -1))
         self.kick = 0.25
 
@@ -113,12 +109,7 @@ class BabyCompanion:
     def draw(self, game, screen):
         if game.carried_baby is None or self.pos is None:
             return
-        image = game.baby_image
-        if self.facing_right:
-            image = pg.transform.flip(image, True, False)
-        if self.airborne:
-            image = pg.transform.scale(image, (35, 36))
-        elif self.moving:
-            image = pg.transform.rotate(image, math.sin(self.walk_clock*17)*9)
+        state = ('jump' if len(self.route)>1 and self.route[1][1][1]<self.pos[1] else 'fall') if self.airborne else 'walk' if self.moving else 'idle'
+        image = game.art.baby(state,self.walk_clock if self.moving else game.time,self.facing_right)
         x, y = self.pos
         screen.blit(image, image.get_rect(midbottom=(round(x-game.camera_x), round(y))))

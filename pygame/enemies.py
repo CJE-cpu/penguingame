@@ -68,12 +68,21 @@ class Enemy:
                 self.velocity_y = 0
             self.rect.y = round(self.y)
 
-    def draw(self, screen, camera_x, images):
-        index = int(self.clock*5)%2 if self.kind == 'skua' else int(bool(self.charge or self.warning)) if self.kind == 'seal' else int(self.rect.y<self.base_y)
+    def sprite_image(self, images):
+        if self.kind == 'seal':
+            index = 3 if self.charge else 2 if self.warning else int(self.clock/0.2)%2
+        elif self.kind == 'spirit':
+            index = (2 if self.velocity_y<0 else 3) if self.rect.y<self.base_y else int(self.clock/0.3)%2
+        else:
+            index = int(self.clock/(0.16 if self.kind=='skua' else 0.2))%4
         frames = images[self.kind]
         image = frames[min(index,len(frames)-1)]
         if self.speed > 0:
             image = pg.transform.flip(image,True,False)
+        return image
+
+    def draw(self, screen, camera_x, images):
+        image = self.sprite_image(images)
         rect = self.rect.move(-camera_x,0)
         screen.blit(image,rect)
         if self.warning:

@@ -9,6 +9,7 @@ from feedback import InteractionEffects
 from motion import CombatMotion, BabyCompanion
 from adventure import AdventureContent
 from tutorial import Coach, TutorialStage
+from art import WorldArt
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1200
@@ -68,30 +69,25 @@ class Game:
         self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
         # One oversized panorama per region; never join non-seamless image edges.
         self.scene_backgrounds = [load_image('scene-' + scene + '.png', (WIDTH + 400, HEIGHT)) for scene in SCENES]
-        self.penguin_left = load_image('penguin-adult-left.png', (40, 52), keep_aspect=True)
-        self.penguin_right = pg.transform.flip(self.penguin_left, True, False)
-        self.big_penguin_left = load_image('penguin-adult-left.png', (60, 78), keep_aspect=True)
-        self.big_penguin_right = pg.transform.flip(self.big_penguin_left, True, False)
         self.animation = PenguinAnimation(DATA)
+        self.penguin_left = self.animation.cycles['idle'][0]
+        self.penguin_right = pg.transform.flip(self.penguin_left,True,False)
+        self.big_penguin_left = pg.transform.scale(self.penguin_left,(96,84))
+        self.big_penguin_right = pg.transform.flip(self.big_penguin_left,True,False)
+        self.art = WorldArt(DATA)
+        self.ocean_background = load_image('ocean-panorama-v2.png',(1800,HEIGHT))
         self.feedback = InteractionEffects()
         self.combat = CombatMotion()
         self.companion = BabyCompanion()
-        self.fish_images = {}
-        for kind, (filename, tint, points) in FISH_TYPES.items():
-            image = load_image(filename, (36, 24), keep_aspect=True)
-            self.fish_images[kind] = image
+        self.fish_images = {kind:self.art.fish(kind,0) for kind in FISH_TYPES}
         self.ui = IceUI()
         self.font = self.ui.body
         self.big_font = self.ui.title
         self.intro_font = self.ui.body
         self.intro_title_font = self.ui.title
-        self.baby_image = load_image('penguin-baby-left.png', (32, 40), keep_aspect=True)
-        self.crab_image = load_image('crab-enemy.png', (44, 30), keep_aspect=True)
-        self.enemy_images = {'crab':[self.crab_image]}
-        for kind, filenames in [('seal', ['seal-patrol','seal-charge']),
-                                ('skua',['skua-wings-up','skua-wings-down']),
-                                ('spirit',['ice-spirit-standing','ice-spirit-jumping'])]:
-            self.enemy_images[kind] = [load_image(name+'.png', ENEMY_INFO[kind][1], keep_aspect=True) for name in filenames]
+        self.baby_image = self.art.baby('idle',0)
+        self.enemy_images = self.art.enemies
+        self.crab_image = self.enemy_images['crab'][0]
         self.igloo_image = load_image('igloo-checkpoint.png', (112, 85), keep_aspect=True)
         self.cave_image = load_image('ice-cave-entrance.png', (180, 135), keep_aspect=True)
         self.chest_image = load_image('golden-treasure-chest.png', (36, 30), keep_aspect=True)
@@ -626,7 +622,7 @@ class Game:
                 pg.draw.rect(screen, (245, 92, 125), (rect.x, rect.y-4, int(rect.width*progress), 3))
         for index, (kind, fish) in enumerate(self.fish):
             bob = round(math.sin(self.time * 4 + index) * 3)
-            screen.blit(self.fish_images[kind], fish.move(-self.camera_x, bob))
+            screen.blit(self.art.fish(kind,self.time+index*0.17), fish.move(-self.camera_x, bob))
         for enemy in self.enemies:
             enemy.draw(screen, self.camera_x, self.enemy_images)
         for kind, rect in self.items:
@@ -636,7 +632,11 @@ class Game:
             pg.draw.ellipse(screen, color, (rect.x+2,rect.bottom-3,26,5),2)
             screen.blit(self.item_images[kind], rect.move(0,bob))
         self.content.draw_world(self,screen)
-        image = self.combat.pose(self.feedback.player_image(self))
+        image = self.feedback.player_image(self)
+        if self.combat.hurt:
+            image = self.animation.hurt_image(0.45-self.combat.hurt,self.facing_right)
+            image = pg.transform.scale(image,(round(image.get_width()*self.feedback.size_scale),round(image.get_height()*self.feedback.size_scale)))
+        image = self.combat.pose(image)
         if self.content.sliding:
             if self.on_ground and abs(self.velocity_x)>40:
                 rect = self.player.move(-self.camera_x,0)
@@ -690,7 +690,8 @@ class Game:
         for index, baby in enumerate(self.babies):
             if not baby['rescued'] and index != self.carried_baby:
                 rect = baby['rect'].move(-self.camera_x, 0)
-                screen.blit(self.baby_image,self.baby_image.get_rect(midbottom=rect.midbottom))
+                image = self.art.baby('idle',self.time+index*0.3)
+                screen.blit(image,image.get_rect(midbottom=rect.midbottom))
         snow_weight = dict(self.scene_weights()).get(3, 0)
         if snow_weight > 0:
             snow = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)

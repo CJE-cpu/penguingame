@@ -323,6 +323,40 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
 
+    def test_generated_art_cycles_and_ground_anchors(self):
+        g = self.game
+        for action in ('slide','swim'):
+            frames = g.animation.cycles[action]
+            self.assertEqual(len(frames),6)
+            self.assertGreaterEqual(len({pg.image.tobytes(f,'RGBA') for f in frames}),4)
+            for frame in frames:
+                bounds = frame.get_bounding_rect(min_alpha=128)
+                self.assertGreater(bounds.width,bounds.height)
+                self.assertEqual(frame.get_at((0,0)).a,0)
+                if action=='slide':
+                    self.assertLessEqual(bounds.height,30)
+                    self.assertEqual(bounds.bottom,frame.get_height())
+        for name,frames in g.animation.cycles.items():
+            if name not in ('slide','swim'):
+                for frame in frames:
+                    self.assertEqual(frame.get_bounding_rect(min_alpha=128).bottom,56)
+        for frames in g.art.babies.values():
+            for frame in frames:
+                self.assertEqual(frame.get_bounding_rect(min_alpha=128).bottom,40)
+        for kind,frames in g.enemy_images.items():
+            self.assertEqual(len(frames),4)
+            self.assertGreaterEqual(len({pg.image.tobytes(f,'RGBA') for f in frames}),3)
+        for kind,frames in g.art.fishes.items():
+            self.assertEqual(len(frames),4)
+            self.assertGreaterEqual(len({pg.image.tobytes(f,'RGBA') for f in frames}),3)
+        self.assertEqual(len(g.art.objects),12)
+        self.assertEqual(g.ocean_background.get_size(),(1800,600))
+        self.assertEqual(g.ocean_background.get_at((0,0)).a,255)
+        body = g.player.copy()
+        g.animation.clock = 0.2
+        g.draw(self.screen)
+        self.assertEqual(g.player,body)
+
     def test_action_frames_and_paused_instruction_timers(self):
         g = self.game
         for action in ('slide','swim'):

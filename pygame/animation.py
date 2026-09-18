@@ -1,13 +1,20 @@
 """Penguin sprite animation without altering the physics body."""
-import math
 import pygame as pg
+from art import atlas_cells, fit_cycle
 
 
 class PenguinAnimation:
     def __init__(self, data):
-        names = [f'walk-{i}' for i in range(1,9)] + ['idle', 'jump', 'fall', 'land']
-        self.frames = {name: pg.image.load(str(data / f'penguin-animation-{name}.png')).convert_alpha()
-                       for name in names}
+        cells = atlas_cells(data/'adult-motion-atlas-v2.png',6,5)
+        upright = fit_cycle(cells[:18],(64,56),padding=2)
+        self.cycles = {'walk':upright[:8], 'idle':upright[8:10], 'jump':upright[10:12],
+                       'fall':upright[12:14], 'land':upright[14:16], 'hurt':upright[16:18],
+                       'slide':fit_cycle(cells[18:24],(80,34),padding=2),
+                       'swim':fit_cycle(cells[24:30],(80,42),padding=2,anchor='center')}
+        self.right_cycles = {name:[pg.transform.flip(f,True,False) for f in frames]
+                             for name,frames in self.cycles.items()}
+        self.frames = {f'walk-{i+1}':frame for i,frame in enumerate(self.cycles['walk'])}
+        self.frames.update({name:self.cycles[name][0] for name in ('idle','jump','fall','land')})
         self.cache = {}
         for name, image in self.frames.items():
             for grown in (False, True):
@@ -22,9 +29,11 @@ class PenguinAnimation:
         self.distance = 0.0
         self.walk_clock = 0.0
         self.landing = 0.0
+        self.state_clock = 0.0
         self.puffs = []
 
     def update(self, dt, player, velocity_y, grounded, was_grounded, distance):
+        old_state = self.state
         self.clock += dt
         self.landing = max(0, self.landing-dt)
         self.puffs = [(x, y, life-dt) for x,y,life in self.puffs if life > dt]
@@ -45,42 +54,24 @@ class PenguinAnimation:
             self.state = 'idle'
             self.distance = 0
             self.walk_clock = 0
+        self.state_clock = self.state_clock+dt if self.state==old_state else 0.0
 
     def image(self, grown, right):
-        name = f'walk-{int(self.walk_clock/0.12)%8+1}' if self.state == 'walk' else self.state
-        image = self.cache[name, bool(grown), right]
-        if self.state == 'idle':
-            # Subtle breathing; the feet stay anchored on the platform.
-            height = image.get_height()+round(math.sin(self.clock*2.8)*(1.5 if grown else 1))
-            return pg.transform.scale(image, (image.get_width(), height))
-        return image
+        frames = (self.right_cycles if right else self.cycles)[self.state]
+        interval = 0.12 if self.state=='walk' else 0.6 if self.state=='idle' else 0.07 if self.state=='land' else 0.18
+        clock = self.walk_clock if self.state=='walk' else self.clock if self.state=='idle' else self.state_clock
+        index = int(clock/interval)%len(frames) if self.state in ('walk','idle') else min(len(frames)-1,int(clock/interval))
+        image = frames[index]
+        return pg.transform.scale(image,(96,84)) if grown else image
 
     def action_image(self, action, right):
-        """Horizontal body, cycling kicks and articulated flipper strokes."""
-        phase = self.clock*(7 if action == 'swim' else 4)
-        frame = f'walk-{int(self.clock/0.14)%8+1}' if action == 'swim' else 'jump'
-        source = self.cache[frame,False,right]
-        source = source.subsurface(source.get_bounding_rect()).copy()
-        body = pg.transform.rotate(source,-90 if right else 90)
-        body = pg.transform.scale(body,(62,28))
-        canvas = pg.Surface((80,42),pg.SRCALPHA)
-        direction = 1 if right else -1
-        stroke = math.sin(phase)
-        if action == 'swim':
-            for back in (True,False):
-                flipper = pg.Surface((30,12),pg.SRCALPHA)
-                pg.draw.ellipse(flipper,(39,52,67),(0,1,28,9))
-                pg.draw.ellipse(flipper,(78,106,128),(0,1,28,9),1)
-                flipper = pg.transform.rotate(flipper,direction*(28+stroke*38)*(1 if back else -1))
-                canvas.blit(flipper,flipper.get_rect(center=(37,16 if back else 28)))
-                if back:
-                    canvas.blit(body,body.get_rect(center=(40,22)))
-            return pg.transform.rotate(canvas,stroke*3)
-        canvas.blit(body,body.get_rect(midbottom=(40,38)))
-        # The flipper sweeps backward while the belly stays on the snow.
-        px = round(39-direction*stroke*4)
-        pg.draw.polygon(canvas,(34,48,62),[(px,21),(px-direction*20,round(29+stroke*3)),(px-direction*11,32),(px+direction*5,25)])
-        return canvas
+        frames = (self.right_cycles if right else self.cycles)[action]
+        interval = 0.14 if action=='swim' else 0.16
+        return frames[int(self.clock/interval)%len(frames)]
+
+    def hurt_image(self, age, right):
+        frames = (self.right_cycles if right else self.cycles)['hurt']
+        return frames[min(1,int(age/0.16))]
 
     def draw_puffs(self, screen, camera_x):
         layer = pg.Surface(screen.get_size(), pg.SRCALPHA)

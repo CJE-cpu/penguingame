@@ -209,13 +209,9 @@ class AdventureContent:
             if journal['found']:
                 continue
             rect = journal['rect'].move(-game.camera_x,round(math.sin(game.time*3)*3))
-            pg.draw.rect(screen,(239,197,104),rect,border_radius=3)
-            pg.draw.rect(screen,(91,65,55),rect,2,border_radius=3)
-            pg.draw.line(screen,(255,250,221),(rect.x+6,rect.y+8),(rect.right-4,rect.y+8),2)
-            pg.draw.line(screen,(255,250,221),(rect.x+6,rect.y+15),(rect.right-4,rect.y+15),2)
+            game.art.place(screen,'journal',rect.midbottom)
         hole = self.hole.move(-game.camera_x,0)
-        pg.draw.ellipse(screen,(6,52,97),hole)
-        pg.draw.ellipse(screen,(157,235,252),hole,3)
+        game.art.place(screen,'dive-hole',hole.midbottom)
         if -100<hole.x<900:
             game.ui.text(screen,'잠수 E',(hole.x-3,hole.y-23),game.ui.small)
         for index,baby in enumerate(game.babies):
@@ -223,34 +219,26 @@ class AdventureContent:
                 continue
             rect = baby['rect'].move(-game.camera_x,0)
             if index==0:
-                pg.draw.rect(screen,(111,205,245),rect.inflate(14,12),3,border_radius=10)
-                pg.draw.line(screen,(206,248,255),rect.topleft,rect.bottomright,2)
+                game.art.place(screen,'ice-cage',(rect.centerx,rect.bottom+4))
             else:
                 game.ui.icon(screen,game.fish_images['orange'] if index==1 else game.igloo_image,
                              (rect.centerx,rect.top-43),(25,21))
         lever = self.lever.move(-game.camera_x,0)
-        pg.draw.line(screen,(93,89,105),lever.midbottom,(lever.centerx,lever.top),4)
-        pg.draw.polygon(screen,(141,232,168) if self.quests[2] else (255,204,99),
-                        [(lever.centerx,lever.top),(lever.right+8,lever.top+5),(lever.centerx,lever.top+15)])
+        game.art.place(screen,'lever-up' if self.quests[2] else 'lever-down',lever.midbottom)
         home = game.checkpoints[-1]
         cx, floor = round(home.centerx-game.camera_x),home.bottom
         if self.upgrades>=1:
-            pg.draw.ellipse(screen,(151,111,71),(cx+72,floor-13,65,13))
-            pg.draw.ellipse(screen,(245,220,151),(cx+78,floor-11,53,8),2)
+            game.art.place(screen,'nest',(cx+104,floor))
         if self.upgrades>=2:
-            pg.draw.line(screen,(69,108,133),(cx+155,floor),(cx+155,floor-70),4)
-            pg.draw.polygon(screen,(246,188,88),[(cx+155,floor-70),(cx+195,floor-59),(cx+155,floor-46)])
+            game.art.place(screen,'home-flag',(cx+172,floor))
         if self.upgrades>=3:
-            for i in range(5):
-                x = cx+213+i*17
-                pg.draw.line(screen,(83,170,154),(x,floor),(x,floor-17),2)
-                pg.draw.circle(screen,(149,228,250),(x,floor-20),6)
-                pg.draw.circle(screen,(255,235,135),(x,floor-20),2)
+            game.art.place(screen,'flowers',(cx+252,floor))
         for i,baby in enumerate(game.babies):
             if not baby['rescued']:
                 continue
-            x = cx+70+i*47+round(math.sin(game.time*0.8+i)*18)
-            image = pg.transform.rotate(game.baby_image,math.sin(game.time*5+i)*5)
+            phase = game.time*0.8+i
+            x = cx+70+i*47+round(math.sin(phase)*18)
+            image = game.art.baby('walk',game.time+i*0.3,math.cos(phase)>0)
             screen.blit(image,image.get_rect(midbottom=(x,floor)))
 
     def draw_hud(self, game, screen):
@@ -268,6 +256,7 @@ class AdventureContent:
         game.ui.veil(screen)
         game.ui.panel(screen,(78,65,644,475))
         game.ui.text(screen,'펭귄 탐험 일지',(400,99),game.ui.heading,center=True)
+        game.ui.icon(screen,game.art.objects['journal-open'],(120,101),(38,28))
         for i,(title,text) in enumerate(JOURNALS):
             y = 137+i*56
             found = self.journals[i]['found']
@@ -276,23 +265,18 @@ class AdventureContent:
         game.ui.text(screen,'TAB / E: 닫기 · 일지를 읽는 동안 모험이 멈춥니다.',(400,504),game.ui.small,center=True)
 
     def draw_ocean(self, game, screen):
-        screen.fill((15,68,113))
         camera = max(0,min(1000,self.swimmer.x-400))
-        for y in range(90,550,15):
-            pg.draw.rect(screen,(13,max(29,81-y//12),max(63,140-y//9)),(0,y,800,15))
-        pg.draw.rect(screen,(208,239,248),(0,65,800,25))
-        pg.draw.ellipse(screen,(67,142,181),(60-camera,77,80,19))
-        pg.draw.rect(screen,(13,42,67),(0,550,800,50))
-        for i in range(20):
-            x = round(i*97-camera)
-            height = 25+int(math.sin(i)*15)
-            pg.draw.line(screen,(74,166,151),(x,550),(x+round(math.sin(game.time*2+i)*8),550-height),4)
+        screen.blit(game.ocean_background,(-round(camera),0))
+        game.art.place(screen,'dive-hole',(100-camera,94))
+        for i in range(10):
+            x = i*190-camera+70
+            game.art.place(screen,'ocean-rock' if i%3==0 else 'seaweed',(x,560))
         for i in range(24):
             x = round((i*83+math.sin(game.time+i)*9)%1800-camera)
             y = round(540-(game.time*28+i*37)%425)
             pg.draw.circle(screen,(104,181,211),(x,y),3,1)
         for kind,rect in self.ocean_fish:
-            screen.blit(game.fish_images[kind],rect.move(-camera,round(math.sin(game.time*4+rect.x)*4)))
+            screen.blit(game.art.fish(kind,game.time+rect.x*0.01),rect.move(-camera,round(math.sin(game.time*4+rect.x)*4)))
         image = game.animation.action_image('swim',game.facing_right)
         screen.blit(image,image.get_rect(center=(round(self.swimmer.x-camera),round(self.swimmer.y))))
         for i in range(5):
