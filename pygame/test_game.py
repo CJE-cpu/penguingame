@@ -163,6 +163,37 @@ class AdventureChecks(unittest.TestCase):
         g.update_adventure(4.1)
         self.assertIn(platform, g.active_platforms())
 
+    def test_boundary_blending_and_camera(self):
+        g = self.game
+        for boundary in range(1200, 7200, 1200):
+            g.player.centerx = boundary
+            weights = g.scene_weights()
+            self.assertEqual([weight for _, weight in weights], [0.5, 0.5])
+            g.player.centerx = boundary-1
+            left = dict(g.scene_weights())
+            g.player.centerx = boundary+1
+            right = dict(g.scene_weights())
+            for region in left:
+                self.assertLess(abs(left[region]-right[region]), 0.01)
+        g.camera_x = 650
+        g.player.centerx = 1201
+        g.update_presentation(1/60)
+        self.assertTrue(650 < g.camera_x < 801)
+        self.assertEqual(g.region_banner, 2.4)
+        self.assertEqual(g.display_region, 1)
+        g.ui.transition(g, self.screen, [('region', (0,0,0))]*6)
+        g.update_presentation(1)
+        self.assertAlmostEqual(g.region_banner, 1.4)
+        g.update_presentation(2)
+        self.assertEqual(g.region_banner, 0)
+        g.player.centerx = 1199
+        g.update_presentation(1/60)
+        self.assertEqual(g.display_region, 0)
+        self.assertEqual(g.region_banner, 2.4)
+        g.respawn()
+        self.assertEqual(g.region_banner, 0)
+        self.assertEqual(g.camera_x, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -74,6 +74,18 @@ class IceUI:
         pg.draw.circle(screen, BLUE, (marker, 578), 5)
         pg.draw.circle(screen, 'white', (marker, 578), 3)
 
+    def transition(self, game, screen, regions):
+        if game.region_banner <= 0 or game.won:
+            return
+        elapsed = 2.4-game.region_banner
+        opacity = min(1, elapsed/0.3, game.region_banner/0.4)
+        card = pg.Surface((298, 54), pg.SRCALPHA)
+        self.panel(card, (0, 0, 290, 46), dark=True)
+        self.text(card, f'{game.display_region+1}번째 탐험 · {regions[game.display_region][0]}',
+                  (145, 23), self.body, 'white', center=True)
+        card.set_alpha(round(255*opacity))
+        screen.blit(card, (490, 94-round(7*(1-opacity))))
+
     def intro(self, game, screen):
         screen.blit(game.scene_backgrounds[0], (0, 0))
         self.veil(screen)

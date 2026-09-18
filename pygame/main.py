@@ -10,6 +10,7 @@ REGIONS = [('눈 덮인 해안', (109, 192, 226)), ('미끄러운 빙하', (80, 
            ('얼음 동굴', (106, 129, 179)), ('눈보라 고원', (159, 183, 202)),
            ('갈라진 빙붕', (148, 183, 230)), ('펭귄의 보금자리', (132, 206, 183))]
 WORLD_WIDTH = REGION_WIDTH * len(REGIONS)
+BLEND_DISTANCE = 180
 SCENES = ['snow-coast', 'glacier-canyon', 'ice-cave', 'blizzard-plateau', 'fractured-shelf', 'sunset-home']
 # Each region has a different silhouette and optional upper routes.
 MAP_LAYOUTS = [
@@ -151,6 +152,8 @@ class Game:
         self.hits = 0
         self.invincible = 0.0
         self.camera_x = 0
+        self.display_region = 0
+        self.region_banner = 0.0
         self.started = False
         self.falls = 0
         self.won = False
@@ -180,6 +183,26 @@ class Game:
 
     def active_platforms(self):
         return [p for p in self.platforms if self.crumbles.get(tuple(p), (0, 0))[1] <= 0]
+
+    def scene_weights(self):
+        """Blend across either side of a boundary, including when returning."""
+        x = self.player.centerx
+        for right in range(1, len(REGIONS)):
+            boundary = right * REGION_WIDTH
+            if abs(x - boundary) <= BLEND_DISTANCE:
+                t = (x - boundary + BLEND_DISTANCE) / (2 * BLEND_DISTANCE)
+                t = t * t * (3 - 2 * t)
+                return [(right - 1, 1 - t), (right, t)]
+        return [(max(0, min(len(REGIONS)-1, x // REGION_WIDTH)), 1.0)]
+
+    def update_presentation(self, dt):
+        target = max(0, min(WORLD_WIDTH-WIDTH, self.player.centerx-WIDTH//2))
+        self.camera_x += (target-self.camera_x) * (1-math.exp(-10*dt))
+        region = max(0, min(len(REGIONS)-1, self.player.centerx//REGION_WIDTH))
+        self.region_banner = max(0, self.region_banner-dt)
+        if region != self.display_region:
+            self.display_region = region
+            self.region_banner = 2.4
 
     def update_adventure(self, dt):
         for key, (elapsed, hidden) in list(self.crumbles.items()):
@@ -235,6 +258,8 @@ class Game:
             self.falls += 1
         self.invincible = 2.0
         self.camera_x = max(0, min(WORLD_WIDTH - WIDTH, self.player.centerx - WIDTH // 2))
+        self.display_region = self.player.centerx // REGION_WIDTH
+        self.region_banner = 0.0
 
     def update(self, dt, direction=0, jump=False):
         if not self.started:
@@ -266,7 +291,7 @@ class Game:
                 self.velocity_x *= math.exp(-1.5 * dt)
         else:
             self.velocity_x = direction * speed
-        wind = -75 if 3 * REGION_WIDTH <= self.player.centerx < 4 * REGION_WIDTH else 0
+        wind = -75 * dict(self.scene_weights()).get(3, 0)
         movement = self.velocity_x + wind
         self.x += movement * dt
         self.player.x = round(self.x)
@@ -340,17 +365,20 @@ class Game:
             self.won = True
         if self.player.top > HEIGHT:
             self.respawn()
-        self.camera_x = max(0, min(WORLD_WIDTH - WIDTH, self.player.centerx - WIDTH // 2))
+        self.update_presentation(dt)
 
     def draw(self, screen):
         if not self.started:
             self.draw_intro(screen)
             return
-        region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
-        background = self.scene_backgrounds[region]
         background_x = -int(self.camera_x * 0.2) % WIDTH
-        screen.blit(background, (background_x - WIDTH, 0))
-        screen.blit(background, (background_x, 0))
+        for index, (region, weight) in enumerate(self.scene_weights()):
+            background = self.scene_backgrounds[region]
+            if index:
+                background = background.copy()
+                background.set_alpha(round(255*weight))
+            screen.blit(background, (background_x - WIDTH, 0))
+            screen.blit(background, (background_x, 0))
         # Show water in the ground gaps so falls are visually clear.
         pg.draw.rect(screen, (24, 88, 130), (0, 550, WIDTH, 50))
         self.draw_adventure(screen)
@@ -386,6 +414,7 @@ class Game:
             rect = self.player.move(-self.camera_x, 0)
             screen.blit(self.baby_image, (rect.centerx - 12, rect.bottom - image.get_height() - 29))
         self.ui.hud(self, screen, REGIONS)
+        self.ui.transition(self, screen, REGIONS)
         if self.won:
             self.ui.finish(self, screen)
 
@@ -408,11 +437,14 @@ class Game:
                 screen.blit(self.baby_image, rect)
                 label = self.font.render('!', True, (255, 232, 101))
                 screen.blit(label, (rect.centerx - 4, rect.y - 25))
-        if region == 3:
+        snow_weight = dict(self.scene_weights()).get(3, 0)
+        if snow_weight > 0:
+            snow = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
             for i in range(65):
                 x = int((i * 137 - self.time * 180) % WIDTH)
                 y = int((i * 83 + self.time * 45) % HEIGHT)
-                pg.draw.line(screen, (238, 249, 255), (x, y), (x - 12, y + 4), 2)
+                pg.draw.line(snow, (238, 249, 255, round(255*snow_weight)), (x, y), (x - 12, y + 4), 2)
+            screen.blit(snow, (0, 0))
     def draw_intro(self, screen):
         self.ui.intro(self, screen)
 
