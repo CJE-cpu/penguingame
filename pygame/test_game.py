@@ -5,7 +5,7 @@ os.environ['SDL_AUDIODRIVER'] = 'dummy'
 import unittest
 import math
 import pygame as pg
-from main import Game, REGION_WIDTH, REGIONS, Enemy
+from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy
 
 
 class AdventureChecks(unittest.TestCase):
@@ -141,7 +141,7 @@ class AdventureChecks(unittest.TestCase):
         g.started = True
         for region in range(len(REGIONS)):
             self.place(g.region_grounds[region][0], region*REGION_WIDTH+70, grown=True)
-            g.camera_x = max(0, min(6400, g.player.centerx-400))
+            g.camera_x = max(0, min(WORLD_WIDTH-800, g.player.centerx-400))
             g.draw(self.screen)
         for image in [g.penguin_left, g.baby_image, g.crab_image, *g.item_images.values()]:
             self.assertEqual(image.get_at((0, 0)).a, 0)
@@ -170,7 +170,7 @@ class AdventureChecks(unittest.TestCase):
 
     def test_boundary_blending_and_camera(self):
         g = self.game
-        for boundary in range(1200, 7200, 1200):
+        for boundary in range(REGION_WIDTH, WORLD_WIDTH, REGION_WIDTH):
             g.player.centerx = boundary
             weights = g.scene_weights()
             self.assertEqual([weight for _, weight in weights], [0.5, 0.5])
@@ -181,9 +181,9 @@ class AdventureChecks(unittest.TestCase):
             for region in left:
                 self.assertLess(abs(left[region]-right[region]), 0.01)
         g.camera_x = 650
-        g.player.centerx = 1201
+        g.player.centerx = REGION_WIDTH+1
         g.update_presentation(1/60)
-        self.assertTrue(650 < g.camera_x < 801)
+        self.assertTrue(650 < g.camera_x < REGION_WIDTH-399)
         self.assertEqual(g.region_banner, 2.4)
         self.assertEqual(g.display_region, 1)
         g.ui.transition(g, self.screen, [('region', (0,0,0))]*6)
@@ -191,7 +191,7 @@ class AdventureChecks(unittest.TestCase):
         self.assertAlmostEqual(g.region_banner, 1.4)
         g.update_presentation(2)
         self.assertEqual(g.region_banner, 0)
-        g.player.centerx = 1199
+        g.player.centerx = REGION_WIDTH-1
         g.update_presentation(1/60)
         self.assertEqual(g.display_region, 0)
         self.assertEqual(g.region_banner, 2.4)
@@ -322,6 +322,68 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw_aura(g,self.screen)
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
+
+    def test_growth_expiration_protects_against_contact(self):
+        g = self.game
+        enemy = g.enemies[0]
+        g.enemies = [enemy]
+        g.items = []
+        g.player.midbottom = enemy.rect.midbottom
+        g.x,g.y = map(float,g.player.topleft)
+        g.effects['grow'] = 0.001
+        g.update(1/60)
+        self.assertEqual(g.effects['grow'],0)
+        self.assertEqual(g.grow_guard,1.5)
+        self.assertGreaterEqual(g.invincible,1.5)
+        self.assertIn(enemy,g.enemies)
+        self.assertFalse(g.combat.hurt)
+        g.draw(self.screen)
+        g.enemies = []
+        for _ in range(100):
+            g.update(1/60)
+        self.assertEqual(g.grow_guard,0)
+        self.assertEqual(g.invincible,0)
+        g.effects['grow'] = 0.001
+        g.invincible = 3
+        g.update(1/60)
+        self.assertGreater(g.invincible,2.9)
+
+    def test_research_rewards_and_crystal_persistence(self):
+        g = self.game
+        c = g.content
+        self.assertEqual(WORLD_WIDTH,10800)
+        for crystal in c.crystals:
+            r = crystal['rect']
+            self.assertFalse(any(r.colliderect(fish) for kind,fish in g.fish))
+            g.player.center = r.center
+            c.update(g,0)
+        self.assertEqual(c.research_progress()[2],6)
+        self.assertEqual(g.score,240)
+        c.ocean_fish = c.ocean_fish[3:]
+        for j in c.journals[:3]:j['found'] = True
+        self.place(g.region_grounds[0][0],g.checkpoints[0].centerx)
+        for _ in range(3):c.action(g)
+        self.assertEqual(c.research_claimed,[True,True,True])
+        self.assertEqual(g.score,740)
+        self.assertEqual(c.wallet,10)
+        c.action(g)
+        self.assertEqual(g.score,740)
+        self.assertEqual(c.wallet,10)
+        g.respawn()
+        self.assertEqual(c.research_progress()[2],6)
+        self.assertEqual(c.research_claimed,[True,True,True])
+        self.assertEqual(c.wallet,10)
+        c.book_open = True
+        g.handle_key(pg.K_LEFT)
+        self.assertEqual(c.book_page,6)
+        g.draw(self.screen)
+        g.handle_key(pg.K_RIGHT)
+        self.assertEqual(c.book_page,0)
+        g.draw(self.screen)
+        g.reset()
+        self.assertEqual(g.content.wallet,0)
+        self.assertFalse(any(g.content.research_claimed))
+        self.assertFalse(any(crystal['found'] for crystal in g.content.crystals))
 
     def test_generated_art_cycles_and_ground_anchors(self):
         g = self.game
@@ -565,10 +627,10 @@ class AdventureChecks(unittest.TestCase):
         c.update(g,0.02)
         self.assertFalse(c.escape_cleared)
         self.assertFalse(c.escape_active)
-        g.player.centerx = 4855
+        g.player.centerx = c.escape_start+55
         c.update(g,0)
         self.assertTrue(c.escape_active)
-        g.player.centerx = 5970
+        g.player.centerx = c.escape_end+10
         c.update(g,1)
         self.assertTrue(c.escape_cleared)
         score = g.score
@@ -652,14 +714,14 @@ class AdventureChecks(unittest.TestCase):
         g = self.game
         for kind, rect in g.items:
             self.assertFalse(any(rect.inflate(28,18).colliderect(o) for o in g.potion_obstacles()))
-        for camera in (0, 1, 2000, 3999, 6400):
+        for camera in (0, 1, 2000, 3999, WORLD_WIDTH-800):
             g.camera_x = camera
             g.player.centerx = 500
             self.screen.fill((255,0,255))
             g.draw_background(self.screen)
-            drift = round(400*camera/6400)
+            drift = round(400*camera/(WORLD_WIDTH-800))
             expected = g.scene_backgrounds[0].subsurface((drift,0,800,600))
-            self.assertEqual(pg.image.tobytes(self.screen,'RGB'), pg.image.tobytes(expected,'RGB'))
+            self.assertTrue(pg.image.tobytes(self.screen,'RGB') == pg.image.tobytes(expected,'RGB'))
         platform = g.region_ledges[4][0]
         original = platform.copy()
         g.camera_x = platform.x-200
@@ -679,7 +741,7 @@ class AdventureChecks(unittest.TestCase):
         baby = g.babies[0]
         g.player.center = baby['rect'].center
         self.assertEqual(g.rescue_target(),('baby',baby['rect']))
-        g.camera_x = 1200
+        g.camera_x = baby['rect'].centerx-400
         self.screen.fill((0,0,0))
         g.time = 0
         g.draw_baby_markers(self.screen)
@@ -687,7 +749,7 @@ class AdventureChecks(unittest.TestCase):
         self.screen.fill((0,0,0))
         g.time = 0.6
         g.draw_baby_markers(self.screen)
-        self.assertNotEqual(first,pg.image.tobytes(self.screen,'RGB'))
+        self.assertTrue(first != pg.image.tobytes(self.screen,'RGB'))
         g.carried_baby = 0
         self.assertEqual(g.rescue_target()[0],'home')
         g.ui.rescue_guide(g,self.screen)

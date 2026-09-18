@@ -45,7 +45,7 @@ class IceUI:
 
     def hud(self, game, screen, regions):
         self.panel(screen, (12, 12, 776, 73))
-        region = min(len(regions)-1, game.player.centerx//1200)
+        region = min(len(regions)-1, game.player.centerx//game.region_width)
         self.text(screen, regions[region][0], (28, 21), self.body)
         self.text(screen, f'탐험 {region+1}/6 · 저장 지점 {game.checkpoint_index+1}', (28, 49), self.small, MUTED)
         self.icon(screen, game.fish_images['gold'], (249, 46))
@@ -74,9 +74,9 @@ class IceUI:
         for index,baby in enumerate(game.babies):
             if baby['rescued'] or index == game.carried_baby:
                 continue
-            x = 598+round(baby['rect'].centerx/7200*180)
+            x = 598+round(baby['rect'].centerx/game.world_width*180)
             pg.draw.polygon(screen,(255,219,85),[(x,567),(x-4,573),(x+4,573)])
-        marker = 598 + int(game.player.centerx/7200*180)
+        marker = 598 + int(game.player.centerx/game.world_width*180)
         pg.draw.circle(screen, BLUE, (marker, 578), 5)
         pg.draw.circle(screen, 'white', (marker, 578), 3)
 
@@ -117,7 +117,7 @@ class IceUI:
         self.panel(screen, (32, 24, 736, 550))
         self.icon(screen, game.penguin_right, (100, 83), (49, 66))
         self.text(screen, '남극 펭귄의 모험', (146, 43), self.title)
-        self.text(screen, '연습 해안에서 조작을 배우고, 여섯 지대의 친구들을 구해주세요.', (147, 98), self.small, MUTED)
+        self.text(screen, '연습 해안에서 배우고, 10,800픽셀의 여섯 지대를 탐험하세요.', (147, 98), self.small, MUTED)
         self.panel(screen, (54, 136, 692, 58), dark=True)
         self.text(screen, '물고기 30마리 + 친구 3마리 구조 + 빙붕 탈출 후 귀환', (400, 154), self.body, 'white', center=True)
         self.text(screen, '친구의 부탁을 해결하면 동행 시작 · 이글루에 데려다 주면 +100점', (400, 177), self.small, (224,248,255), center=True)
@@ -127,7 +127,7 @@ class IceUI:
             (game.baby_image, '친구마다 다른 구조 미션', '얼음 깨기 · 먹이 3마리 · 깃발 레버 E'),
             (game.chest_image, '숨겨진 길과 탐험 일지', '동굴 E: 지름길 · 옆길 일지: TAB 읽기'),
             (game.igloo_image, '친구들과 꾸미는 보금자리', '마지막 이글루 E · 물고기로 둥지와 장식'),
-            (game.platform_images['crumble'], '마지막 빙붕 탈출', '빙붕 입구부터 24초 · 오른쪽 끝까지!')]
+            (game.platform_images['crumble'], '빙붕 탈출과 연구 의뢰', '탈출 32초 · 결정 6개 · TAB 의뢰 확인')]
         for index, (image, title, detail) in enumerate(cards):
             x, y = 54+(index%2)*352, 206+(index//2)*77
             self.panel(screen, (x,y,340,66))
@@ -147,6 +147,6 @@ class IceUI:
         self.text(screen, '물고기와 친구들을 데리고 빙붕을 넘어 돌아왔습니다.', (400, 269), self.body, MUTED, center=True)
         self.text(screen, f'{game.score}점', (400, 315), self.title, BLUE, center=True)
         self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 360), self.small, MUTED, center=True)
-        self.text(screen, f'탐험 일지 {sum(j["found"] for j in game.content.journals)}/6 · 보금자리 {game.content.upgrades}/3', (400,382),self.small,MUTED,center=True)
+        self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,382),self.small,MUTED,center=True)
         self.panel(screen, (220, 395, 360, 51), dark=True)
         self.text(screen, 'ENTER 계속 탐험 · R 새로운 모험', (400, 420), self.body, 'white', center=True)

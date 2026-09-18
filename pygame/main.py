@@ -12,7 +12,8 @@ from tutorial import Coach, TutorialStage
 from art import WorldArt
 
 WIDTH, HEIGHT = 800, 600
-REGION_WIDTH = 1200
+REGION_WIDTH = 1800
+MAP_SCALE = REGION_WIDTH / 1200
 REGIONS = [('눈 덮인 해안', (109, 192, 226)), ('미끄러운 빙하', (80, 211, 239)),
            ('얼음 동굴', (106, 129, 179)), ('눈보라 고원', (159, 183, 202)),
            ('갈라진 빙붕', (148, 183, 230)), ('펭귄의 보금자리', (132, 206, 183))]
@@ -41,6 +42,7 @@ GRAVITY = 1800
 MOVE_SPEED = 270
 JUMP_SPEED = -650
 ITEM_DURATION = 8.0
+GROW_EXIT_INVINCIBILITY = 1.5
 ITEM_STYLE = {'grow': ((126, 224, 126), '+', 'BIG'),
               'speed': ((255, 212, 92), '>>', 'FAST'),
               'reverse': ((221, 142, 255), '<>', 'REVERSE')}
@@ -66,6 +68,8 @@ def load_image(name, size=None, keep_aspect=False):
 
 class Game:
     def __init__(self):
+        self.region_width = REGION_WIDTH
+        self.world_width = WORLD_WIDTH
         self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
         # One oversized panorama per region; never join non-seamless image edges.
         self.scene_backgrounds = [load_image('scene-' + scene + '.png', (WIDTH + 400, HEIGHT)) for scene in SCENES]
@@ -103,8 +107,8 @@ class Game:
         self.region_ledges = []
         for region, (ground_layout, ledge_layout) in enumerate(MAP_LAYOUTS):
             offset = region * REGION_WIDTH
-            grounds = [pg.Rect(offset+x, y, w, HEIGHT-y) for x,y,w in ground_layout]
-            ledges = [pg.Rect(offset+x, y, w, 24) for x,y,w in ledge_layout]
+            grounds = [pg.Rect(offset+round(x*MAP_SCALE), y, round(w*MAP_SCALE), HEIGHT-y) for x,y,w in ground_layout]
+            ledges = [pg.Rect(offset+round(x*MAP_SCALE), y, round(w*MAP_SCALE), 24) for x,y,w in ledge_layout]
             self.region_grounds.append(grounds)
             self.region_ledges.append(ledges)
             self.grounds.extend(grounds)
@@ -162,6 +166,7 @@ class Game:
         self.defeated = 0
         self.hits = 0
         self.invincible = 0.0
+        self.grow_guard = 0.0
         self.camera_x = 0
         self.display_region = 0
         self.region_banner = 0.0
@@ -193,7 +198,7 @@ class Game:
         self.in_sanctuary = False
         self.max_score += len(self.babies) * 100 + len(self.caves) * 100
         self.content = AdventureContent(self)
-        self.max_score += 6*60 + 170 + 200
+        self.max_score += 6*60 + 170 + 200 + 6*40 + 500
         self.arrange_potions(placements)
 
     def start(self, practice=True):
@@ -245,6 +250,8 @@ class Game:
             self.content.action(self)
         elif key == pg.K_RETURN and self.won:
             self.finish_open = False
+        elif self.content.book_open and key in (pg.K_LEFT,pg.K_RIGHT,pg.K_a,pg.K_d):
+            self.content.book_page = (self.content.book_page+(1 if key in (pg.K_RIGHT,pg.K_d) else -1))%7
         elif key in (pg.K_SPACE,pg.K_UP,pg.K_w):
             return not self.content.diving and not self.content.book_open and not self.coach.explain('jump')
         return False
@@ -254,7 +261,7 @@ class Game:
             return
         if self.content.nearby(self,self.checkpoints[-1]):
             self.coach.explain('home')
-        elif 4800 <= self.player.centerx <= 4930 and not self.content.escape_cleared:
+        elif self.content.escape_start <= self.player.centerx <= self.content.escape_start+130 and not self.content.escape_cleared:
             self.coach.explain('escape')
         elif self.content.context(self):
             self.coach.explain('interact')
@@ -265,6 +272,7 @@ class Game:
         obstacles += [self.cave_image.get_rect(midbottom=c['rect'].midbottom) for c in self.caves]
         obstacles += [self.baby_image.get_rect(midbottom=b['rect'].midbottom) for b in self.babies]
         obstacles += [j['rect'] for j in self.content.journals] + [self.content.hole, self.content.lever]
+        obstacles += [c['rect'] for c in self.content.crystals]
         for enemy in self.enemies:
             margin = 48 if enemy.kind in ('skua', 'spirit') else 0
             obstacles.append(pg.Rect(enemy.left, enemy.base_y-margin,
@@ -433,6 +441,7 @@ class Game:
         else:
             self.falls += 1
         self.invincible = 2.0
+        self.grow_guard = 0.0
         self.feedback.emit(self.player.midtop, '피격! 저장 지점 복귀' if hit else '저장 지점에서 다시!', (205,235,255))
         self.camera_x = max(0, min(WORLD_WIDTH - WIDTH, self.player.centerx - WIDTH // 2))
         self.display_region = self.player.centerx // REGION_WIDTH
@@ -460,6 +469,7 @@ class Game:
             self.content.notice_left = max(0,self.content.notice_left-dt)
             return
         self.invincible = max(0.0, self.invincible - dt)
+        self.grow_guard = max(0.0,self.grow_guard-dt)
         self.feedback.update(dt,self)
         was_hurt = self.combat.hurt > 0
         self.combat.update(dt)
@@ -481,7 +491,12 @@ class Game:
         for enemy in self.enemies:
             enemy.update(dt, self.player)
         for kind in self.effects:
+            previous = self.effects[kind]
             self.effects[kind] = max(0.0, self.effects[kind] - dt)
+            if kind=='grow' and previous>0 and self.effects[kind]==0:
+                self.invincible = max(self.invincible,GROW_EXIT_INVINCIBILITY)
+                self.grow_guard = GROW_EXIT_INVINCIBILITY
+                self.feedback.emit(self.player.midtop,'거대 효과 종료 · 보호 1.5초',(159,231,255))
         if self.effects['reverse']:
             direction = -direction
         speed = MOVE_SPEED * (1.6 if self.effects['speed'] else 1.0) * (1.35 if self.content.sliding else 1)

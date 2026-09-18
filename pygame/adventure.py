@@ -3,14 +3,16 @@ import math
 import pygame as pg
 
 JOURNALS = [
-    ('해안의 첫 발자국', '배를 눈에 붙이면 바람처럼 미끄러질 수 있다.'),
-    ('얼음에 갇힌 친구', '빙하의 친구는 얼음 껍질을 깨야 함께 갈 수 있다.'),
-    ('동굴의 비밀', '동굴 입구의 푸른 빛은 위쪽 통로로 이어진다.'),
-    ('눈보라 속 식사', '배고픈 친구에게 물고기 세 마리를 나눠 주었다.'),
-    ('빙붕 탈출 기록', '무너지는 빙붕을 건너면 보금자리가 보인다.'),
-    ('함께 만든 집', '돌아온 친구들과 작은 둥지를 꾸미기로 했다.')]
+    ('해안의 첫 발자국', '첫 이글루 오른쪽의 넓은 눈밭 끝에서 잠수 구멍을 찾았다. E로 들어가면 왼쪽 위에 출구가 있다.\n산소 35초 안에 귀환해야 한다. 깊은 곳의 황금 물고기를 찾더라도 산소가 절반 남으면 귀환을 준비하자.\n↓를 누르며 이동하면 1.35배로 활주한다. 서두르지 말고 순찰하는 적과 거리를 두자.'),
+    ('얼음에 갇힌 친구', '빙하의 가장 높은 발판 오른쪽에 아기 펭귄이 얼음 껍질에 갇혀 있다. 발판 위에 착지한 뒤 ↓를 누르며 가까이 이동하면 껍질이 깨진다.\n친구가 따라오기 시작하면 가까운 이글루로 데려가자. 몸에 닿는 것만으로 구조가 완료되지는 않는다.\n거대 물약은 8초간 적을 돌파한다. 종료 직후에는 1.5초의 보호 시간이 있어 안전한 곳으로 이동할 수 있다.'),
+    ('동굴의 비밀', '동굴 구역의 오른쪽 땅에는 큰 얼음 입구가 있다. 입구 근처에서 E를 누르면 높은 옆길로 이어지는 지름길을 탄다.\n보물 상자는 입구 오른쪽 아래에 있다. 상자에 직접 닿으면 100점을 얻는다. 일지는 두 번째 위쪽 발판 왼쪽에 놓여 있다.\n반전 물약은 오른쪽 위 옆길에 한 개 있다. 효과가 8초 동안 이어지므로 발판 가장자리에서 입력 방향을 확인하자.'),
+    ('눈보라 속 식사', '눈보라 구역의 가장 높은 발판 오른쪽에서 배고픈 친구를 만났다. 먹이 3마리를 가진 채 가까이서 E를 누르면 친구가 따라온다.\n먹이는 물고기 한 마리를 주울 때 한 개씩 늘어난다. 나눠 줘도 점수와 30마리 수집 목표는 줄어들지 않는다.\n바람은 왼쪽으로 분다. 속도 물약과 활주를 이용하되, 갈매기가 낮게 내려올 때는 잠시 기다리자.'),
+    ('빙붕 탈출 기록', '갈라진 빙붕 입구부터 오른쪽 끝까지 32초 안에 건너면 탈출 성공이다. 발판은 밟은 뒤 0.8초에 무너지고 4초 뒤 복구된다.\n위쪽 길의 결정은 선택 수집품이다. 탈출 도중 억지로 돌아가지 말고, 완료 기록을 남긴 후 천천히 다시 찾아도 된다.\n추락하거나 시간이 끝나도 물고기, 일지와 구조 기록은 유지된다. 입구에서 도전을 다시 시작할 수 있다.'),
+    ('함께 만든 집', '보금자리의 가장 높은 발판 왼쪽에 길 안내 레버가 있다. 가까이서 E를 눌러 초록 깃발을 세운 뒤 오른쪽 친구를 만나자.\n마지막 이글루에서는 먹이 5개로 둥지, 8개로 깃발, 10개로 꽃밭을 만든다. 연구 의뢰 보상도 먹이로 사용할 수 있다.\n물고기 30마리와 친구 3마리, 탈출 완료 기록을 모두 갖추고 이곳에 돌아오면 모험 성공이다. Enter로 계속 탐험할 수 있다.')]
 HOME_UPGRADES = [('따뜻한 둥지', 5), ('탐험 깃발', 8), ('얼음 꽃밭', 10)]
 OXYGEN_DURATION = 35.0
+ESCAPE_DURATION = 32.0
+RESEARCH_TASKS = [('해양 생태 조사',3,100,2),('탐험 기록 복원',3,150,3),('빙하 결정 조사',6,250,5)]
 
 
 class AdventureContent:
@@ -21,6 +23,7 @@ class AdventureContent:
         self.wallet = 0
         self.upgrades = 0
         self.book_open = False
+        self.book_page = 0
         self.sliding = False
         self.quests = [False, False, False]
         self.journals = []
@@ -29,7 +32,15 @@ class AdventureContent:
             self.journals.append({'rect': pg.Rect(platform.left+24, platform.top-32, 23, 29), 'found': False})
         platform = min(game.region_ledges[5], key=lambda p:p.y)
         self.lever = pg.Rect(platform.left+20, platform.top-34, 25, 34)
-        self.hole = pg.Rect(670, 533, 64, 17)
+        ground = game.region_grounds[0][0]
+        self.hole = pg.Rect(ground.right-95,ground.top-17,64,17)
+        self.crystals = []
+        for ledges in game.region_ledges:
+            platform = ledges[-2]
+            self.crystals.append({'rect':pg.Rect(platform.left+40,platform.top-30,20,26),'found':False})
+        self.research_claimed = [False,False,False]
+        self.escape_start = 4*game.region_width
+        self.escape_end = 5*game.region_width-40
         self.diving = False
         self.oxygen = OXYGEN_DURATION
         self.swimmer = pg.Vector2(100, 115)
@@ -39,7 +50,7 @@ class AdventureContent:
                             ('gold',1040,450),('blue',1300,280),('gold',1540,400)]]
         self.escape_active = False
         self.escape_cleared = False
-        self.escape_left = 24.0
+        self.escape_left = ESCAPE_DURATION
         self.notice = ''
         self.notice_left = 0.0
 
@@ -85,13 +96,22 @@ class AdventureContent:
                 self.say('잠수! 방향키로 수영 · 왼쪽 위 구멍에서 E로 나가기')
                 game.coach.explain('swim')
             return
+        if any(self.nearby(game,checkpoint) for checkpoint in game.checkpoints):
+            progress = self.research_progress()
+            for i,(name,goal,points,food) in enumerate(RESEARCH_TASKS):
+                if not self.research_claimed[i] and progress[i]>=goal:
+                    self.research_claimed[i] = True
+                    game.score += points
+                    self.wallet += food
+                    self.say(f'{name} 완료! +{points}점 · 먹이 +{food}')
+                    return
         home = game.checkpoints[-1]
         if self.nearby(game,home):
             if not game.fish and game.rescued == 3 and not self.escape_cleared:
-                game.player.midbottom = (4855,550)
+                game.player.midbottom = (self.escape_start+55,550)
                 game.x, game.y = map(float,game.player.topleft)
                 game.velocity_x = game.velocity_y = 0
-                game.camera_x = 4480
+                game.camera_x = self.escape_start-320
                 self.begin_escape()
             elif self.upgrades < len(HOME_UPGRADES):
                 name, cost = HOME_UPGRADES[self.upgrades]
@@ -127,27 +147,37 @@ class AdventureContent:
 
     def begin_escape(self):
         self.escape_active = True
-        self.escape_left = 24.0
-        self.say('빙붕 탈출! 24초 안에 오른쪽 보금자리로!')
+        self.escape_left = ESCAPE_DURATION
+        self.say('빙붕 탈출! 32초 안에 오른쪽 보금자리로!')
+
+    def research_progress(self):
+        return [6-len(self.ocean_fish),sum(j['found'] for j in self.journals),sum(c['found'] for c in self.crystals)]
 
     def update(self, game, dt):
         self.notice_left = max(0,self.notice_left-dt)
-        for journal in self.journals:
+        for index,journal in enumerate(self.journals):
             if not journal['found'] and game.player.colliderect(journal['rect']):
                 journal['found'] = True
+                self.book_page = index
                 game.score += 60
                 game.feedback.emit(journal['rect'].center,'탐험 일지! +60',(255,224,124))
                 self.say('탐험 일지 발견! TAB으로 읽어 보세요.')
+        for crystal in self.crystals:
+            if not crystal['found'] and game.player.colliderect(crystal['rect']):
+                crystal['found'] = True
+                game.score += 40
+                game.feedback.emit(crystal['rect'].center,'빙하 결정! +40',(128,227,255))
+                self.say('빙하 결정 발견! 6개를 모아 이글루에서 E로 조사 보상 받기')
         baby = game.babies[0] if game.babies else None
         if baby and not self.quests[0] and self.sliding and abs(game.velocity_x)>40 and self.nearby(game,baby['rect'],80):
             self.quests[0] = True
             game.feedback.emit(baby['rect'].center,'얼음 껍질 돌파!',(132,224,255))
             self.say('얼음에 갇힌 친구를 구했어요! 이글루로 데려가세요.')
-        if not self.escape_cleared and not self.escape_active and 4800 <= game.player.centerx <= 4930:
+        if not self.escape_cleared and not self.escape_active and self.escape_start <= game.player.centerx <= self.escape_start+130:
             self.begin_escape()
         if self.escape_active:
             self.escape_left -= dt
-            if game.player.centerx >= 5960:
+            if game.player.centerx >= self.escape_end:
                 self.escape_active = False
                 self.escape_cleared = True
                 game.score += 200
@@ -193,6 +223,11 @@ class AdventureContent:
             return 'E: 길 안내 깃발 세우기'
         if self.nearby(game,self.hole):
             return 'E: 바닷속 탐험 · 산소 35초 · 구멍으로 돌아오기'
+        if any(self.nearby(game,checkpoint) for checkpoint in game.checkpoints):
+            progress = self.research_progress()
+            for i,(name,goal,points,food) in enumerate(RESEARCH_TASKS):
+                if not self.research_claimed[i] and progress[i]>=goal:
+                    return f'E: {name} 보상 · +{points}점 / 먹이 +{food}'
         if self.nearby(game,game.checkpoints[-1]):
             if not game.fish and game.rescued==3 and not self.escape_cleared:
                 return 'E: 마지막 빙붕 탈출 도전'
@@ -205,6 +240,14 @@ class AdventureContent:
         return ''
 
     def draw_world(self, game, screen):
+        for index,crystal in enumerate(self.crystals):
+            if crystal['found']:
+                continue
+            rect = crystal['rect'].move(-game.camera_x,round(math.sin(game.time*3+index)*3))
+            cx,cy = rect.center
+            pg.draw.polygon(screen,(43,133,195),[(cx,rect.top),(rect.right,cy),(cx,rect.bottom),(rect.left,cy)])
+            pg.draw.polygon(screen,(148,238,255),[(cx,rect.top+2),(cx+7,cy),(cx,rect.bottom-3),(cx-7,cy)])
+            pg.draw.line(screen,(239,255,255),(cx,rect.top+4),(cx-5,cy),2)
         for journal in self.journals:
             if journal['found']:
                 continue
@@ -244,7 +287,7 @@ class AdventureContent:
     def draw_hud(self, game, screen):
         game.ui.panel(screen,(283,147,208,43))
         game.ui.text(screen,f'먹이 {self.wallet} · 일지 {sum(j["found"] for j in self.journals)}/6',(297,150),game.ui.small)
-        game.ui.text(screen,'↓ 활주 · E 행동 · TAB 일지',(297,169),game.ui.small)
+        game.ui.text(screen,f'결정 {sum(c["found"] for c in self.crystals)}/6 · TAB 기록/의뢰',(297,169),game.ui.small)
         message = self.notice if self.notice_left else self.context(game)
         if self.escape_active:
             message = f'빙붕 탈출 {max(0,self.escape_left):.1f}초 · 오른쪽 끝까지!'
@@ -257,12 +300,38 @@ class AdventureContent:
         game.ui.panel(screen,(78,65,644,475))
         game.ui.text(screen,'펭귄 탐험 일지',(400,99),game.ui.heading,center=True)
         game.ui.icon(screen,game.art.objects['journal-open'],(120,101),(38,28))
-        for i,(title,text) in enumerate(JOURNALS):
-            y = 137+i*56
-            found = self.journals[i]['found']
-            game.ui.text(screen,f'{i+1}. '+(title if found else '아직 찾지 못한 기록'),(106,y),game.ui.body)
-            game.ui.text(screen,text if found else '해당 구역의 위쪽 옆길을 살펴보세요.',(106,y+25),game.ui.small)
-        game.ui.text(screen,'TAB / E: 닫기 · 일지를 읽는 동안 모험이 멈춥니다.',(400,504),game.ui.small,center=True)
+        if self.book_page==6:
+            game.ui.text(screen,'남극 연구 기지의 의뢰',(106,141),game.ui.heading)
+            progress = self.research_progress()
+            tips = ['해안 얼음 구멍으로 잠수해 보너스 물고기를 찾으세요.',
+                    '각 구역 두 번째 위쪽 발판 왼쪽에서 일지를 찾으세요.',
+                    '구역마다 높은 옆길의 푸른 결정을 한 개씩 모으세요.']
+            for i,(name,goal,points,food) in enumerate(RESEARCH_TASKS):
+                y = 188+i*89
+                status = '보상 수령' if self.research_claimed[i] else 'E로 수령 가능' if progress[i]>=goal else '조사 중'
+                game.ui.text(screen,f'{name} · {min(goal,progress[i])}/{goal} · {status}',(106,y),game.ui.body)
+                game.ui.text(screen,tips[i],(106,y+28),game.ui.small)
+                game.ui.text(screen,f'보상: {points}점 / 먹이 {food}개 · 아무 이글루 근처에서 E',(106,y+50),game.ui.small)
+        else:
+            title,text = JOURNALS[self.book_page]
+            found = self.journals[self.book_page]['found']
+            game.ui.text(screen,f'{self.book_page+1}. '+title,(106,141),game.ui.heading)
+            if not found:
+                text = f'{self.book_page+1}번째 구역의 두 번째 위쪽 발판 왼쪽에서 이 기록을 찾으세요.\n기록에는 해당 구역 친구의 부탁, 위험 요소, 숨겨진 길과 조작 방법이 담겨 있습니다.\n일지 3개를 찾으면 연구 의뢰 보상을 받을 수 있습니다. →로 연구 의뢰 페이지도 확인해 보세요.'
+            lines = []
+            for paragraph in text.split('\n'):
+                current = ''
+                for char in paragraph:
+                    if game.ui.body.size(current+char)[0]>585:
+                        lines.append(current)
+                        current = char
+                    else:
+                        current += char
+                lines.append(current)
+                lines.append('')
+            for index,line in enumerate(lines):
+                game.ui.text(screen,line,(106,185+index*24),game.ui.body)
+        game.ui.text(screen,f'← → 페이지 {self.book_page+1}/7 · TAB / E 닫기 · 모험 일시정지',(400,504),game.ui.small,center=True)
 
     def draw_ocean(self, game, screen):
         camera = max(0,min(1000,self.swimmer.x-400))

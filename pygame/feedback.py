@@ -77,6 +77,10 @@ class InteractionEffects:
         layer = pg.Surface(screen.get_size(),pg.SRCALPHA)
         cx = round(game.player.centerx-game.camera_x)
         cy = game.player.centery
+        if game.grow_guard>0:
+            radius = 36+round(math.sin(game.time*8)*2)
+            pg.draw.ellipse(layer,(128,224,255,190),(cx-radius,cy-37,radius*2,74),3)
+            pg.draw.ellipse(layer,(221,253,255,110),(cx-radius-4,cy-41,radius*2+8,82),2)
         for index,kind in enumerate(active):
             radius = 28+index*5+round(math.sin(game.time*4)*2)
             if kind == 'grow':
