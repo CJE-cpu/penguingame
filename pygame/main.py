@@ -9,9 +9,24 @@ REGIONS = [('눈 덮인 해안', (109, 192, 226)), ('미끄러운 빙하', (80, 
            ('얼음 동굴', (106, 129, 179)), ('눈보라 고원', (159, 183, 202)),
            ('갈라진 빙붕', (148, 183, 230)), ('펭귄의 보금자리', (132, 206, 183))]
 WORLD_WIDTH = REGION_WIDTH * len(REGIONS)
-FISH_TYPES = {'orange': ('orange-fish-swim-1.png', (255, 255, 255), 10),
-              'blue': ('orange-fish-swim-2.png', (100, 205, 255), 25),
-              'gold': ('orange-fish-swim-3.png', (255, 230, 100), 50)}
+SCENES = ['snow-coast', 'glacier-canyon', 'ice-cave', 'blizzard-plateau', 'fractured-shelf', 'sunset-home']
+# Each region has a different silhouette and optional upper routes.
+MAP_LAYOUTS = [
+    ([(0,550,360), (430,550,370), (870,550,330)],
+     [(180,450,190), (370,360,170), (550,270,160), (735,360,150), (900,450,160)]),
+    ([(0,550,280), (360,530,220), (660,550,210), (950,550,250)],
+     [(160,450,140), (330,360,150), (510,280,190), (730,370,140), (910,455,150)]),
+    ([(0,550,1200)],
+     [(200,450,170), (380,355,180), (580,265,190), (380,175,190), (800,355,180), (990,450,150)]),
+    ([(0,550,310), (370,520,250), (690,490,230), (995,550,205)],
+     [(160,450,180), (350,365,200), (575,280,180), (780,205,190)]),
+    ([(0,550,250), (315,550,230), (610,550,240), (925,550,275)],
+     [(180,460,150), (345,390,150), (510,320,160), (700,390,150), (865,460,160)]),
+    ([(0,550,350), (420,550,780)],
+     [(190,450,200), (395,365,160), (575,280,180), (785,365,160), (975,450,180)])]
+FISH_TYPES = {'orange': ('orange-fish.png', (255, 255, 255), 10),
+              'blue': ('blue-fish.png', (255, 255, 255), 25),
+              'gold': ('gold-fish.png', (255, 255, 255), 50)}
 DATA = Path(__file__).resolve().parent / 'data'
 GRAVITY = 1800
 MOVE_SPEED = 270
@@ -56,66 +71,56 @@ class Enemy:
             self.speed = -abs(self.speed)
         self.rect.x = round(self.x)
 
-    def draw(self, screen, camera_x):
+    def draw(self, screen, camera_x, image):
         rect = self.rect.move(-camera_x, 0)
-        color = (227, 81, 98)
-        for dx in (-1, 1):
-            cx = rect.centerx + dx * 15
-            pg.draw.line(screen, color, (cx, rect.bottom - 8), (cx + dx * 10, rect.bottom - 1), 3)
-            pg.draw.circle(screen, color, (cx + dx * 6, rect.y + 10), 7)
-        pg.draw.ellipse(screen, color, rect.inflate(-6, -8).move(0, 4))
-        for x in (rect.centerx - 8, rect.centerx + 8):
-            pg.draw.circle(screen, 'white', (x, rect.y + 7), 5)
-            pg.draw.circle(screen, (30, 35, 50), (x + (1 if self.speed > 0 else -1), rect.y + 7), 2)
+        screen.blit(image if self.speed < 0 else pg.transform.flip(image, True, False), rect)
 
 
 class Game:
     def __init__(self):
         self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
-        self.penguin_left = load_image('penguin-left.png', (40, 52), keep_aspect=True)
+        self.scene_backgrounds = [load_image('scene-' + scene + '.png', (WIDTH, HEIGHT)) for scene in SCENES]
+        self.penguin_left = load_image('penguin-adult-left.png', (40, 52), keep_aspect=True)
         self.penguin_right = pg.transform.flip(self.penguin_left, True, False)
-        self.big_penguin_left = load_image('penguin-left.png', (60, 78), keep_aspect=True)
+        self.big_penguin_left = load_image('penguin-adult-left.png', (60, 78), keep_aspect=True)
         self.big_penguin_right = pg.transform.flip(self.big_penguin_left, True, False)
         self.fish_images = {}
         for kind, (filename, tint, points) in FISH_TYPES.items():
             image = load_image(filename, (36, 24), keep_aspect=True)
-            if kind != 'orange':
-                # Tint the body while retaining the original alpha and outlines.
-                for x in range(image.get_width()):
-                    for y in range(image.get_height()):
-                        color = image.get_at((x, y))
-                        if color.a and color.r > color.g * 1.15 and color.r > 80:
-                            brightness = color.r / 255
-                            image.set_at((x, y), (*[round(c * brightness) for c in tint], color.a))
             self.fish_images[kind] = image
         self.font = pg.font.Font(None, 30)
         self.big_font = pg.font.Font(None, 64)
         korean_font = pg.font.match_font('malgungothic, 맑은 고딕, nanumgothic')
         self.intro_font = pg.font.Font(korean_font, 21)
         self.intro_title_font = pg.font.Font(korean_font, 36)
-        self.baby_image = load_image('penguin-left.png', (24, 31), keep_aspect=True)
+        self.baby_image = load_image('penguin-baby-left.png', (24, 31), keep_aspect=True)
+        self.crab_image = load_image('crab-enemy.png', (44, 30), keep_aspect=True)
+        self.igloo_image = load_image('igloo-checkpoint.png', (112, 85), keep_aspect=True)
+        self.cave_image = load_image('ice-cave-entrance.png', (180, 135), keep_aspect=True)
+        self.chest_image = load_image('golden-treasure-chest.png', (36, 30), keep_aspect=True)
+        self.item_images = {kind: load_image(filename + '-potion.png', (30, 36), keep_aspect=True)
+                            for kind, filename in [('grow', 'growth'), ('speed', 'speed'), ('reverse', 'reverse')]}
+        self.platform_images = {kind: load_image(filename + '-platform-tile.png', (80, 30))
+                                for kind, filename in [('snow', 'snow'), ('ice', 'smooth-ice'), ('crumble', 'cracked-ice')]}
         self.platforms = []
         self.platform_kinds = {}
         self.grounds = []
-        for region in range(len(REGIONS)):
+        self.region_grounds = []
+        self.region_ledges = []
+        for region, (ground_layout, ledge_layout) in enumerate(MAP_LAYOUTS):
             offset = region * REGION_WIDTH
-            gap = (65, 85, 70, 65, 100, 75)[region]
-            layouts = [(0, 550, 330, 50), (330 + gap, 550, 400, 50),
-                       (790 + gap, 550, REGION_WIDTH - 790 - gap, 50)]
-            # Different ridge positions and heights distinguish each region.
-            start = (175, 200, 155, 210, 175, 195)[region]
-            level = (450, 455, 445, 450, 455, 445)[region]
-            layouts += [(start, level, 180, 22), (start + 190, level - 90, 180, 22),
-                        (start + 380, level - 180, 180, 22)]
-            for index, (x, y, w, h) in enumerate(layouts):
-                rect = pg.Rect(offset + x, y, w, h)
+            grounds = [pg.Rect(offset+x, y, w, HEIGHT-y) for x,y,w in ground_layout]
+            ledges = [pg.Rect(offset+x, y, w, 24) for x,y,w in ledge_layout]
+            self.region_grounds.append(grounds)
+            self.region_ledges.append(ledges)
+            self.grounds.extend(grounds)
+            for rect in grounds + ledges:
                 self.platforms.append(rect)
                 kind = 'ice' if region in (1, 3) else 'snow'
-                if region == 4 and index in (3, 4, 5):
+                if region == 4 and rect in ledges:
                     kind = 'crumble'
                 self.platform_kinds[tuple(rect)] = kind
-                if index < 3:
-                    self.grounds.append(rect)
+        self.ground_keys = {tuple(p) for p in self.grounds}
         self.reset()
 
     def reset(self):
@@ -129,15 +134,16 @@ class Game:
         self.fish = []
         for region in range(len(REGIONS)):
             offset = region * REGION_WIDTH
-            for kind, x in [('orange', 245), ('orange', 1030)]:
-                self.fish.append((kind, pg.Rect(offset + x, 515, 36, 24)))
-            for index, kind in enumerate(('blue', 'blue', 'gold')):
-                platform = self.platforms[region * 6 + 3 + index]
+            grounds = self.region_grounds[region]
+            for platform, shift in [(grounds[0], 35), (grounds[-1], -35)]:
+                self.fish.append(('orange', pg.Rect(platform.centerx + shift - 18, platform.top - 35, 36, 24)))
+            ledges = self.region_ledges[region]
+            for kind, platform in [('blue', ledges[0]), ('blue', ledges[1]), ('gold', min(ledges, key=lambda p:p.y))]:
                 self.fish.append((kind, pg.Rect(platform.centerx - 18, platform.top - 35, 36, 24)))
         self.total = len(self.fish)
         self.score = 0
         self.max_score = sum(FISH_TYPES[kind][2] for kind, rect in self.fish)
-        self.enemies = [Enemy(self.platforms[region * 6 + 1], 65 + region * 8)
+        self.enemies = [Enemy(self.region_grounds[region][-1], 65 + region * 8)
                         for region in range(len(REGIONS))]
         self.max_score += len(self.enemies) * ENEMY_POINTS
         self.defeated = 0
@@ -149,20 +155,22 @@ class Game:
         self.won = False
         self.time = 0.0
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
-        self.items = [(kind, pg.Rect(offset + x, y, 30, 30))
-                      for offset in range(0, WORLD_WIDTH, REGION_WIDTH)
-                      for kind, x, y in [('grow', 140, 510), ('speed', 465, 510),
-                                         ('reverse', 710, 510)]]
+        self.items = []
+        for region in range(len(REGIONS)):
+            for kind, platform, shift in [('grow', self.region_grounds[region][0], 120),
+                                          ('speed', self.region_ledges[region][0], 35),
+                                          ('reverse', self.region_grounds[region][-1], 65)]:
+                self.items.append((kind, pg.Rect(platform.x + shift, platform.top - 36, 30, 36)))
         self.checkpoints = [pg.Rect(i * REGION_WIDTH + 30, 490, 95, 60)
                             for i in range(len(REGIONS))]
         self.checkpoint_index = 0
         self.spawn = (55, 498)
         self.crumbles = {}  # key -> (elapsed since stepped on, time left hidden)
-        self.caves = [{'rect': pg.Rect(i * REGION_WIDTH + 880, 420, 180, 130),
+        self.caves = [{'rect': pg.Rect(self.region_grounds[i][-1].right - 210, 420, 180, 130),
                        'found': False, 'treasure': False} for i in (2, 4)]
         self.babies = []
         for region in (1, 3, 5):
-            platform = self.platforms[region * 6 + 5]
+            platform = min(self.region_ledges[region], key=lambda p:p.y)
             self.babies.append({'rect': pg.Rect(platform.right - 40, platform.top - 31, 24, 31),
                                 'rescued': False})
         self.carried_baby = None
@@ -209,17 +217,6 @@ class Game:
                     cave['treasure'] = True
                     self.score += 100
 
-    def resize_player(self, size):
-        candidate = pg.Rect((0, 0), size)
-        candidate.midbottom = self.player.midbottom
-        candidate.x = max(0, min(WORLD_WIDTH - candidate.width, candidate.x))
-        # Leave a growth pickup available if a wall or ceiling blocks expansion.
-        if any(candidate.colliderect(platform) for platform in self.active_platforms()):
-            return False
-        self.player = candidate
-        self.x, self.y = map(float, candidate.topleft)
-        return True
-
     def respawn(self, hit=False):
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.player.size = (40, 52)
@@ -251,8 +248,6 @@ class Game:
             enemy.update(dt)
         for kind in self.effects:
             self.effects[kind] = max(0.0, self.effects[kind] - dt)
-        if not self.effects['grow'] and self.player.size != (40, 52):
-            self.resize_player((40, 52))
         if self.effects['reverse']:
             direction = -direction
         speed = MOVE_SPEED * (1.6 if self.effects['speed'] else 1.0)
@@ -274,7 +269,7 @@ class Game:
         movement = self.velocity_x + wind
         self.x += movement * dt
         self.player.x = round(self.x)
-        for platform in self.active_platforms():
+        for platform in self.grounds:
             if self.player.colliderect(platform):
                 if movement > 0:
                     self.player.right = platform.left
@@ -289,32 +284,39 @@ class Game:
         self.y += self.velocity_y * dt
         self.player.y = round(self.y)
         self.on_ground = False
+        landings = []
         for platform in self.active_platforms():
-            touching_top = (self.velocity_y >= 0 and self.player.bottom == platform.top
-                            and self.player.right > platform.left and self.player.left < platform.right)
-            if self.player.colliderect(platform) or touching_top:
-                if self.velocity_y > 0:
-                    self.player.bottom = platform.top
-                    self.on_ground = True
-                    self.surface_kind = self.platform_kinds[tuple(platform)]
-                    if self.surface_kind == 'crumble':
-                        self.crumbles.setdefault(tuple(platform), (0.0, 0.0))
-                elif self.velocity_y < 0:
+            overlap_x = self.player.right > platform.left and self.player.left < platform.right
+            if (self.velocity_y >= 0 and overlap_x
+                    and previous_bottom <= platform.top <= self.player.bottom):
+                landings.append(platform)
+            elif (tuple(platform) in self.ground_keys and self.player.colliderect(platform)
+                  and self.velocity_y < 0):
                     self.player.top = platform.bottom
-                self.y = float(self.player.y)
-                self.velocity_y = 0.0
+                    self.y = float(self.player.y)
+                    self.velocity_y = 0.0
+        if landings:
+            platform = min(landings, key=lambda p:p.top)
+            self.player.bottom = platform.top
+            self.on_ground = True
+            self.surface_kind = self.platform_kinds[tuple(platform)]
+            if self.surface_kind == 'crumble':
+                self.crumbles.setdefault(tuple(platform), (0.0, 0.0))
+            self.y = float(self.player.y)
+            self.velocity_y = 0.0
         # Descending from above is a stomp; side and upward contact cause damage.
         for enemy in list(self.enemies):
             if not self.player.colliderect(enemy.rect):
                 continue
-            if self.velocity_y > 0 and previous_bottom <= enemy.rect.top + 3:
+            if self.effects['grow'] or (self.velocity_y > 0 and previous_bottom <= enemy.rect.top + 3):
                 self.enemies.remove(enemy)
                 self.score += ENEMY_POINTS
                 self.defeated += 1
-                self.player.bottom = enemy.rect.top
-                self.y = float(self.player.y)
-                self.velocity_y = -420
-                self.on_ground = False
+                if not self.effects['grow']:
+                    self.player.bottom = enemy.rect.top
+                    self.y = float(self.player.y)
+                    self.velocity_y = -420
+                    self.on_ground = False
             elif not self.invincible:
                 self.respawn(hit=True)
                 return
@@ -328,8 +330,6 @@ class Game:
         remaining_items = []
         for kind, rect in self.items:
             if not self.player.colliderect(rect):
-                remaining_items.append((kind, rect))
-            elif kind == 'grow' and not self.resize_player((60, 78)):
                 remaining_items.append((kind, rect))
             else:
                 self.effects[kind] = ITEM_DURATION
@@ -345,48 +345,53 @@ class Game:
         if not self.started:
             self.draw_intro(screen)
             return
+        region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
+        background = self.scene_backgrounds[region]
         background_x = -int(self.camera_x * 0.2) % WIDTH
-        screen.blit(self.background, (background_x - WIDTH, 0))
-        screen.blit(self.background, (background_x, 0))
+        screen.blit(background, (background_x - WIDTH, 0))
+        screen.blit(background, (background_x, 0))
         # Show water in the ground gaps so falls are visually clear.
         pg.draw.rect(screen, (24, 88, 130), (0, 550, WIDTH, 50))
         self.draw_adventure(screen)
         for platform in self.active_platforms():
             rect = platform.move(-self.camera_x, 0)
             kind = self.platform_kinds[tuple(platform)]
-            color = (92, 208, 238) if kind == 'ice' else (180, 144, 158) if kind == 'crumble' else (96, 185, 221)
-            pg.draw.rect(screen, color, rect, border_radius=5)
-            pg.draw.rect(screen, (223, 249, 255), (rect.x, rect.y, rect.width, 7), border_radius=3)
-            if kind == 'crumble':
-                for x in range(rect.x + 15, rect.right, 35):
-                    pg.draw.lines(screen, (83, 75, 109), False, [(x, rect.y + 7), (x + 8, rect.y + 13), (x + 3, rect.bottom)], 2)
+            tile = self.platform_images[kind]
+            clip = screen.get_clip()
+            screen.set_clip(rect.clip(screen.get_rect()))
+            for y in range(rect.y, rect.bottom, tile.get_height()):
+                for x in range(rect.x, rect.right, tile.get_width()):
+                    screen.blit(tile, (x, y))
+            screen.set_clip(clip)
+            if kind == 'crumble' and tuple(platform) in self.crumbles:
+                progress = min(1, self.crumbles[tuple(platform)][0] / 0.8)
+                pg.draw.rect(screen, (245, 92, 125), (rect.x, rect.y-4, int(rect.width*progress), 3))
         for index, (kind, fish) in enumerate(self.fish):
             bob = round(math.sin(self.time * 4 + index) * 3)
             screen.blit(self.fish_images[kind], fish.move(-self.camera_x, bob))
         for enemy in self.enemies:
-            enemy.draw(screen, self.camera_x)
+            enemy.draw(screen, self.camera_x, self.crab_image)
         for kind, rect in self.items:
             rect = rect.move(-self.camera_x, 0)
-            color, symbol, _ = ITEM_STYLE[kind]
-            pg.draw.rect(screen, color, rect, border_radius=7)
-            pg.draw.rect(screen, (245, 250, 255), rect, width=2, border_radius=7)
-            label = self.font.render(symbol, True, (16, 45, 72))
-            screen.blit(label, label.get_rect(center=rect.center))
-        if self.player.size == (60, 78):
+            screen.blit(self.item_images[kind], rect)
+        if self.effects['grow']:
             image = self.big_penguin_right if self.facing_right else self.big_penguin_left
         else:
             image = self.penguin_right if self.facing_right else self.penguin_left
         if not self.invincible or int(self.time * 10) % 2 == 0:
-            screen.blit(image, self.player.move(-self.camera_x, 0))
+            rect = self.player.move(-self.camera_x, 0)
+            screen.blit(image, image.get_rect(midbottom=rect.midbottom))
         if self.carried_baby is not None:
             rect = self.player.move(-self.camera_x, 0)
-            screen.blit(self.baby_image, (rect.centerx - 12, rect.top - 29))
+            screen.blit(self.baby_image, (rect.centerx - 12, rect.bottom - image.get_height() - 29))
         pg.draw.rect(screen, (16, 45, 72), (0, 0, WIDTH, 72))
         screen.blit(self.font.render(f'Score: {self.score}    Fish: {self.total - len(self.fish)} / {self.total}    Falls: {self.falls}    Hits: {self.hits}', True, 'white'), (18, 10))
         screen.blit(self.font.render('Arrows / A D: move    Space: jump    R: restart    Esc: quit', True, (195, 234, 255)), (18, 40))
         region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
         status = f'{REGIONS[region][0]} | 구조 {self.rescued}/3 | 저장 지점 {self.checkpoint_index + 1}'
-        screen.blit(self.intro_font.render(status, True, (20, 45, 70)), (18, 116))
+        label = self.intro_font.render(status, True, 'white')
+        pg.draw.rect(screen, (16, 45, 72), (12, 113, label.get_width()+16, 32), border_radius=5)
+        screen.blit(label, (20, 116))
         legend = self.font.render('Orange: 10    Blue: 25    Gold: 50    Stomp crab: +30', True, 'white')
         pg.draw.rect(screen, (16, 45, 72), (10, HEIGHT - 35, legend.get_width() + 20, 30), border_radius=5)
         screen.blit(legend, (20, HEIGHT - 31))
@@ -408,29 +413,17 @@ class Game:
 
     def draw_adventure(self, screen):
         region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
-        tint = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
-        tint.fill((*REGIONS[region][1], 45 if region != 2 else 95))
-        screen.blit(tint, (0, 0))
         for cave in self.caves:
             rect = cave['rect'].move(-self.camera_x, 0)
-            pg.draw.ellipse(screen, (170, 206, 232), rect.inflate(24, 24))
-            pg.draw.ellipse(screen, (22, 35, 67), rect)
-            for dx in (18, 45, 100, 135):
-                pg.draw.polygon(screen, (131, 216, 249), [(rect.x + dx, rect.y + 15),
-                                (rect.x + dx + 12, rect.y + 15), (rect.x + dx + 6, rect.y + 48)])
+            screen.blit(self.cave_image, self.cave_image.get_rect(midbottom=rect.midbottom))
             if cave['found'] and not cave['treasure']:
                 chest = pg.Rect(rect.right - 45, 515, 30, 30)
-                pg.draw.rect(screen, (240, 186, 66), chest, border_radius=4)
-                pg.draw.rect(screen, (255, 242, 156), chest, 3, border_radius=4)
-                pg.draw.line(screen, (120, 78, 42), chest.midtop, chest.midbottom, 3)
+                screen.blit(self.chest_image, chest)
         for index, checkpoint in enumerate(self.checkpoints):
             rect = checkpoint.move(-self.camera_x, 0)
-            pg.draw.ellipse(screen, (225, 245, 255), rect)
-            pg.draw.rect(screen, (225, 245, 255), (rect.x, 520, rect.width, 30))
-            pg.draw.ellipse(screen, (35, 66, 98), (rect.centerx - 15, 517, 30, 42))
-            pg.draw.line(screen, (40, 65, 95), (rect.right, 455), (rect.right, 540), 3)
-            flag = (112, 242, 150) if index == self.checkpoint_index else (255, 215, 106)
-            pg.draw.polygon(screen, flag, [(rect.right, 455), (rect.right + 32, 466), (rect.right, 480)])
+            screen.blit(self.igloo_image, self.igloo_image.get_rect(midbottom=rect.midbottom))
+            if index == self.checkpoint_index:
+                pg.draw.circle(screen, (111, 255, 151), (rect.centerx, rect.top-32), 5)
         for index, baby in enumerate(self.babies):
             if not baby['rescued'] and index != self.carried_baby:
                 rect = baby['rect'].move(-self.camera_x, 0)
@@ -459,9 +452,9 @@ class Game:
             ('목표: 6개 구역의 물고기 30마리를 모으고 아기 펭귄 3마리 구조!', 'white'),
             ('이동: ← → 또는 A / D     점프: 스페이스바 / ↑ / W', 'white'),
             ('주황 물고기 10점 · 파랑 25점 · 황금 50점', (255, 223, 120)),
-            ('초록 + : 몸 크기 1.5배', ITEM_STYLE['grow'][0]),
-            ('노랑 >> : 이동 속도 1.6배', ITEM_STYLE['speed'][0]),
-            ('보라 <> : 좌우 이동 반전! (A / D도 반전됩니다)', ITEM_STYLE['reverse'][0]),
+            ('초록 물약: 몸 크기 1.5배 · 적 돌파! 좁은 길도 통과 가능', ITEM_STYLE['grow'][0]),
+            ('노랑 물약: 이동 속도 1.6배 (모든 물약 효과는 8초)', ITEM_STYLE['speed'][0]),
+            ('보라 물약: 좌우 이동 반전! 발판은 아래에서 통과 가능', ITEM_STYLE['reverse'][0]),
             ('이글루에 닿으면 저장! 아기 펭귄을 데려오면 구조 +100점.', 'white'),
             ('게를 위에서 밟으면 처치하고 30점을 얻습니다.', (255, 155, 165)),
             ('미끄러운 얼음, 0.8초 뒤 무너지는 발판, 눈보라에 주의!', 'white'),

@@ -11,3 +11,6 @@ Files:
 - icicle-projectile.gif: copy of the icicle used by the earlier shooting example.
 - antarctica-background: Antarctic landscape, PNG and GIF.
 - penguin-fish-ice-sprite-atlas.png: original combined sprite sheet.
+
+Adventure art update, built-in image_gen tool. Prompt: consistent Antarctic pixel-art 4x3 object atlas (adult penguin, baby, crab, igloo, cave entrance, chest, growth/speed/reverse potions, snow/smooth/cracked ice blocks), transparent background, isolated sprites. Alpha extraction edit: remove background and halos, preserve sprites and opaque doorways. Background prompt: six-panel pixel-art landscapes: snowy coast, glacier canyon, ice cave interior, blizzard plateau, fractured shelf, sunset nesting coast. Final cropped PNG files are in this directory.
+Fish prompt (built-in image_gen): transparent single-row atlas, isolated orange, cyan-blue and golden fish with distinct silhouettes and crisp dark outlines, all facing left. Outputs: orange-fish.png, blue-fish.png, gold-fish.png.
