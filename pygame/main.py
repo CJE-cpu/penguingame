@@ -63,7 +63,8 @@ def load_image(name, size=None, keep_aspect=False):
 class Game:
     def __init__(self):
         self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
-        self.scene_backgrounds = [load_image('scene-' + scene + '.png', (WIDTH, HEIGHT)) for scene in SCENES]
+        # One oversized panorama per region; never join non-seamless image edges.
+        self.scene_backgrounds = [load_image('scene-' + scene + '.png', (WIDTH + 400, HEIGHT)) for scene in SCENES]
         self.penguin_left = load_image('penguin-adult-left.png', (40, 52), keep_aspect=True)
         self.penguin_right = pg.transform.flip(self.penguin_left, True, False)
         self.big_penguin_left = load_image('penguin-adult-left.png', (60, 78), keep_aspect=True)
@@ -168,9 +169,6 @@ class Game:
         placements = [('grow',0,False,0,120), ('speed',1,True,0,95),
                       ('reverse',2,True,-1,105), ('speed',3,True,-1,100),
                       ('grow',4,False,0,120)]
-        for kind,region,upper,index,shift in placements:
-            platform = (self.region_ledges if upper else self.region_grounds)[region][index]
-            self.items.append((kind,pg.Rect(platform.x+shift,platform.top-36,30,36)))
         self.checkpoints = [pg.Rect(i * REGION_WIDTH + 30, 490, 95, 60)
                             for i in range(len(REGIONS))]
         self.checkpoint_index = 0
@@ -187,6 +185,57 @@ class Game:
         self.rescued = 0
         self.in_sanctuary = False
         self.max_score += len(self.babies) * 100 + len(self.caves) * 100
+        self.arrange_potions(placements)
+
+    def potion_obstacles(self):
+        obstacles = [rect for kind, rect in self.fish]
+        obstacles += [self.igloo_image.get_rect(midbottom=r.midbottom) for r in self.checkpoints]
+        obstacles += [self.cave_image.get_rect(midbottom=c['rect'].midbottom) for c in self.caves]
+        obstacles += [self.baby_image.get_rect(midbottom=b['rect'].midbottom) for b in self.babies]
+        for enemy in self.enemies:
+            margin = 48 if enemy.kind in ('skua', 'spirit') else 0
+            obstacles.append(pg.Rect(enemy.left, enemy.base_y-margin,
+                                     enemy.right-enemy.left, enemy.rect.height+margin*2))
+        return obstacles
+
+    def arrange_potions(self, placements):
+        """Reserve room for bobbing sprites and the entire enemy patrol route."""
+        self.items = []
+        obstacles = self.potion_obstacles()
+        for kind, region, upper, index, shift in placements:
+            preferred = (self.region_ledges if upper else self.region_grounds)[region][index]
+            alternatives = self.region_ledges[region] if upper else self.region_grounds[region] + self.region_ledges[region]
+            for platform in [preferred] + [p for p in alternatives if p != preferred]:
+                positions = range(platform.left+18, platform.right-47, 8)
+                for x in sorted(positions, key=lambda x: abs(x-(preferred.x+shift))):
+                    rect = pg.Rect(x, platform.top-36, 30, 36)
+                    if not any(rect.inflate(28, 18).colliderect(o) for o in obstacles):
+                        self.items.append((kind, rect))
+                        obstacles.append(rect.inflate(12, 12))
+                        break
+                else:
+                    continue
+                break
+            else:
+                raise ValueError('No clear potion position in region ' + str(region))
+
+    def platform_draw_rect(self, platform):
+        rect = platform.move(-self.camera_x, 0)
+        elapsed, hidden = self.crumbles.get(tuple(platform), (0, 0))
+        if elapsed and not hidden:
+            progress = min(1, elapsed / 0.8)
+            rect.move_ip(round(math.sin(elapsed*65)*(1+progress*4)),
+                         round(math.sin(elapsed*47)*(1+progress*2)))
+        return rect
+
+    def draw_background(self, screen):
+        drift = round(400 * max(0, min(1, self.camera_x / (WORLD_WIDTH-WIDTH))))
+        for index, (region, weight) in enumerate(self.scene_weights()):
+            background = self.scene_backgrounds[region]
+            if index:
+                background = background.copy()
+                background.set_alpha(round(255*weight))
+            screen.blit(background, (-drift, 0))
 
     def active_platforms(self):
         return [p for p in self.platforms if self.crumbles.get(tuple(p), (0, 0))[1] <= 0]
@@ -408,19 +457,12 @@ class Game:
         if not self.started:
             self.draw_intro(screen)
             return
-        background_x = -int(self.camera_x * 0.2) % WIDTH
-        for index, (region, weight) in enumerate(self.scene_weights()):
-            background = self.scene_backgrounds[region]
-            if index:
-                background = background.copy()
-                background.set_alpha(round(255*weight))
-            screen.blit(background, (background_x - WIDTH, 0))
-            screen.blit(background, (background_x, 0))
+        self.draw_background(screen)
         # Show water in the ground gaps so falls are visually clear.
         pg.draw.rect(screen, (24, 88, 130), (0, 550, WIDTH, 50))
         self.draw_adventure(screen)
         for platform in self.active_platforms():
-            rect = platform.move(-self.camera_x, 0)
+            rect = self.platform_draw_rect(platform)
             kind = self.platform_kinds[tuple(platform)]
             tile = self.platform_images[kind]
             clip = screen.get_clip()

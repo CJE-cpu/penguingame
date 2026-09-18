@@ -144,8 +144,9 @@ class AdventureChecks(unittest.TestCase):
 
     def test_growth_pickup_expiry_and_crumble(self):
         g = self.game
-        platform = g.region_grounds[0][0]
-        self.place(platform, 135)
+        potion = next(rect for kind, rect in g.items if kind == 'grow')
+        platform = next(p for p in g.platforms if p.top == potion.bottom and p.contains(pg.Rect(potion.x, p.top, 30, 1)))
+        self.place(platform, potion.centerx)
         g.update(1/60)
         self.assertEqual(g.effects['grow'], 8)
         self.assertEqual(g.player.size, (40, 52))
@@ -317,6 +318,32 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw_aura(g,self.screen)
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
+
+    def test_clear_potions_panorama_and_shaking(self):
+        g = self.game
+        for kind, rect in g.items:
+            self.assertFalse(any(rect.inflate(28,18).colliderect(o) for o in g.potion_obstacles()))
+        for camera in (0, 1, 2000, 3999, 6400):
+            g.camera_x = camera
+            g.player.centerx = 500
+            self.screen.fill((255,0,255))
+            g.draw_background(self.screen)
+            drift = round(400*camera/6400)
+            expected = g.scene_backgrounds[0].subsurface((drift,0,800,600))
+            self.assertEqual(pg.image.tobytes(self.screen,'RGB'), pg.image.tobytes(expected,'RGB'))
+        platform = g.region_ledges[4][0]
+        original = platform.copy()
+        g.camera_x = platform.x-200
+        still = g.platform_draw_rect(platform)
+        positions = set()
+        for elapsed in (0.1,0.2,0.3,0.4,0.5,0.6,0.7):
+            g.crumbles[tuple(platform)] = (elapsed,0)
+            positions.add(g.platform_draw_rect(platform).topleft)
+        self.assertGreater(len(positions),3)
+        self.assertEqual(platform,original)
+        self.assertIn(platform,g.active_platforms())
+        g.crumbles[tuple(platform)] = (0.8,4)
+        self.assertNotIn(platform,g.active_platforms())
 
     def test_baby_markers_and_direction_target(self):
         g = self.game
