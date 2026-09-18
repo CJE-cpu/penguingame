@@ -1,0 +1,37 @@
+{
+  "name": "penguin-expedition-portfolio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc -b && vite build",
+    "start": "node server/index.mjs",
+    "test": "node --test server/app.test.mjs",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "lucide-react": "^1.47.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "^3.9.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}
