@@ -125,7 +125,7 @@ class IceUI:
         self.panel(screen, (32, 24, 736, 550))
         self.icon(screen, game.penguin_right, (100, 83), (49, 66))
         self.text(screen, '남극 펭귄의 모험', (146, 43), self.title)
-        self.text(screen, '연습 해안에서 배우고, 10,800픽셀의 여섯 지대를 탐험하세요.', (147, 98), self.small, MUTED)
+        self.text(screen, '남극을 탐험하고 물고기와 친구들을 찾으세요.', (147, 98), self.small, MUTED)
         self.panel(screen, (54, 136, 692, 58), dark=True)
         self.text(screen, '물고기 30마리 + 친구 3마리 구조 + 빙붕 탈출 후 귀환', (400, 154), self.body, 'white', center=True)
         self.text(screen, '친구의 부탁을 해결하면 동행 시작 · 이글루에 데려다 주면 +100점', (400, 177), self.small, (224,248,255), center=True)
@@ -145,7 +145,7 @@ class IceUI:
         self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료 확인', (400, 456), self.small, MUTED, center=True)
         self.panel(screen, (149, 483, 502, 49), dark=True)
         self.text(screen, 'ENTER 튜토리얼 시작 · N 바로 모험', (400, 507), self.heading, 'white', center=True)
-        self.text(screen, '설명창이 뜨면 게임 정지 · ENTER / SPACE 확인   |   잠수·일지·집 꾸미기는 선택', (400, 552), self.small, MUTED, center=True)
+        self.text(screen, 'F3 점수 기록 · F4 이름 변경(시작 전) · 설명창과 기록 창은 게임 정지', (400, 552), self.small, MUTED, center=True)
 
     def exit_buttons(self):
         return pg.Rect(188,334,194,54),pg.Rect(418,334,194,54)
@@ -154,7 +154,7 @@ class IceUI:
         self.veil(screen)
         self.panel(screen,(112,169,576,269))
         self.text(screen,'모험을 종료할까요?',(400,215),self.heading,center=True)
-        self.text(screen,'종료하면 현재 진행은 저장되지 않습니다.',(400,265),self.body,MUTED,center=True)
+        self.text(screen,'점수 기록은 저장됩니다. 맵 진행은 저장되지 않습니다.',(400,265),self.body,MUTED,center=True,max_width=530)
         self.text(screen,'계속하기를 선택하면 그대로 이어서 플레이합니다.',(400,293),self.small,MUTED,center=True)
         for index,(rect,label) in enumerate(zip(self.exit_buttons(),('계속하기','종료'))):
             selected = bool(index)==game.exit_choice
@@ -172,4 +172,4 @@ class IceUI:
         self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 360), self.small, MUTED, center=True)
         self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,382),self.small,MUTED,center=True)
         self.panel(screen, (220, 395, 360, 51), dark=True)
-        self.text(screen, 'ENTER 계속 탐험 · R 새로운 모험', (400, 420), self.body, 'white', center=True)
+        self.text(screen, 'ENTER 계속 · F3 기록 · R 새 모험', (400, 420), self.body, 'white', center=True)

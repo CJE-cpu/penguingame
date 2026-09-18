@@ -39,7 +39,7 @@ class GameWindow:
             self.open = False
             return False
         if event.type == pg.KEYDOWN:
-            if event.key == pg.K_F2 and not game.exit_open:
+            if event.key == pg.K_F2 and not game.exit_open and not game.score_ui.open:
                 self.open = not self.open
                 return True
             if self.open:
@@ -60,7 +60,7 @@ class GameWindow:
                             self.apply()
                             break
                 return True
-            if pos is not None and self.button.collidepoint(pos) and not game.exit_open:
+            if pos is not None and self.button.collidepoint(pos) and not game.exit_open and not game.score_ui.open:
                 self.open = True
                 return True
         return False
@@ -68,7 +68,7 @@ class GameWindow:
     def present(self,game):
         game.draw(self.canvas)
         ui = game.ui
-        if not game.exit_open:
+        if not game.exit_open and not game.score_ui.open:
             ui.panel(self.canvas,self.button,dark=True)
             ui.text(self.canvas,'F2 창 크기',self.button.center,ui.small,'white',center=True)
         if self.open:
@@ -84,5 +84,10 @@ class GameWindow:
             ui.text(self.canvas,'창 가장자리를 드래그해도 조절할 수 있어요.',(400,461),ui.small,center=True)
         self.screen.fill((10,25,39))
         rect = self.viewport()
+        if game.score_ui.mode=='name':
+            field = game.score_ui.input_rect
+            pg.key.set_text_input_rect(pg.Rect(rect.x+round(field.x*rect.w/800),
+                                               rect.y+round(field.y*rect.h/600),
+                                               round(field.w*rect.w/800),round(field.h*rect.h/600)))
         pg.transform.smoothscale(self.canvas,rect.size,self.screen.subsurface(rect))
         pg.display.flip()

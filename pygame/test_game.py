@@ -4,10 +4,14 @@ os.environ['SDL_VIDEODRIVER'] = 'dummy'
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
 import unittest
 import math
+import tempfile
+from pathlib import Path
 import pygame as pg
 from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy
 from window import GameWindow
 from cave import CaveExpedition
+from records import ScoreRecords
+from unittest.mock import patch
 
 
 class AdventureChecks(unittest.TestCase):
@@ -21,7 +25,10 @@ class AdventureChecks(unittest.TestCase):
         pg.quit()
 
     def setUp(self):
-        self.game = Game()
+        temporary = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent)
+        self.addCleanup(temporary.cleanup)
+        self.score_path = Path(temporary.name)/'scores.json'
+        self.game = Game(score_path=self.score_path)
         self.game.started = True
 
     def test_resized_window_preserves_ratio_and_mouse_coordinates(self):
@@ -159,6 +166,89 @@ class AdventureChecks(unittest.TestCase):
         for frame in range(35):
             cave.update(g,1/60,1,frame==0,False)
         self.assertLessEqual(cave.player.right,cave.gate.left)
+
+    def test_named_scores_reload_sort_and_keep_best_per_player(self):
+        g = self.game
+        records = g.records
+        records.set_name('눈송이')
+        base = {'name':'눈송이','run':'first','score':180,'fish':8,'rescued':1,'seconds':90,
+                'cleared':False,'date':'2026-09-18T12:00:00'}
+        self.assertTrue(records.record(base))
+        records.record(dict(base,score=140,run='second'))
+        records.record(dict(base,score=200,name='빙하',run='third',cleared=True))
+        records.record(dict(base,score=220,run='first',cleared=True))
+        loaded = ScoreRecords(self.score_path)
+        self.assertEqual(loaded.name,'눈송이')
+        self.assertEqual([r['score'] for r in loaded.ranking()],[220,200])
+        self.assertEqual(len(loaded.history),3)
+        self.assertEqual(sum(e['run']=='first' for e in loaded.history),1)
+        self.assertTrue(loaded.best['눈송이']['cleared'])
+
+    def test_score_reset_preserves_history_but_tutorial_does_not_record(self):
+        g = self.game
+        g.player_name = '얼음별'
+        g.score = 125
+        run = g.run_id
+        g.handle_key(pg.K_r)
+        self.assertEqual(g.records.best['얼음별']['score'],125)
+        self.assertEqual(g.records.history[0]['run'],run)
+        self.assertNotEqual(g.run_id,run)
+        self.assertEqual(g.score,0)
+        g.start(True)
+        g.score = 900
+        g.reset()
+        self.assertEqual(len(g.records.history),1)
+
+    def test_score_ui_korean_name_and_pause_preserve_current_game(self):
+        g = self.game
+        g.started = False
+        g.handle_key(pg.K_F4)
+        self.assertEqual(g.score_ui.mode,'name')
+        g.score_ui.text_event(pg.event.Event(pg.TEXTEDITING,text='눈',start=0,length=1))
+        g.handle_key(pg.K_RETURN)
+        self.assertTrue(g.score_ui.open)
+        g.score_ui.text_event(pg.event.Event(pg.TEXTINPUT,text='눈송이'))
+        g.handle_key(pg.K_RETURN)
+        self.assertEqual(g.player_name,'눈송이')
+        self.assertFalse(g.score_ui.open)
+        g.started = True
+        g.score = 80
+        g.content.diving = True
+        position,oxygen,time = g.content.swimmer.copy(),g.content.oxygen,g.time
+        g.handle_key(pg.K_F3)
+        g.update(1,1,True,True,1)
+        self.assertEqual((g.content.swimmer,g.content.oxygen,g.time),(position,oxygen,time))
+        g.draw(self.screen)
+        g.handle_key(pg.K_TAB)
+        self.assertTrue(g.score_ui.recent)
+        g.handle_key(pg.K_ESCAPE)
+        self.assertFalse(g.exit_open)
+        self.assertFalse(g.score_ui.open)
+        g.handle_key(pg.K_F4)
+        self.assertFalse(g.score_ui.open)
+        self.assertEqual(g.records.best['눈송이']['score'],80)
+
+    def test_record_write_failure_keeps_previous_file_and_reports_error(self):
+        records = self.game.records
+        records.set_name('안전한 기록')
+        before = self.score_path.read_bytes()
+        with patch('records.os.replace',side_effect=PermissionError('read-only')):
+            self.assertFalse(records.set_name('새 이름'))
+        self.assertEqual(self.score_path.read_bytes(),before)
+        self.assertTrue(records.error)
+        self.assertFalse(list(self.score_path.parent.glob('scores-*.tmp')))
+
+    def test_corrupt_records_are_backed_up_and_invalid_entries_ignored(self):
+        self.score_path.write_text('{broken',encoding='utf-8')
+        records = ScoreRecords(self.score_path)
+        self.assertTrue(records.error)
+        self.assertTrue(records.set_name('다시 시작'))
+        backups = list(self.score_path.parent.glob('scores.json.backup-*'))
+        self.assertEqual(len(backups),1)
+        self.assertEqual(backups[0].read_text(encoding='utf-8'),'{broken')
+        self.assertEqual(ScoreRecords(self.score_path).name,'다시 시작')
+        self.assertFalse(records.record({'name':'bad','score':-1}))
+        self.assertFalse(records.set_name('  '))
 
     def test_growth_preserves_passage_and_attacks(self):
         g = self.game

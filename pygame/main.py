@@ -1,5 +1,7 @@
 """Antarctic penguin platformer. Arrows/A/D: move; Space: jump; R: restart."""
 from pathlib import Path
+from datetime import datetime
+from uuid import uuid4
 import math
 import pygame as pg
 from ui import IceUI
@@ -12,6 +14,7 @@ from tutorial import Coach, TutorialStage
 from art import WorldArt
 from window import GameWindow
 from cave import CaveExpedition
+from records import ScoreRecords, ScoreUI
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1800
@@ -69,7 +72,7 @@ def load_image(name, size=None, keep_aspect=False):
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, score_path=None):
         self.region_width = REGION_WIDTH
         self.world_width = WORLD_WIDTH
         self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
@@ -121,9 +124,16 @@ class Game:
                     kind = 'crumble'
                 self.platform_kinds[tuple(rect)] = kind
         self.ground_keys = {tuple(p) for p in self.grounds}
+        self.records = ScoreRecords(score_path)
+        self.score_ui = ScoreUI()
         self.reset()
 
     def reset(self):
+        if hasattr(self,'score'):
+            self.save_score()
+        self.score_ui.close()
+        self.player_name = self.records.name
+        self.run_id = uuid4().hex
         self.exit_open = False
         self.exit_choice = False
         self.quit_requested = False
@@ -241,6 +251,8 @@ class Game:
                 else:
                     self.exit_open = False
             return False
+        if self.score_ui.key(self,key):
+            return False
         if key == pg.K_ESCAPE:
             self.ask_exit()
             return False
@@ -304,6 +316,16 @@ class Game:
                 self.exit_open = False
             elif confirm.collidepoint(pos):
                 self.quit_requested = True
+            return
+        self.score_ui.click(self,pos)
+
+    def save_score(self):
+        if not getattr(self,'started',False) or self.tutorial or self.score<=0:
+            return True
+        return self.records.record({'run':self.run_id,'name':self.player_name,'score':self.score,
+                                    'fish':self.total-len(self.fish),'rescued':self.rescued,
+                                    'seconds':round(self.time),'cleared':self.won,
+                                    'date':datetime.now().isoformat(timespec='seconds')})
 
     def explain_nearby(self, slide):
         if slide and self.coach.explain('slide'):
@@ -494,7 +516,7 @@ class Game:
         self.region_banner = 0.0
 
     def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0):
-        if self.exit_open or self.quit_requested:
+        if self.exit_open or self.quit_requested or self.score_ui.open:
             return
         if not self.started:
             return
@@ -653,6 +675,7 @@ class Game:
                 and self.content.nearby(self,self.checkpoints[-1])):
             self.won = True
             self.finish_open = True
+            self.save_score()
         if self.player.top > HEIGHT:
             self.respawn()
             return
@@ -663,6 +686,7 @@ class Game:
 
     def draw(self, screen):
         self.draw_scene(screen)
+        self.score_ui.draw(self,screen)
         if self.exit_open:
             self.ui.exit_dialog(self,screen)
 
@@ -850,8 +874,10 @@ def main():
                     jump = False
                 elif event.type == pg.KEYDOWN:
                     jump = game.handle_key(event.key) or jump
-                    if game.exit_open:
+                    if game.exit_open or game.score_ui.open:
                         jump = False
+                elif event.type in (pg.TEXTINPUT,pg.TEXTEDITING) and not game.exit_open:
+                    game.score_ui.text_event(event)
                 elif event.type == pg.MOUSEBUTTONDOWN and event.button==1:
                     pos = window.game_position(event.pos)
                     if pos is not None:
@@ -866,6 +892,7 @@ def main():
                 game.update(dt, direction, jump, bool(keys[pg.K_DOWN] or keys[pg.K_s]),vertical)
             window.present(game)
     finally:
+        game.save_score()
         pg.quit()
 
 
