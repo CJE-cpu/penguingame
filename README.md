@@ -34,3 +34,15 @@ python pygame/main.py
 - `requirements.txt`: 실행에 필요한 패키지
 
 게임 이미지는 저장소에 함께 포함해야 합니다. 빌드 도구와 생성된 실행 파일은 `.gitignore`에서 제외합니다. Windows 실행 파일은 GitHub Releases에 별도로 배포할 수 있습니다.
+
+
+## Adventure expansion
+
+Double-click `pygame/AntarcticPenguin.exe` on Windows; Python is not required.
+
+- 7,200-pixel world with six regions: snowy coast, slippery glacier, ice caves, blizzard plateau, fractured ice shelf and penguin home.
+- Collect all 30 fish and rescue three baby penguins to complete the adventure. Touch a baby to carry it, then return to any igloo for a 100-point rescue bonus.
+- Igloos are checkpoints for the current game session. Falling or taking damage returns you to your last igloo; carried babies return to their original positions.
+- Ice retains momentum, blizzards push left, and cracked platforms collapse after 0.8 seconds and recover after four seconds.
+- Explore two cave entrances to reveal treasure chests worth 100 points each. Treasure and enemy defeats are optional.
+- R resets all progress and returns to the instructions.
