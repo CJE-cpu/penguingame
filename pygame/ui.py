@@ -1,4 +1,5 @@
 """Ice-themed Korean interface, drawn at native resolution."""
+import math
 import pygame as pg
 
 INK = (28, 64, 87)
@@ -70,9 +71,33 @@ class IceUI:
         self.text(screen, '← → / A D 이동   SPACE 점프   R 다시 시작   ESC 종료', (25, 569), self.small)
         for i, (_, color) in enumerate(regions):
             pg.draw.rect(screen, color, (598+i*30, 574, 28, 8), border_radius=3)
+        for index,baby in enumerate(game.babies):
+            if baby['rescued'] or index == game.carried_baby:
+                continue
+            x = 598+round(baby['rect'].centerx/7200*180)
+            pg.draw.polygon(screen,(255,219,85),[(x,567),(x-4,573),(x+4,573)])
         marker = 598 + int(game.player.centerx/7200*180)
         pg.draw.circle(screen, BLUE, (marker, 578), 5)
         pg.draw.circle(screen, 'white', (marker, 578), 3)
+
+    def rescue_guide(self,game,screen):
+        target = game.rescue_target()
+        if target is None or game.won:
+            return
+        kind,rect = target
+        self.panel(screen,(12,147,262,43))
+        self.icon(screen,game.baby_image if kind=='baby' else game.igloo_image,(35,168),(27,30))
+        dx,dy = rect.centerx-game.player.centerx,rect.centery-game.player.centery
+        horizontal = '오른쪽' if dx>40 else '왼쪽' if dx<-40 else '근처'
+        vertical = ' 위' if dy<-45 else ' 아래' if dy>45 else ''
+        self.text(screen,'친구 위치' if kind=='baby' else '친구와 이글루로', (57,150),self.small)
+        self.text(screen,horizontal+vertical,(57,169),self.small,MUTED)
+        angle = math.atan2(dy,dx)
+        cx,cy = 246,168
+        tip = (round(cx+math.cos(angle)*11),round(cy+math.sin(angle)*11))
+        left = (round(cx+math.cos(angle+2.5)*8),round(cy+math.sin(angle+2.5)*8))
+        right = (round(cx+math.cos(angle-2.5)*8),round(cy+math.sin(angle-2.5)*8))
+        pg.draw.polygon(screen,BLUE,[tip,left,right])
 
     def transition(self, game, screen, regions):
         if game.region_banner <= 0 or game.won:
@@ -101,7 +126,7 @@ class IceUI:
             (game.enemy_images['seal'][0], '행동이 다른 네 종류의 적', '게 · 물범 · 갈매기 · 튀는 얼음 정령'),
             (game.item_images['grow'], '성장 물약 · 8초', '몸이 커지고 적 돌파 · 좁은 길 통과'),
             (game.item_images['speed'], '속도 물약 · 8초', '이동 속도 1.6배 · 얼음에서는 관성'),
-            (game.item_images['reverse'], '반전 물약 · 8초', '2곳에 배치 · 중복은 시간만 갱신'),
+            (game.item_images['reverse'], '반전 물약 · 8초', '옆길에 1개 · 중복은 시간만 갱신'),
             (game.chest_image, '동굴과 얼음 발판', '보물 +100점 · 금 간 발판은 곧 붕괴')]
         for index, (image, title, detail) in enumerate(cards):
             x, y = 54+(index%2)*352, 206+(index//2)*77
@@ -112,7 +137,7 @@ class IceUI:
         self.text(screen, '← → / A D 이동     SPACE / ↑ / W 점프     R 재시작     ESC 종료', (400, 456), self.small, MUTED, center=True)
         self.panel(screen, (149, 483, 502, 49), dark=True)
         self.text(screen, 'ENTER 또는 SPACE로 모험 시작', (400, 507), self.heading, 'white', center=True)
-        self.text(screen, '물고기: 주황 10점 · 파랑 25점 · 황금 50점', (400, 552), self.small, MUTED, center=True)
+        self.text(screen, '주황 10점 · 파랑 25점 · 황금 50점   |   물약 5개 · 한 번에 한 효과', (400, 552), self.small, MUTED, center=True)
 
     def finish(self, game, screen):
         self.veil(screen)

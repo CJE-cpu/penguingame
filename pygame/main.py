@@ -79,7 +79,7 @@ class Game:
         self.big_font = self.ui.title
         self.intro_font = self.ui.body
         self.intro_title_font = self.ui.title
-        self.baby_image = load_image('penguin-baby-left.png', (24, 31), keep_aspect=True)
+        self.baby_image = load_image('penguin-baby-left.png', (32, 40), keep_aspect=True)
         self.crab_image = load_image('crab-enemy.png', (44, 30), keep_aspect=True)
         self.enemy_images = {'crab':[self.crab_image]}
         for kind, filenames in [('seal', ['seal-patrol','seal-charge']),
@@ -164,13 +164,13 @@ class Game:
         self.time = 0.0
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.items = []
-        for region in range(len(REGIONS)):
-            for kind, platform, shift in [('grow', self.region_grounds[region][0], 120),
-                                          ('speed', self.region_ledges[region][0], 35),
-                                          ('reverse', self.region_grounds[region][-1], 65)]:
-                if kind == 'reverse' and region not in (2,4):
-                    continue
-                self.items.append((kind, pg.Rect(platform.x + shift, platform.top - 36, 30, 36)))
+        # Five spaced pickups; control-changing potions sit on optional upper paths.
+        placements = [('grow',0,False,0,120), ('speed',1,True,0,95),
+                      ('reverse',2,True,-1,105), ('speed',3,True,-1,100),
+                      ('grow',4,False,0,120)]
+        for kind,region,upper,index,shift in placements:
+            platform = (self.region_ledges if upper else self.region_grounds)[region][index]
+            self.items.append((kind,pg.Rect(platform.x+shift,platform.top-36,30,36)))
         self.checkpoints = [pg.Rect(i * REGION_WIDTH + 30, 490, 95, 60)
                             for i in range(len(REGIONS))]
         self.checkpoint_index = 0
@@ -289,7 +289,7 @@ class Game:
         if self.won:
             return
         self.invincible = max(0.0, self.invincible - dt)
-        self.feedback.update(dt)
+        self.feedback.update(dt,self)
         was_grounded = self.on_ground
         previous_x = self.player.x
         self.update_adventure(dt)
@@ -386,11 +386,13 @@ class Game:
             else:
                 # Idempotent: a second reversal refreshes its timer, never flips twice.
                 repeated = self.effects[kind] > 0
+                for other in self.effects:
+                    self.effects[other] = 0.0
                 self.effects[kind] = ITEM_DURATION
                 name = {'grow':'성장! 적 돌파', 'speed':'가속! 속도 증가', 'reverse':'주의! 좌우 반전'}[kind]
                 if repeated:
                     name = {'grow':'성장', 'speed':'가속', 'reverse':'반전'}[kind]+' 시간 갱신'
-                self.feedback.emit(rect.center, name, ITEM_STYLE[kind][0])
+                self.feedback.emit(rect.center, name, ITEM_STYLE[kind][0],kind=kind)
         self.items = remaining_items
         self.update_adventure(0)
         if not self.fish and self.rescued == len(self.babies):
@@ -441,7 +443,7 @@ class Game:
             color = ITEM_STYLE[kind][0]
             pg.draw.ellipse(screen, color, (rect.x+2,rect.bottom-3,26,5),2)
             screen.blit(self.item_images[kind], rect.move(0,bob))
-        image = self.animation.image(self.effects['grow'], self.facing_right)
+        image = self.feedback.player_image(self)
         self.feedback.draw_aura(self, screen)
         self.animation.draw_puffs(screen, self.camera_x)
         if not self.invincible or int(self.time * 10) % 2 == 0:
@@ -449,10 +451,12 @@ class Game:
             screen.blit(image, image.get_rect(midbottom=rect.midbottom))
         if self.carried_baby is not None:
             rect = self.player.move(-self.camera_x, 0)
-            screen.blit(self.baby_image, (rect.centerx - 12, rect.bottom - image.get_height() - 29))
+            screen.blit(self.baby_image, (rect.centerx - 16, rect.bottom - image.get_height() - 38))
         self.draw_region_atmosphere(screen)
+        self.draw_baby_markers(screen)
         self.feedback.draw(self, screen)
         self.ui.hud(self, screen, REGIONS)
+        self.ui.rescue_guide(self,screen)
         self.ui.transition(self, screen, REGIONS)
         if self.region_banner > 0:
             label = self.ui.small.render(REGION_HINTS[self.display_region],True,(28,64,87))
@@ -479,9 +483,7 @@ class Game:
         for index, baby in enumerate(self.babies):
             if not baby['rescued'] and index != self.carried_baby:
                 rect = baby['rect'].move(-self.camera_x, 0)
-                screen.blit(self.baby_image, rect)
-                label = self.font.render('!', True, (255, 232, 101))
-                screen.blit(label, (rect.centerx - 4, rect.y - 25))
+                screen.blit(self.baby_image,self.baby_image.get_rect(midbottom=rect.midbottom))
         snow_weight = dict(self.scene_weights()).get(3, 0)
         if snow_weight > 0:
             snow = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
@@ -490,6 +492,40 @@ class Game:
                 y = int((i * 83 + self.time * 45) % HEIGHT)
                 pg.draw.line(snow, (238, 249, 255, round(255*snow_weight)), (x, y), (x - 12, y + 4), 2)
             screen.blit(snow, (0, 0))
+
+    def rescue_target(self):
+        if self.carried_baby is not None:
+            return ('home',min(self.checkpoints,key=lambda r:abs(r.centerx-self.player.centerx)))
+        waiting = [b['rect'] for b in self.babies if not b['rescued']]
+        if waiting:
+            return ('baby',min(waiting,key=lambda r:abs(r.centerx-self.player.centerx)+abs(r.centery-self.player.centery)))
+        return None
+
+    def draw_baby_markers(self, screen):
+        layer = pg.Surface((WIDTH,HEIGHT),pg.SRCALPHA)
+        for index,baby in enumerate(self.babies):
+            if baby['rescued'] or index == self.carried_baby:
+                continue
+            rect = baby['rect'].move(-self.camera_x,0)
+            if rect.right<0 or rect.left>WIDTH:
+                continue
+            cx = rect.centerx
+            pulse = (math.sin(self.time*3+index)+1)/2
+            for row in range(80):
+                pg.draw.line(layer,(255,225,114,round((1-row/80)*45)),
+                             (cx-17,rect.bottom-row),(cx+17,rect.bottom-row),1)
+            radius = round(19+pulse*7)
+            pg.draw.ellipse(layer,(255,231,126,200),(cx-radius,rect.bottom-6,radius*2,12),3)
+            y = rect.top-22-round(pulse*7)
+            pg.draw.polygon(layer,(255,232,114,245),[(cx-9,y),(cx+9,y),(cx,y+10)])
+            pg.draw.polygon(layer,(255,255,245,245),[(cx-5,y+2),(cx+5,y+2),(cx,y+7)])
+            for i in range(4):
+                phase = self.time*1.5+i*math.pi/2
+                x = round(cx+math.cos(phase)*23)
+                y = round(rect.centery+math.sin(phase)*23)
+                pg.draw.line(layer,(255,244,171,220),(x-3,y),(x+3,y),2)
+                pg.draw.line(layer,(255,244,171,220),(x,y-3),(x,y+3),2)
+        screen.blit(layer,(0,0))
 
     def draw_region_atmosphere(self, screen):
         weights = dict(self.scene_weights())

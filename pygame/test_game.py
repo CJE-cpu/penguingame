@@ -230,7 +230,7 @@ class AdventureChecks(unittest.TestCase):
 
     def test_reverse_pickups_and_feedback(self):
         g = self.game
-        self.assertEqual(sum(kind=='reverse' for kind,rect in g.items),2)
+        self.assertEqual(sum(kind=='reverse' for kind,rect in g.items),1)
         g.enemies = []
         self.place(g.region_grounds[0][0],75)
         rect = g.player.copy()
@@ -290,6 +290,55 @@ class AdventureChecks(unittest.TestCase):
         for _ in range(60):
             g.animation.update(1/60,g.player,0,True,True,20)
         self.assertAlmostEqual(g.animation.walk_clock,1.3)
+
+    def test_sparse_potions_and_visible_animation(self):
+        g = self.game
+        self.assertEqual(len(g.items),5)
+        self.assertEqual([sum(k==kind for k,r in g.items) for kind in ('grow','speed','reverse')],[2,2,1])
+        for kind,rect in g.items:
+            self.assertTrue(any(p.top==rect.bottom and p.left<=rect.left and p.right>=rect.right for p in g.platforms))
+            if kind == 'reverse':
+                self.assertTrue(any(p.top==rect.bottom for group in g.region_ledges for p in group))
+        g.enemies = []
+        self.place(g.region_grounds[0][0],75)
+        for kind in ('grow','speed','reverse'):
+            g.items = [(kind,g.player.copy())]
+            g.update(1/60)
+            self.assertEqual([k for k,v in g.effects.items() if v>0],[kind])
+            self.assertEqual(g.feedback.bursts[-1]['kind'],kind)
+        g.effects = {'grow':8,'speed':0,'reverse':0}
+        g.feedback.update(0.15,g)
+        self.assertTrue(1<g.feedback.size_scale<1.5)
+        self.assertGreater(g.feedback.player_image(g).get_height(),56)
+        g.effects = {'grow':0,'speed':8,'reverse':0}
+        g.velocity_x = 270
+        g.feedback.update(0.05,g)
+        self.assertTrue(g.feedback.trails)
+        g.feedback.draw_aura(g,self.screen)
+        g.feedback.draw(g,self.screen)
+        self.assertEqual(g.player.size,(40,52))
+
+    def test_baby_markers_and_direction_target(self):
+        g = self.game
+        baby = g.babies[0]
+        g.player.center = baby['rect'].center
+        self.assertEqual(g.rescue_target(),('baby',baby['rect']))
+        g.camera_x = 1200
+        self.screen.fill((0,0,0))
+        g.time = 0
+        g.draw_baby_markers(self.screen)
+        first = pg.image.tobytes(self.screen,'RGB')
+        self.screen.fill((0,0,0))
+        g.time = 0.6
+        g.draw_baby_markers(self.screen)
+        self.assertNotEqual(first,pg.image.tobytes(self.screen,'RGB'))
+        g.carried_baby = 0
+        self.assertEqual(g.rescue_target()[0],'home')
+        g.ui.rescue_guide(g,self.screen)
+        g.carried_baby = None
+        for baby in g.babies:
+            baby['rescued'] = True
+        self.assertIsNone(g.rescue_target())
 
 
 if __name__ == '__main__':
