@@ -2,6 +2,7 @@
 from pathlib import Path
 import math
 import pygame as pg
+from ui import IceUI
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1200
@@ -88,11 +89,11 @@ class Game:
         for kind, (filename, tint, points) in FISH_TYPES.items():
             image = load_image(filename, (36, 24), keep_aspect=True)
             self.fish_images[kind] = image
-        self.font = pg.font.Font(None, 30)
-        self.big_font = pg.font.Font(None, 64)
-        korean_font = pg.font.match_font('malgungothic, 맑은 고딕, nanumgothic')
-        self.intro_font = pg.font.Font(korean_font, 21)
-        self.intro_title_font = pg.font.Font(korean_font, 36)
+        self.ui = IceUI()
+        self.font = self.ui.body
+        self.big_font = self.ui.title
+        self.intro_font = self.ui.body
+        self.intro_title_font = self.ui.title
         self.baby_image = load_image('penguin-baby-left.png', (24, 31), keep_aspect=True)
         self.crab_image = load_image('crab-enemy.png', (44, 30), keep_aspect=True)
         self.igloo_image = load_image('igloo-checkpoint.png', (112, 85), keep_aspect=True)
@@ -384,32 +385,9 @@ class Game:
         if self.carried_baby is not None:
             rect = self.player.move(-self.camera_x, 0)
             screen.blit(self.baby_image, (rect.centerx - 12, rect.bottom - image.get_height() - 29))
-        pg.draw.rect(screen, (16, 45, 72), (0, 0, WIDTH, 72))
-        screen.blit(self.font.render(f'Score: {self.score}    Fish: {self.total - len(self.fish)} / {self.total}    Falls: {self.falls}    Hits: {self.hits}', True, 'white'), (18, 10))
-        screen.blit(self.font.render('Arrows / A D: move    Space: jump    R: restart    Esc: quit', True, (195, 234, 255)), (18, 40))
-        region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
-        status = f'{REGIONS[region][0]} | 구조 {self.rescued}/3 | 저장 지점 {self.checkpoint_index + 1}'
-        label = self.intro_font.render(status, True, 'white')
-        pg.draw.rect(screen, (16, 45, 72), (12, 113, label.get_width()+16, 32), border_radius=5)
-        screen.blit(label, (20, 116))
-        legend = self.font.render('Orange: 10    Blue: 25    Gold: 50    Stomp crab: +30', True, 'white')
-        pg.draw.rect(screen, (16, 45, 72), (10, HEIGHT - 35, legend.get_width() + 20, 30), border_radius=5)
-        screen.blit(legend, (20, HEIGHT - 31))
-        active = '    '.join(f'{ITEM_STYLE[kind][2]}: {seconds:.1f}s'
-                             for kind, seconds in self.effects.items() if seconds > 0)
-        if active:
-            label = self.font.render(active, True, 'white')
-            pg.draw.rect(screen, (16, 45, 72), (12, 77, label.get_width() + 16, 30), border_radius=5)
-            screen.blit(label, (20, 80))
+        self.ui.hud(self, screen, REGIONS)
         if self.won:
-            overlay = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
-            overlay.fill((8, 25, 45, 175))
-            screen.blit(overlay, (0, 0))
-            for text, font, y in [('Adventure complete!', self.big_font, 225),
-                                  (f'Final score: {self.score} / {self.max_score}', self.font, 300),
-                                  ('Press R to play again', self.font, 345)]:
-                label = font.render(text, True, 'white')
-                screen.blit(label, label.get_rect(center=(WIDTH // 2, y)))
+            self.ui.finish(self, screen)
 
     def draw_adventure(self, screen):
         region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
@@ -435,38 +413,8 @@ class Game:
                 x = int((i * 137 - self.time * 180) % WIDTH)
                 y = int((i * 83 + self.time * 45) % HEIGHT)
                 pg.draw.line(screen, (238, 249, 255), (x, y), (x - 12, y + 4), 2)
-        # An overview of the six regions and the camera position.
-        for i, (_, color) in enumerate(REGIONS):
-            pg.draw.rect(screen, color, (WIDTH - 210 + i * 32, HEIGHT - 30, 30, 12))
-        marker = WIDTH - 210 + int(self.player.centerx / WORLD_WIDTH * 192)
-        pg.draw.circle(screen, 'white', (marker, HEIGHT - 24), 4)
-
     def draw_intro(self, screen):
-        screen.blit(self.background, (0, 0))
-        overlay = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
-        overlay.fill((8, 25, 45, 210))
-        screen.blit(overlay, (0, 0))
-        title = self.intro_title_font.render('남극 펭귄의 물고기 모험', True, (223, 249, 255))
-        screen.blit(title, title.get_rect(center=(WIDTH // 2, 55)))
-        lines = [
-            ('목표: 6개 구역의 물고기 30마리를 모으고 아기 펭귄 3마리 구조!', 'white'),
-            ('이동: ← → 또는 A / D     점프: 스페이스바 / ↑ / W', 'white'),
-            ('주황 물고기 10점 · 파랑 25점 · 황금 50점', (255, 223, 120)),
-            ('초록 물약: 몸 크기 1.5배 · 적 돌파! 좁은 길도 통과 가능', ITEM_STYLE['grow'][0]),
-            ('노랑 물약: 이동 속도 1.6배 (모든 물약 효과는 8초)', ITEM_STYLE['speed'][0]),
-            ('보라 물약: 좌우 이동 반전! 발판은 아래에서 통과 가능', ITEM_STYLE['reverse'][0]),
-            ('이글루에 닿으면 저장! 아기 펭귄을 데려오면 구조 +100점.', 'white'),
-            ('게를 위에서 밟으면 처치하고 30점을 얻습니다.', (255, 155, 165)),
-            ('미끄러운 얼음, 0.8초 뒤 무너지는 발판, 눈보라에 주의!', 'white'),
-            ('피격·추락 시 이글루로 복귀. 점수 유지, 아이템 해제, 2초 무적.', 'white'),
-            ('동굴 안 보물 +100점! 구조 중 추락하면 아기는 원래 자리로.', 'white'),
-            ('R: 설명 화면부터 재시작     Esc: 게임 종료', (195, 234, 255)),
-        ]
-        for index, (text, color) in enumerate(lines):
-            screen.blit(self.intro_font.render(text, True, color), (45, 105 + index * 32))
-        pg.draw.rect(screen, (42, 104, 142), (125, 510, 550, 58), border_radius=12)
-        prompt = self.intro_font.render('Enter 또는 스페이스바를 눌러 시작하세요', True, 'white')
-        screen.blit(prompt, prompt.get_rect(center=(WIDTH // 2, 539)))
+        self.ui.intro(self, screen)
 
 
 def main():
