@@ -109,6 +109,7 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(g.total, 30)
         self.assertEqual(len(g.babies), 3)
         baby = g.babies[0]
+        g.content.quests[0] = True
         g.player.topleft = baby['rect'].topleft
         g.update_adventure(0)
         self.assertEqual(g.carried_baby, 0)
@@ -128,6 +129,8 @@ class AdventureChecks(unittest.TestCase):
         g.update(1/60)
         self.assertFalse(g.won)
         g.rescued = 3
+        g.content.escape_cleared = True
+        self.place(g.region_grounds[-1][0],g.checkpoints[-1].centerx)
         g.update(1/60)
         self.assertTrue(g.won)
 
@@ -319,6 +322,128 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw_aura(g,self.screen)
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
+
+    def test_rescue_quests_sliding_and_feed(self):
+        g = self.game
+        g.enemies = []
+        g.items = []
+        baby = g.babies[0]
+        g.player.midbottom = baby['rect'].midbottom
+        g.x,g.y = map(float,g.player.topleft)
+        g.update_adventure(0)
+        self.assertIsNone(g.carried_baby)
+        g.on_ground = True
+        feet = g.player.bottom
+        g.update(1/60,1,slide=True)
+        self.assertTrue(g.content.quests[0])
+        self.assertEqual(g.carried_baby,0)
+        self.assertEqual(g.player.height,28)
+        self.assertEqual(g.player.bottom,feet)
+        g.update(1/60)
+        self.assertEqual(g.player.height,52)
+        g.carried_baby = None
+        g.player.midbottom = g.babies[1]['rect'].midbottom
+        g.content.wallet = 2
+        g.content.action(g)
+        self.assertFalse(g.content.quests[1])
+        g.content.wallet = 3
+        g.content.action(g)
+        self.assertTrue(g.content.quests[1])
+        self.assertEqual(g.content.wallet,0)
+        g.update_adventure(0)
+        self.assertEqual(g.carried_baby,1)
+        g.carried_baby = None
+        g.player.midbottom = g.content.lever.midbottom
+        g.content.action(g)
+        self.assertTrue(g.content.quests[2])
+        g.player.midbottom = g.babies[2]['rect'].midbottom
+        g.update_adventure(0)
+        self.assertEqual(g.carried_baby,2)
+
+    def test_ocean_exit_oxygen_and_bonus_persistence(self):
+        g = self.game
+        c = g.content
+        self.place(g.region_grounds[0][1],c.hole.centerx)
+        shore = g.player.midbottom
+        c.action(g)
+        self.assertTrue(c.diving)
+        self.assertEqual(c.oxygen,18)
+        c.swimmer.update(c.ocean_fish[0][1].center)
+        g.update(1/60,1,swim_vertical=1)
+        self.assertEqual(len(c.ocean_fish),5)
+        self.assertEqual(c.wallet,1)
+        self.assertEqual(g.total,30)
+        g.draw(self.screen)
+        c.action(g)
+        self.assertTrue(c.diving)
+        c.swimmer.update(100,115)
+        c.action(g)
+        self.assertFalse(c.diving)
+        self.assertEqual(g.player.midbottom,shore)
+        c.action(g)
+        self.assertTrue(c.diving)
+        c.oxygen = 0.01
+        g.update(0.02)
+        self.assertFalse(c.diving)
+        self.assertEqual(g.falls,1)
+        self.assertEqual(c.wallet,1)
+        self.assertEqual(len(c.ocean_fish),5)
+
+    def test_journals_shortcut_home_and_escape(self):
+        g = self.game
+        c = g.content
+        journal = c.journals[2]
+        g.player.center = journal['rect'].center
+        c.update(g,0)
+        score = g.score
+        c.update(g,0)
+        self.assertEqual(score,60)
+        self.assertEqual(g.score,score)
+        c.book_open = True
+        time = g.time
+        g.update(1,1)
+        self.assertEqual(g.time,time)
+        g.draw(self.screen)
+        c.book_open = False
+        g.player.midbottom = g.caves[0]['rect'].midbottom
+        c.action(g)
+        self.assertEqual(g.player.bottom,min(g.region_ledges[2],key=lambda p:p.y).top)
+        self.place(g.region_grounds[5][0],g.checkpoints[-1].centerx)
+        c.wallet = 23
+        for i in range(3):
+            c.action(g)
+            self.assertEqual(c.upgrades,i+1)
+        self.assertEqual(c.wallet,0)
+        c.action(g)
+        self.assertEqual(c.upgrades,3)
+        g.rescued = 3
+        g.fish = []
+        g.update(1/60)
+        self.assertFalse(g.won)
+        c.action(g)
+        self.assertTrue(c.escape_active)
+        c.escape_left = 0.01
+        c.update(g,0.02)
+        self.assertFalse(c.escape_cleared)
+        self.assertFalse(c.escape_active)
+        g.player.centerx = 4855
+        c.update(g,0)
+        self.assertTrue(c.escape_active)
+        g.player.centerx = 5970
+        c.update(g,1)
+        self.assertTrue(c.escape_cleared)
+        score = g.score
+        c.update(g,1)
+        self.assertEqual(g.score,score)
+        self.place(g.region_grounds[5][0],g.checkpoints[-1].centerx)
+        g.update(1/60)
+        self.assertTrue(g.won)
+        self.assertTrue(g.finish_open)
+        g.finish_open = False
+        old_x = g.player.x
+        g.update(1/60,1)
+        self.assertGreater(g.player.x,old_x)
+        g.draw(self.screen)
 
     def test_combat_animation_and_delayed_respawn(self):
         g = self.game

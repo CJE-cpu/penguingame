@@ -68,7 +68,7 @@ class IceUI:
             pg.draw.rect(screen, (186, 219, 232), (x+43, 123, 89, 4), border_radius=2)
             pg.draw.rect(screen, BLUE, (x+43, 123, round(89*min(1,game.effects[kind]/8)), 4), border_radius=2)
         self.panel(screen, (12, 565, 565, 27))
-        self.text(screen, '← → / A D 이동   SPACE 점프   R 다시 시작   ESC 종료', (25, 569), self.small)
+        self.text(screen, '← → 이동  SPACE 점프  ↓ 활주  E 행동  TAB 일지  R 재시작', (25, 569), self.small)
         for i, (_, color) in enumerate(regions):
             pg.draw.rect(screen, color, (598+i*30, 574, 28, 8), border_radius=3)
         for index,baby in enumerate(game.babies):
@@ -119,33 +119,34 @@ class IceUI:
         self.text(screen, '남극 펭귄의 모험', (146, 43), self.title)
         self.text(screen, '여섯 개의 얼음 지대를 탐험하고 친구들을 집으로 데려오세요.', (147, 98), self.small, MUTED)
         self.panel(screen, (54, 136, 692, 58), dark=True)
-        self.text(screen, '물고기 30마리 수집 + 아기 펭귄 3마리 구조', (400, 154), self.body, 'white', center=True)
-        self.text(screen, '아기를 만나면 동행 시작! 이글루에 도착하면 구조 완료 · +100점', (400, 177), self.small, (224,248,255), center=True)
+        self.text(screen, '물고기 30마리 + 친구 3마리 구조 + 빙붕 탈출 후 귀환', (400, 154), self.body, 'white', center=True)
+        self.text(screen, '친구의 부탁을 해결하면 동행 시작 · 이글루에 데려다 주면 +100점', (400, 177), self.small, (224,248,255), center=True)
         cards = [
-            (game.igloo_image, '이글루 체크포인트', '닿으면 저장 · 실패하면 이곳에서 복귀'),
-            (game.enemy_images['seal'][0], '행동이 다른 네 종류의 적', '게 · 물범 · 갈매기 · 튀는 얼음 정령'),
-            (game.item_images['grow'], '성장 물약 · 8초', '몸이 커지고 적 돌파 · 좁은 길 통과'),
-            (game.item_images['speed'], '속도 물약 · 8초', '이동 속도 1.6배 · 얼음에서는 관성'),
-            (game.item_images['reverse'], '반전 물약 · 8초', '옆길에 1개 · 중복은 시간만 갱신'),
-            (game.chest_image, '동굴과 얼음 발판', '보물 +100점 · 금 간 발판은 곧 붕괴')]
+            (game.penguin_right, '배로 미끄러지기', '↓ + 이동: 빠른 활주 · 얼음 껍질 돌파'),
+            (game.fish_images['blue'], '잠수 탐험 · 산소 18초', '해안 구멍 E · 방향키 수영 · 구멍으로 귀환'),
+            (game.baby_image, '친구마다 다른 구조 미션', '얼음 깨기 · 먹이 3마리 · 깃발 레버 E'),
+            (game.chest_image, '숨겨진 길과 탐험 일지', '동굴 E: 지름길 · 옆길 일지: TAB 읽기'),
+            (game.igloo_image, '친구들과 꾸미는 보금자리', '마지막 이글루 E · 물고기로 둥지와 장식'),
+            (game.platform_images['crumble'], '마지막 빙붕 탈출', '빙붕 입구부터 24초 · 오른쪽 끝까지!')]
         for index, (image, title, detail) in enumerate(cards):
             x, y = 54+(index%2)*352, 206+(index//2)*77
             self.panel(screen, (x,y,340,66))
             self.icon(screen, image, (x+30,y+32), (38,40))
             self.text(screen, title, (x+60,y+10), self.body)
             self.text(screen, detail, (x+60,y+38), self.small, MUTED)
-        self.text(screen, '← → / A D 이동     SPACE / ↑ / W 점프     R 재시작     ESC 종료', (400, 456), self.small, MUTED, center=True)
+        self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료', (400, 456), self.small, MUTED, center=True)
         self.panel(screen, (149, 483, 502, 49), dark=True)
         self.text(screen, 'ENTER 또는 SPACE로 모험 시작', (400, 507), self.heading, 'white', center=True)
-        self.text(screen, '주황 10점 · 파랑 25점 · 황금 50점   |   물약 5개 · 한 번에 한 효과', (400, 552), self.small, MUTED, center=True)
+        self.text(screen, '물약: 성장 · 가속 · 좌우 반전 8초   |   잠수·일지·집 꾸미기는 선택 탐험', (400, 552), self.small, MUTED, center=True)
 
     def finish(self, game, screen):
         self.veil(screen)
         self.panel(screen, (130, 122, 540, 354))
         self.icon(screen, game.igloo_image, (400, 169), (84,60))
         self.text(screen, '모험을 마쳤어요!', (400, 227), self.title, center=True)
-        self.text(screen, '모든 물고기를 찾고 친구들을 안전하게 데려왔습니다.', (400, 269), self.body, MUTED, center=True)
+        self.text(screen, '물고기와 친구들을 데리고 빙붕을 넘어 돌아왔습니다.', (400, 269), self.body, MUTED, center=True)
         self.text(screen, f'{game.score}점', (400, 315), self.title, BLUE, center=True)
         self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 360), self.small, MUTED, center=True)
+        self.text(screen, f'탐험 일지 {sum(j["found"] for j in game.content.journals)}/6 · 보금자리 {game.content.upgrades}/3', (400,382),self.small,MUTED,center=True)
         self.panel(screen, (220, 395, 360, 51), dark=True)
-        self.text(screen, 'R 키로 새로운 모험 시작', (400, 420), self.body, 'white', center=True)
+        self.text(screen, 'ENTER 계속 탐험 · R 새로운 모험', (400, 420), self.body, 'white', center=True)

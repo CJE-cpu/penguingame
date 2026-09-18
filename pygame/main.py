@@ -7,6 +7,7 @@ from animation import PenguinAnimation
 from enemies import Enemy, ENEMY_INFO
 from feedback import InteractionEffects
 from motion import CombatMotion, BabyCompanion
+from adventure import AdventureContent
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1200
@@ -168,6 +169,7 @@ class Game:
         self.started = False
         self.falls = 0
         self.won = False
+        self.finish_open = False
         self.time = 0.0
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.items = []
@@ -191,6 +193,8 @@ class Game:
         self.rescued = 0
         self.in_sanctuary = False
         self.max_score += len(self.babies) * 100 + len(self.caves) * 100
+        self.content = AdventureContent(self)
+        self.max_score += 6*60 + 170 + 200
         self.arrange_potions(placements)
 
     def potion_obstacles(self):
@@ -198,6 +202,7 @@ class Game:
         obstacles += [self.igloo_image.get_rect(midbottom=r.midbottom) for r in self.checkpoints]
         obstacles += [self.cave_image.get_rect(midbottom=c['rect'].midbottom) for c in self.caves]
         obstacles += [self.baby_image.get_rect(midbottom=b['rect'].midbottom) for b in self.babies]
+        obstacles += [j['rect'] for j in self.content.journals] + [self.content.hole, self.content.lever]
         for enemy in self.enemies:
             margin = 48 if enemy.kind in ('skua', 'spirit') else 0
             obstacles.append(pg.Rect(enemy.left, enemy.base_y-margin,
@@ -329,6 +334,7 @@ class Game:
                     self.feedback.emit(checkpoint.midtop, '친구 구조! +100', (157,238,183))
         for index, baby in enumerate(self.babies):
             if (not baby['rescued'] and self.carried_baby is None
+                    and self.content.quests[index]
                     and self.player.colliderect(baby['rect'])):
                 self.carried_baby = index
                 self.companion.start(self, baby)
@@ -355,6 +361,9 @@ class Game:
         self.velocity_x = 0.0
         self.surface_kind = 'snow'
         self.carried_baby = None
+        self.content.sliding = False
+        self.content.diving = False
+        self.content.escape_active = False
         self.crumbles.clear()
         self.on_ground = True
         if hit:
@@ -367,11 +376,17 @@ class Game:
         self.display_region = self.player.centerx // REGION_WIDTH
         self.region_banner = 0.0
 
-    def update(self, dt, direction=0, jump=False):
+    def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0):
         if not self.started:
             return
+        if self.content.book_open:
+            return
         self.time += dt
-        if self.won:
+        if self.content.diving:
+            self.content.swim(self,dt,direction,swim_vertical)
+            return
+        if self.won and self.finish_open:
+            self.content.notice_left = max(0,self.content.notice_left-dt)
             return
         self.invincible = max(0.0, self.invincible - dt)
         self.feedback.update(dt,self)
@@ -381,6 +396,13 @@ class Game:
             if not self.combat.hurt:
                 self.respawn(hit=True)
             return
+        self.content.sliding = bool(slide and self.on_ground and not jump)
+        desired_height = 28 if self.content.sliding else 52
+        if self.player.height != desired_height:
+            feet = self.player.midbottom
+            self.player.height = desired_height
+            self.player.midbottom = feet
+            self.y = float(self.player.y)
         was_grounded = self.on_ground
         previous_x = self.player.x
         self.update_adventure(dt)
@@ -391,7 +413,7 @@ class Game:
             self.effects[kind] = max(0.0, self.effects[kind] - dt)
         if self.effects['reverse']:
             direction = -direction
-        speed = MOVE_SPEED * (1.6 if self.effects['speed'] else 1.0)
+        speed = MOVE_SPEED * (1.6 if self.effects['speed'] else 1.0) * (1.35 if self.content.sliding else 1)
         if jump and self.on_ground:
             self.velocity_y = JUMP_SPEED
             self.on_ground = False
@@ -468,6 +490,7 @@ class Game:
         for kind, rect in self.fish:
             if self.player.colliderect(rect):
                 self.score += FISH_TYPES[kind][2]
+                self.content.wallet += 1
                 self.feedback.emit(rect.center, f'+{FISH_TYPES[kind][2]}', (255,232,151))
             else:
                 remaining_fish.append((kind, rect))
@@ -487,9 +510,12 @@ class Game:
                     name = {'grow':'성장', 'speed':'가속', 'reverse':'반전'}[kind]+' 시간 갱신'
                 self.feedback.emit(rect.center, name, ITEM_STYLE[kind][0],kind=kind)
         self.items = remaining_items
+        self.content.update(self,dt)
         self.update_adventure(0)
-        if not self.fish and self.rescued == len(self.babies):
+        if (not self.won and not self.fish and self.rescued == len(self.babies) and self.content.escape_cleared
+                and self.content.nearby(self,self.checkpoints[-1])):
             self.won = True
+            self.finish_open = True
         if self.player.top > HEIGHT:
             self.respawn()
             return
@@ -501,6 +527,11 @@ class Game:
     def draw(self, screen):
         if not self.started:
             self.draw_intro(screen)
+            return
+        if self.content.diving:
+            self.content.draw_ocean(self,screen)
+            if self.content.book_open:
+                self.content.draw_book(self,screen)
             return
         self.draw_background(screen)
         # Show water in the ground gaps so falls are visually clear.
@@ -524,7 +555,17 @@ class Game:
             color = ITEM_STYLE[kind][0]
             pg.draw.ellipse(screen, color, (rect.x+2,rect.bottom-3,26,5),2)
             screen.blit(self.item_images[kind], rect.move(0,bob))
+        self.content.draw_world(self,screen)
         image = self.combat.pose(self.feedback.player_image(self))
+        if self.content.sliding:
+            image = pg.transform.rotate(image,-75 if self.facing_right else 75)
+            image = pg.transform.scale(image,(round(image.get_width()*1.1),30))
+            if self.on_ground and abs(self.velocity_x)>40:
+                rect = self.player.move(-self.camera_x,0)
+                for i in range(3):
+                    offset = (self.time*160+i*11)%35
+                    side = -1 if self.facing_right else 1
+                    pg.draw.circle(screen,(228,246,255),(round(rect.centerx+side*(24+offset)),rect.bottom-3-i*2),max(1,4-i))
         self.feedback.draw_aura(self, screen)
         self.animation.draw_puffs(screen, self.camera_x)
         if self.combat.hurt or not self.invincible or int(self.time * 10) % 2 == 0:
@@ -542,12 +583,15 @@ class Game:
         self.ui.hud(self, screen, REGIONS)
         self.ui.rescue_guide(self,screen)
         self.ui.transition(self, screen, REGIONS)
+        self.content.draw_hud(self,screen)
         if self.region_banner > 0:
             label = self.ui.small.render(REGION_HINTS[self.display_region],True,(28,64,87))
             self.ui.panel(screen,(490,149,298,31))
             screen.blit(label,(499,154))
-        if self.won:
+        if self.won and self.finish_open:
             self.ui.finish(self, screen)
+        if self.content.book_open:
+            self.content.draw_book(self,screen)
 
     def draw_adventure(self, screen):
         region = min(len(REGIONS) - 1, self.player.centerx // REGION_WIDTH)
@@ -655,11 +699,19 @@ def main():
                             game.region_banner = 2.4
                     elif event.key == pg.K_r:
                         game.reset()
+                    elif event.key == pg.K_TAB:
+                        game.content.book_open = not game.content.book_open
+                    elif event.key == pg.K_e:
+                        game.finish_open = False
+                        game.content.action(game)
+                    elif event.key == pg.K_RETURN and game.won:
+                        game.finish_open = False
                     elif event.key in (pg.K_SPACE, pg.K_UP, pg.K_w):
                         jump = True
             keys = pg.key.get_pressed()
             direction = int(keys[pg.K_RIGHT] or keys[pg.K_d]) - int(keys[pg.K_LEFT] or keys[pg.K_a])
-            game.update(dt, direction, jump)
+            vertical = int(keys[pg.K_DOWN] or keys[pg.K_s])-int(keys[pg.K_UP] or keys[pg.K_w] or keys[pg.K_SPACE])
+            game.update(dt, direction, jump, bool(keys[pg.K_DOWN] or keys[pg.K_s]),vertical)
             game.draw(screen)
             pg.display.flip()
     finally:
