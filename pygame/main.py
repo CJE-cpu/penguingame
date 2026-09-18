@@ -94,6 +94,7 @@ class Game:
                             for kind, filename in [('grow', 'growth'), ('speed', 'speed'), ('reverse', 'reverse')]}
         self.platform_images = {kind: load_image(filename + '-platform-tile.png', (80, 30))
                                 for kind, filename in [('snow', 'snow'), ('ice', 'smooth-ice'), ('crumble', 'cracked-ice')]}
+        self.platform_textures = {}
         self.platforms = []
         self.platform_kinds = {}
         self.grounds = []
@@ -227,6 +228,32 @@ class Game:
             rect.move_ip(round(math.sin(elapsed*65)*(1+progress*4)),
                          round(math.sin(elapsed*47)*(1+progress*2)))
         return rect
+
+    def platform_texture(self, kind, size):
+        key = (kind, size)
+        if key not in self.platform_textures:
+            tile = self.platform_images[kind]
+            width, height = size
+            surface = pg.Surface(size, pg.SRCALPHA)
+            # Repeat only the interior. Rounded corners belong to the two ends.
+            middle = tile.subsurface((10, 0, 60, 27))
+            body = tile.subsurface((10, 17, 60, 10))
+            surface.set_clip((8, 0, width-16, height))
+            for y in range(0, height, 10):
+                for x in range(8, width-8, 60):
+                    surface.blit(body, (x, y))
+            for x in range(8, width-8, 60):
+                surface.blit(middle, (x, 0))
+            surface.set_clip(None)
+            surface.blit(tile, (0, 0), (0, 0, 8, 30))
+            surface.blit(tile, (width-8, 0), (72, 0, 8, 30))
+            border = (13, 49, 89)
+            if height > 30:
+                pg.draw.line(surface, border, (1, 27), (1, height-2), 3)
+                pg.draw.line(surface, border, (width-2, 27), (width-2, height-2), 3)
+            pg.draw.line(surface, border, (5, height-2), (width-6, height-2), 2)
+            self.platform_textures[key] = surface
+        return self.platform_textures[key]
 
     def draw_background(self, screen):
         drift = round(400 * max(0, min(1, self.camera_x / (WORLD_WIDTH-WIDTH))))
@@ -464,13 +491,7 @@ class Game:
         for platform in self.active_platforms():
             rect = self.platform_draw_rect(platform)
             kind = self.platform_kinds[tuple(platform)]
-            tile = self.platform_images[kind]
-            clip = screen.get_clip()
-            screen.set_clip(rect.clip(screen.get_rect()))
-            for y in range(rect.y, rect.bottom, tile.get_height()):
-                for x in range(rect.x, rect.right, tile.get_width()):
-                    screen.blit(tile, (x, y))
-            screen.set_clip(clip)
+            screen.blit(self.platform_texture(kind, platform.size), rect)
             if kind == 'crumble' and tuple(platform) in self.crumbles:
                 progress = min(1, self.crumbles[tuple(platform)][0] / 0.8)
                 pg.draw.rect(screen, (245, 92, 125), (rect.x, rect.y-4, int(rect.width*progress), 3))
