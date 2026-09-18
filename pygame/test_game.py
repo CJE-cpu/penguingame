@@ -323,6 +323,56 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
 
+    def test_exit_dialog_pauses_and_preserves_nested_screen(self):
+        g = self.game
+        g.coach.enabled = True
+        g.coach.explain('swim')
+        lesson = g.coach.modal
+        g.content.diving = True
+        g.effects['grow'] = 4
+        g.grow_guard = 1
+        g.content.escape_active = True
+        g.content.escape_left = 20
+        g.handle_key(pg.K_ESCAPE)
+        self.assertTrue(g.exit_open)
+        self.assertFalse(g.exit_choice)
+        snapshot = (g.time,g.player.copy(),g.content.oxygen,g.effects.copy(),g.grow_guard,g.content.escape_left)
+        g.handle_key(pg.K_r)
+        g.update(2,1,True,True,1)
+        self.assertEqual(snapshot,(g.time,g.player,g.content.oxygen,g.effects,g.grow_guard,g.content.escape_left))
+        g.draw(self.screen)
+        g.handle_key(pg.K_ESCAPE)
+        self.assertFalse(g.exit_open)
+        self.assertEqual(g.coach.modal,lesson)
+        self.assertFalse(g.quit_requested)
+        g.coach.modal = None
+        g.handle_key(pg.K_ESCAPE)
+        g.handle_key(pg.K_RETURN)
+        self.assertFalse(g.quit_requested)
+        self.assertFalse(g.exit_open)
+        g.update(1)
+        self.assertEqual(g.content.oxygen,snapshot[2]-1)
+
+    def test_exit_confirmation_keys_mouse_and_intro(self):
+        g = self.game
+        g.reset()
+        g.handle_key(pg.K_ESCAPE)
+        g.handle_key(pg.K_RETURN)
+        self.assertFalse(g.started)
+        self.assertFalse(g.quit_requested)
+        g.ask_exit()
+        g.ask_exit()
+        g.handle_click(g.ui.exit_buttons()[0].center)
+        self.assertFalse(g.exit_open)
+        g.ask_exit()
+        g.handle_key(pg.K_RIGHT)
+        g.handle_key(pg.K_RETURN)
+        self.assertTrue(g.quit_requested)
+        g.reset()
+        g.ask_exit()
+        g.handle_click(g.ui.exit_buttons()[1].center)
+        self.assertTrue(g.quit_requested)
+
     def test_growth_expiration_protects_against_contact(self):
         g = self.game
         enemy = g.enemies[0]

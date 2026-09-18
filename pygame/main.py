@@ -122,6 +122,9 @@ class Game:
         self.reset()
 
     def reset(self):
+        self.exit_open = False
+        self.exit_choice = False
+        self.quit_requested = False
         self.coach = Coach()
         self.tutorial = None
         self.animation.reset()
@@ -219,6 +222,22 @@ class Game:
         self.region_banner = 2.4
 
     def handle_key(self, key):
+        if self.exit_open:
+            if key in (pg.K_ESCAPE,pg.K_n):
+                self.exit_open = False
+            elif key in (pg.K_LEFT,pg.K_RIGHT,pg.K_TAB):
+                self.exit_choice = not self.exit_choice
+            elif key == pg.K_y:
+                self.quit_requested = True
+            elif key in (pg.K_RETURN,pg.K_SPACE):
+                if self.exit_choice:
+                    self.quit_requested = True
+                else:
+                    self.exit_open = False
+            return False
+        if key == pg.K_ESCAPE:
+            self.ask_exit()
+            return False
         if not self.started:
             if key in (pg.K_RETURN,pg.K_SPACE,pg.K_t):
                 self.start(True)
@@ -255,6 +274,19 @@ class Game:
         elif key in (pg.K_SPACE,pg.K_UP,pg.K_w):
             return not self.content.diving and not self.content.book_open and not self.coach.explain('jump')
         return False
+
+    def ask_exit(self):
+        if not self.exit_open:
+            self.exit_open = True
+            self.exit_choice = False
+
+    def handle_click(self, pos):
+        if self.exit_open:
+            cancel,confirm = self.ui.exit_buttons()
+            if cancel.collidepoint(pos):
+                self.exit_open = False
+            elif confirm.collidepoint(pos):
+                self.quit_requested = True
 
     def explain_nearby(self, slide):
         if slide and self.coach.explain('slide'):
@@ -448,6 +480,8 @@ class Game:
         self.region_banner = 0.0
 
     def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0):
+        if self.exit_open or self.quit_requested:
+            return
         if not self.started:
             return
         if self.coach.modal:
@@ -611,6 +645,11 @@ class Game:
         self.companion.update(self, dt)
 
     def draw(self, screen):
+        self.draw_scene(screen)
+        if self.exit_open:
+            self.ui.exit_dialog(self,screen)
+
+    def draw_scene(self, screen):
         if not self.started:
             self.draw_intro(screen)
             return
@@ -784,12 +823,17 @@ def main():
             jump = False
             for event in pg.event.get():
                 if event.type == pg.QUIT:
-                    running = False
+                    game.ask_exit()
+                    jump = False
                 elif event.type == pg.KEYDOWN:
-                    if event.key == pg.K_ESCAPE:
-                        running = False
-                    else:
-                        jump = game.handle_key(event.key) or jump
+                    jump = game.handle_key(event.key) or jump
+                    if game.exit_open:
+                        jump = False
+                elif event.type == pg.MOUSEBUTTONDOWN and event.button==1:
+                    game.handle_click(event.pos)
+            if game.quit_requested:
+                running = False
+                continue
             keys = pg.key.get_pressed()
             direction = int(keys[pg.K_RIGHT] or keys[pg.K_d]) - int(keys[pg.K_LEFT] or keys[pg.K_a])
             vertical = int(keys[pg.K_DOWN] or keys[pg.K_s])-int(keys[pg.K_UP] or keys[pg.K_w] or keys[pg.K_SPACE])

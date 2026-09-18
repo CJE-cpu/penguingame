@@ -134,10 +134,25 @@ class IceUI:
             self.icon(screen, image, (x+30,y+32), (38,40))
             self.text(screen, title, (x+60,y+10), self.body)
             self.text(screen, detail, (x+60,y+38), self.small, MUTED)
-        self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료', (400, 456), self.small, MUTED, center=True)
+        self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료 확인', (400, 456), self.small, MUTED, center=True)
         self.panel(screen, (149, 483, 502, 49), dark=True)
         self.text(screen, 'ENTER 튜토리얼 시작 · N 바로 모험', (400, 507), self.heading, 'white', center=True)
         self.text(screen, '설명창이 뜨면 게임 정지 · ENTER / SPACE 확인   |   잠수·일지·집 꾸미기는 선택', (400, 552), self.small, MUTED, center=True)
+
+    def exit_buttons(self):
+        return pg.Rect(188,334,194,54),pg.Rect(418,334,194,54)
+
+    def exit_dialog(self, game, screen):
+        self.veil(screen)
+        self.panel(screen,(112,169,576,269))
+        self.text(screen,'모험을 종료할까요?',(400,215),self.heading,center=True)
+        self.text(screen,'종료하면 현재 진행은 저장되지 않습니다.',(400,265),self.body,MUTED,center=True)
+        self.text(screen,'계속하기를 선택하면 그대로 이어서 플레이합니다.',(400,293),self.small,MUTED,center=True)
+        for index,(rect,label) in enumerate(zip(self.exit_buttons(),('계속하기','종료'))):
+            selected = bool(index)==game.exit_choice
+            self.panel(screen,rect,dark=selected)
+            self.text(screen,label,rect.center,self.body,'white' if selected else INK,center=True)
+        self.text(screen,'← → 선택 · ENTER 확인 · ESC 취소 · 마우스 클릭',(400,412),self.small,MUTED,center=True)
 
     def finish(self, game, screen):
         self.veil(screen)
