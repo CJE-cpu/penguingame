@@ -143,8 +143,13 @@ class IceUI:
             self.text(screen, title, (x+60,y+10), self.body)
             self.text(screen, detail, (x+60,y+38), self.small, MUTED)
         self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료 확인', (400, 456), self.small, MUTED, center=True)
-        self.panel(screen, (149, 483, 502, 49), dark=True)
-        self.text(screen, 'ENTER 튜토리얼 시작 · N 바로 모험', (400, 507), self.heading, 'white', center=True)
+        self.panel(screen, (119, 483, 562, 49), dark=True)
+        start_label = 'ENTER 튜토리얼 · N 새 모험'
+        if game.progress.available:
+            start_label += ' · C 이어하기'
+        self.text(screen, start_label, (400, 507), self.heading, 'white', center=True)
+        if game.progress.error:
+            self.text(screen, game.progress.error, (400, 535), self.small, (194,91,74), center=True)
         self.text(screen, 'F3 점수 기록 · F4 이름 변경(시작 전) · 설명창과 기록 창은 게임 정지', (400, 552), self.small, MUTED, center=True)
 
     def exit_buttons(self):
@@ -154,7 +159,7 @@ class IceUI:
         self.veil(screen)
         self.panel(screen,(112,169,576,269))
         self.text(screen,'모험을 종료할까요?',(400,215),self.heading,center=True)
-        self.text(screen,'점수 기록은 저장됩니다. 맵 진행은 저장되지 않습니다.',(400,265),self.body,MUTED,center=True,max_width=530)
+        self.text(screen,'점수는 기록되고 최근 체크포인트 진행도 유지됩니다.',(400,265),self.body,MUTED,center=True,max_width=530)
         self.text(screen,'계속하기를 선택하면 그대로 이어서 플레이합니다.',(400,293),self.small,MUTED,center=True)
         for index,(rect,label) in enumerate(zip(self.exit_buttons(),('계속하기','종료'))):
             selected = bool(index)==game.exit_choice

@@ -84,6 +84,57 @@ class AdventureChecks(unittest.TestCase):
         g.update_adventure(0)
         self.assertFalse(any(b['text']=='저장 완료' for b in g.feedback.bursts))
 
+    def test_checkpoint_progress_survives_restart_and_revisit_saves_silently(self):
+        g = self.game
+        collected = g.fish.pop(0)
+        g.score = 345
+        g.time = 91.5
+        g.content.wallet = 4
+        g.content.journals[0]['found'] = True
+        g.content.crystals[1]['found'] = True
+        g.content.quests[0] = True
+        g.babies[0]['rescued'] = True
+        g.rescued = 1
+        g.caves[0]['found'] = True
+        g.caves[0]['expedition'] = {
+            'stones': {0, 2}, 'lever': False, 'cleared': False, 'defeated': {1}}
+        g.player.midbottom = g.checkpoints[2].midbottom
+        g.update_adventure(0)
+        self.assertTrue(g.progress.available)
+        self.assertTrue(any(b['text']=='저장 완료' for b in g.feedback.bursts))
+
+        restored = Game(score_path=self.score_path)
+        self.assertTrue(restored.continue_adventure())
+        self.assertTrue(restored.started)
+        self.assertEqual(restored.checkpoint_index, 2)
+        self.assertEqual(restored.player.topleft, restored.spawn)
+        self.assertEqual(restored.score, 345)
+        self.assertEqual(restored.time, 91.5)
+        self.assertEqual(restored.content.wallet, 4)
+        self.assertTrue(restored.content.journals[0]['found'])
+        self.assertTrue(restored.content.crystals[1]['found'])
+        self.assertTrue(restored.babies[0]['rescued'])
+        self.assertEqual(restored.caves[0]['expedition']['stones'], {0, 2})
+        self.assertFalse(any(kind == collected[0] and rect.x == collected[1].x and
+                             rect.y == collected[1].y for kind, rect in restored.fish))
+
+        restored.feedback.reset()
+        restored.player.move_ip(200, 0)
+        restored.update_adventure(0)
+        restored.player.midbottom = restored.checkpoints[2].midbottom
+        restored.update_adventure(0)
+        self.assertFalse(any(b['text']=='저장 완료' for b in restored.feedback.bursts))
+
+    def test_corrupt_checkpoint_is_backed_up_and_new_adventure_remains_available(self):
+        path = self.score_path.with_name('progress.json')
+        path.write_text('{broken', encoding='utf-8')
+        game = Game(score_path=self.score_path)
+        self.assertFalse(game.continue_adventure())
+        self.assertFalse(game.started)
+        self.assertFalse(path.exists())
+        self.assertTrue(list(path.parent.glob('progress.json.backup-*')))
+        self.assertIn('새 모험', game.progress.error)
+
     def test_grounded_objects_use_visible_base_as_floor(self):
         g = self.game
         for image in (g.igloo_image,g.cave_image,g.chest_image,

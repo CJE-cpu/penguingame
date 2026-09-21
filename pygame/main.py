@@ -15,6 +15,7 @@ from art import WorldArt
 from window import GameWindow
 from cave import CaveExpedition
 from records import ScoreRecords, ScoreUI
+from progress import AdventureSave
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1800
@@ -72,7 +73,7 @@ def load_image(name, size=None, keep_aspect=False):
 
 
 class Game:
-    def __init__(self, score_path=None):
+    def __init__(self, score_path=None, progress_path=None):
         self.region_width = REGION_WIDTH
         self.world_width = WORLD_WIDTH
         self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
@@ -125,6 +126,9 @@ class Game:
                 self.platform_kinds[tuple(rect)] = kind
         self.ground_keys = {tuple(p) for p in self.grounds}
         self.records = ScoreRecords(score_path)
+        if progress_path is None and score_path is not None:
+            progress_path = Path(score_path).with_name('progress.json')
+        self.progress = AdventureSave(progress_path)
         self.score_ui = ScoreUI()
         self.reset()
 
@@ -172,6 +176,7 @@ class Game:
                 if index and kind == 'seal':
                     platform = self.region_grounds[region][min(1,len(self.region_grounds[region])-1)]
                 enemy = Enemy(platform, 55+region*7, kind)
+                enemy.uid = f'{region}-{index}-{kind}'
                 # Keep ground enemies out of the checkpoint's immediate vicinity.
                 if platform == self.region_grounds[region][0]:
                     enemy.left = platform.left+150
@@ -201,6 +206,7 @@ class Game:
                             for grounds in self.region_grounds]
         self.checkpoint_index = 0
         self.visited_checkpoints = {0}
+        self._checkpoint_contact = None
         self.spawn = (55, 498)
         self.crumbles = {}  # key -> (elapsed since stepped on, time left hidden)
         self.caves = [{'rect': pg.Rect(self.region_grounds[i][-1].right - 210, self.region_grounds[i][-1].top-130, 180, 130),
@@ -221,6 +227,7 @@ class Game:
         self.arrange_potions(placements)
 
     def start(self, practice=True):
+        self.progress.clear()
         self.started = True
         self.coach.enabled = True
         if practice:
@@ -228,6 +235,16 @@ class Game:
         else:
             self.region_banner = 2.4
             self.coach.explain('move')
+
+    def continue_adventure(self):
+        if not self.progress.available:
+            return False
+        self.reset()
+        if self.progress.load_into(self):
+            self.content.say('체크포인트에서 모험을 이어갑니다.')
+            return True
+        self.reset()
+        return False
 
     def finish_tutorial(self):
         learned = self.coach.seen.copy()
@@ -257,12 +274,15 @@ class Game:
             self.ask_exit()
             return False
         if not self.started:
-            if key in (pg.K_RETURN,pg.K_SPACE,pg.K_t):
+            if key == pg.K_c and self.progress.available:
+                self.continue_adventure()
+            elif key in (pg.K_RETURN,pg.K_SPACE,pg.K_t):
                 self.start(True)
             elif key == pg.K_n:
                 self.start(False)
             return False
         if key == pg.K_r:
+            self.progress.clear()
             self.reset()
             return False
         if key == pg.K_n and self.tutorial:
@@ -461,10 +481,12 @@ class Game:
                 if elapsed >= 0.8:
                     hidden = 4.0
             self.crumbles[key] = (elapsed, hidden)
+        touching_checkpoint = False
         for index, checkpoint in enumerate(self.checkpoints):
             if self.player.colliderect(checkpoint):
-                if index not in self.visited_checkpoints:
-                    self.feedback.emit(checkpoint.midtop, '저장 완료', (169,235,255))
+                touching_checkpoint = True
+                first_visit = index not in self.visited_checkpoints
+                if first_visit:
                     self.visited_checkpoints.add(index)
                 self.checkpoint_index = index
                 self.spawn = (checkpoint.x + 25, checkpoint.bottom-self.player.height)
@@ -475,6 +497,16 @@ class Game:
                     self.rescued += 1
                     self.score += 100
                     self.feedback.emit(checkpoint.midtop, '친구 구조! +100', (157,238,183))
+                if self._checkpoint_contact != index:
+                    saved = self.progress.save(self)
+                    if first_visit or not saved:
+                        self.feedback.emit(checkpoint.midtop,
+                                           '저장 완료' if saved else '저장 실패',
+                                           (169,235,255) if saved else (255,170,150))
+                self._checkpoint_contact = index
+                break
+        if not touching_checkpoint:
+            self._checkpoint_contact = None
         for index, baby in enumerate(self.babies):
             if (not baby['rescued'] and self.carried_baby is None
                     and self.content.quests[index]
