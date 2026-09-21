@@ -49,6 +49,9 @@ MOVE_SPEED = 270
 JUMP_SPEED = -650
 ITEM_DURATION = 8.0
 GROW_EXIT_INVINCIBILITY = 1.5
+STARTING_LIVES = 3
+TIME_BONUS_MAX = 1800
+TIME_BONUS_RATE = 2
 ITEM_STYLE = {'grow': ((126, 224, 126), '+', 'BIG'),
               'speed': ((255, 212, 92), '>>', 'FAST'),
               'reverse': ((221, 142, 255), '<>', 'REVERSE')}
@@ -195,6 +198,9 @@ class Game:
         self.falls = 0
         self.won = False
         self.finish_open = False
+        self.game_over = False
+        self.lives = STARTING_LIVES
+        self.time_bonus = 0
         self.time = 0.0
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.items = []
@@ -223,7 +229,7 @@ class Game:
         self.max_score += len(self.babies) * 100 + len(self.caves) * 100
         self.content = AdventureContent(self)
         self.max_score += 6*60 + 170 + 200 + 6*40 + 500
-        self.max_score += 300 + 2*(30+50) # Optional cavern completion and guardians.
+        self.max_score += 300 + 2*(30+50) + TIME_BONUS_MAX # Caverns, guardians and time bonus.
         self.arrange_potions(placements)
 
     def start(self, practice=True):
@@ -272,6 +278,14 @@ class Game:
             return False
         if key == pg.K_ESCAPE:
             self.ask_exit()
+            return False
+        if self.game_over:
+            if key == pg.K_RETURN:
+                self.reset()
+                self.start(False)
+            elif key == pg.K_r:
+                self.progress.clear()
+                self.reset()
             return False
         if not self.started:
             if key == pg.K_c and self.progress.available:
@@ -519,6 +533,8 @@ class Game:
                 cave['found'] = True
 
     def respawn(self, hit=False):
+        if not self.consume_life(hit):
+            return
         self.animation.reset()
         self.feedback.reset()
         self.combat.reset()
@@ -536,10 +552,6 @@ class Game:
         self.content.escape_active = False
         self.crumbles.clear()
         self.on_ground = True
-        if hit:
-            self.hits += 1
-        else:
-            self.falls += 1
         self.invincible = 2.0
         self.grow_guard = 0.0
         self.feedback.emit(self.player.midtop, '피격! 저장 지점 복귀' if hit else '저장 지점에서 다시!', (205,235,255))
@@ -547,8 +559,27 @@ class Game:
         self.display_region = self.player.centerx // REGION_WIDTH
         self.region_banner = 0.0
 
+    def consume_life(self, hit=False):
+        if self.game_over:
+            return False
+        if hit:
+            self.hits += 1
+        else:
+            self.falls += 1
+        self.lives = max(0, self.lives-1)
+        if self.lives:
+            self.progress.save(self)
+            return True
+        self.game_over = True
+        self.finish_open = False
+        self.content.diving = False
+        self.content.book_open = False
+        self.progress.clear()
+        self.save_score()
+        return False
+
     def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0):
-        if self.exit_open or self.quit_requested or self.score_ui.open:
+        if self.exit_open or self.quit_requested or self.score_ui.open or self.game_over:
             return
         if not self.started:
             return
@@ -706,6 +737,8 @@ class Game:
         if (not self.won and not self.fish and self.rescued == len(self.babies) and self.content.escape_cleared
                 and self.content.nearby(self,self.checkpoints[-1])):
             self.won = True
+            self.time_bonus = max(0, TIME_BONUS_MAX-round(self.time*TIME_BONUS_RATE))
+            self.score += self.time_bonus
             self.finish_open = True
             self.save_score()
         if self.player.top > HEIGHT:
@@ -719,6 +752,8 @@ class Game:
     def draw(self, screen):
         self.draw_scene(screen)
         self.score_ui.draw(self,screen)
+        if self.game_over:
+            self.ui.game_over(self,screen)
         if self.exit_open:
             self.ui.exit_dialog(self,screen)
 

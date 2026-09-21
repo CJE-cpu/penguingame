@@ -44,6 +44,7 @@ class AdventureSave:
             'defeated': game.defeated,
             'hits': game.hits,
             'falls': game.falls,
+            'lives': game.lives,
             'visited': sorted(game.visited_checkpoints),
             'babies': [baby['rescued'] for baby in game.babies],
             'rescued': game.rescued,
@@ -129,6 +130,7 @@ class AdventureSave:
             game.defeated = max(0, int(data.get('defeated', 0)))
             game.hits = max(0, int(data.get('hits', 0)))
             game.falls = max(0, int(data.get('falls', 0)))
+            game.lives = max(1, min(3, int(data.get('lives', 3))))
             game.checkpoint_index = checkpoint
             game.visited_checkpoints = {i for i in data.get('visited', [])
                                         if type(i) is int and 0 <= i < len(game.checkpoints)} | {checkpoint}

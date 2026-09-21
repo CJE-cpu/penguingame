@@ -65,8 +65,9 @@ class IceUI:
         self.icon(screen, game.baby_image, (532, 46), (24, 32))
         self.text(screen, f'{game.rescued}/3', (553, 20), self.heading)
         self.text(screen, '구조 완료', (553, 51), self.small, MUTED)
-        self.text(screen, f'추락 {game.falls} · 피격 {game.hits}', (652, 25), self.small, MUTED)
-        self.text(screen, '아기 동행 중' if game.carried_baby is not None else '친구를 찾아보세요', (652, 48), self.small,max_width=122)
+        elapsed = max(0, round(game.time))
+        self.text(screen, f'목숨 {game.lives}/3', (652, 22), self.body, (177,58,70))
+        self.text(screen, f'시간 {elapsed//60:02}:{elapsed%60:02}', (652, 51), self.small, MUTED)
         for index, kind in enumerate(k for k,v in game.effects.items() if v > 0):
             x = 12 + index*157
             self.panel(screen, (x, 94, 147, 43))
@@ -128,7 +129,7 @@ class IceUI:
         self.text(screen, '남극을 탐험하고 물고기와 친구들을 찾으세요.', (147, 98), self.small, MUTED)
         self.panel(screen, (54, 136, 692, 58), dark=True)
         self.text(screen, '물고기 30마리 + 친구 3마리 구조 + 빙붕 탈출 후 귀환', (400, 154), self.body, 'white', center=True)
-        self.text(screen, '친구의 부탁을 해결하면 동행 시작 · 이글루에 데려다 주면 +100점', (400, 177), self.small, (224,248,255), center=True)
+        self.text(screen, '목숨 3개 · 빠른 완주 최대 +1,800점 · 친구 구조 +100점', (400, 177), self.small, (224,248,255), center=True)
         cards = [
             (game.penguin_right, '배로 미끄러지기', '↓ + 이동: 빠른 활주 · 얼음 껍질 돌파'),
             (game.fish_images['blue'], '잠수 탐험 · 산소 35초', '해안 구멍 E · 방향키 수영 · 구멍으로 귀환'),
@@ -173,8 +174,22 @@ class IceUI:
         self.icon(screen, game.igloo_image, (400, 169), (84,60))
         self.text(screen, '모험을 마쳤어요!', (400, 227), self.title, center=True)
         self.text(screen, '물고기와 친구들을 데리고 빙붕을 넘어 돌아왔습니다.', (400, 269), self.body, MUTED, center=True)
-        self.text(screen, f'{game.score}점', (400, 315), self.title, BLUE, center=True)
-        self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 360), self.small, MUTED, center=True)
-        self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,382),self.small,MUTED,center=True)
-        self.panel(screen, (220, 395, 360, 51), dark=True)
-        self.text(screen, 'ENTER 계속 · F3 기록 · R 새 모험', (400, 420), self.body, 'white', center=True)
+        self.text(screen, f'{game.score}점', (400, 305), self.title, BLUE, center=True)
+        elapsed = max(0, round(game.time))
+        self.text(screen, f'완주 {elapsed//60:02}:{elapsed%60:02} · 시간 보너스 +{game.time_bonus}점', (400, 349), self.body, (177,95,36), center=True)
+        self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 376), self.small, MUTED, center=True)
+        self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,391),self.small,MUTED,center=True)
+        self.panel(screen, (220, 407, 360, 45), dark=True)
+        self.text(screen, 'ENTER 계속 · F3 기록 · R 새 모험', (400, 429), self.body, 'white', center=True)
+
+    def game_over(self, game, screen):
+        self.veil(screen)
+        self.panel(screen, (128, 145, 544, 320))
+        self.icon(screen, game.penguin_left, (400, 204), (58, 70))
+        self.text(screen, '게임 오버', (400, 255), self.title, (177,58,70), center=True)
+        self.text(screen, '목숨 3개를 모두 사용했습니다.', (400, 305), self.body, MUTED, center=True)
+        elapsed = max(0, round(game.time))
+        self.text(screen, f'이번 탐험 {game.score}점 · {elapsed//60:02}:{elapsed%60:02}', (400, 340), self.heading, BLUE, center=True)
+        self.panel(screen, (205, 376, 390, 52), dark=True)
+        self.text(screen, 'ENTER 바로 재도전 · R 시작 화면', (400, 402), self.body, 'white', center=True)
+        self.text(screen, '점수 기록은 저장되며 체크포인트 진행은 초기화됩니다.', (400, 447), self.small, MUTED, center=True)

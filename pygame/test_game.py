@@ -7,7 +7,7 @@ import math
 import tempfile
 from pathlib import Path
 import pygame as pg
-from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy
+from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy, TIME_BONUS_MAX, TIME_BONUS_RATE
 from window import GameWindow
 from cave import CaveExpedition
 from records import ScoreRecords
@@ -134,6 +134,46 @@ class AdventureChecks(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertTrue(list(path.parent.glob('progress.json.backup-*')))
         self.assertIn('새 모험', game.progress.error)
+
+    def test_three_lives_trigger_game_over_and_restart(self):
+        g = self.game
+        for expected in (2, 1):
+            g.respawn(hit=True)
+            self.assertEqual(g.lives, expected)
+            self.assertFalse(g.game_over)
+        g.respawn(hit=False)
+        self.assertEqual(g.lives, 0)
+        self.assertTrue(g.game_over)
+        self.assertEqual(g.hits, 2)
+        self.assertEqual(g.falls, 1)
+        self.assertFalse(g.progress.available)
+        elapsed = g.time
+        g.update(2.0, direction=1)
+        self.assertEqual(g.time, elapsed)
+        g.handle_key(pg.K_RETURN)
+        self.assertTrue(g.started)
+        self.assertFalse(g.game_over)
+        self.assertEqual(g.lives, 3)
+
+    def test_fast_clear_awards_time_bonus_only_once(self):
+        g = self.game
+        g.fish.clear()
+        for baby in g.babies:
+            baby['rescued'] = True
+        g.rescued = len(g.babies)
+        g.content.escape_cleared = True
+        g.time = 120
+        g.player.midbottom = g.checkpoints[-1].midbottom
+        g.x, g.y = map(float, g.player.topleft)
+        starting_score = g.score
+        g.update(0)
+        expected = max(0, TIME_BONUS_MAX-round(120*TIME_BONUS_RATE))
+        self.assertTrue(g.won)
+        self.assertEqual(g.time_bonus, expected)
+        self.assertEqual(g.score, starting_score+expected)
+        g.finish_open = False
+        g.update(0)
+        self.assertEqual(g.score, starting_score+expected)
 
     def test_grounded_objects_use_visible_base_as_floor(self):
         g = self.game
@@ -353,6 +393,8 @@ class AdventureChecks(unittest.TestCase):
                         success = False
                         for start in positions:
                             for hold in (12, 24, 48):
+                                # Each route probe is independent from the three-life run.
+                                g.lives, g.game_over = 3, False
                                 self.place(src, start, direction*270, grown=True)
                                 for tick in range(65):
                                     g.update(1/60, direction if tick < hold else 0, tick == 0)
