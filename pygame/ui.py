@@ -44,6 +44,34 @@ class IceUI:
                                           max(1, round(image.get_height()*ratio))))
         screen.blit(image, image.get_rect(center=center))
 
+    def life_icons(self, screen, game, start, size=(20, 25), gap=27):
+        """Draw three penguin lives; spent lives become faint silhouettes."""
+        source = game.penguin_right
+        ratio = min(size[0]/source.get_width(), size[1]/source.get_height())
+        sprite = pg.transform.smoothscale(
+            source, (max(1, round(source.get_width()*ratio)),
+                     max(1, round(source.get_height()*ratio))))
+        for index in range(3):
+            center = (start[0]+index*gap, start[1])
+            if index < game.lives:
+                halo = pg.Surface((size[0]+8, size[1]+8), pg.SRCALPHA)
+                pg.draw.ellipse(halo, (255, 224, 116, 90), halo.get_rect())
+                screen.blit(halo, halo.get_rect(center=center))
+                screen.blit(sprite, sprite.get_rect(center=center))
+            else:
+                faded = pg.Surface(sprite.get_size(), pg.SRCALPHA)
+                mask = pg.mask.from_surface(sprite, 80)
+                silhouette = mask.to_surface(setcolor=(119, 143, 153, 90),
+                                              unsetcolor=(0, 0, 0, 0))
+                faded.blit(silhouette, (0, 0))
+                screen.blit(faded, faded.get_rect(center=center))
+                pg.draw.line(screen, (177, 87, 91),
+                             (center[0]-6, center[1]-6),
+                             (center[0]+6, center[1]+6), 2)
+                pg.draw.line(screen, (177, 87, 91),
+                             (center[0]+6, center[1]-6),
+                             (center[0]-6, center[1]+6), 2)
+
     def veil(self, screen):
         veil = pg.Surface(screen.get_size(), pg.SRCALPHA)
         veil.fill((13, 41, 68, 145))
@@ -66,7 +94,8 @@ class IceUI:
         self.text(screen, f'{game.rescued}/3', (553, 20), self.heading)
         self.text(screen, '구조 완료', (553, 51), self.small, MUTED)
         elapsed = max(0, round(game.time))
-        self.text(screen, f'목숨 {game.lives}/3', (652, 22), self.body, (177,58,70))
+        self.text(screen, '목숨', (647, 20), self.small, (177,58,70))
+        self.life_icons(screen, game, (697, 34), (18, 23), 27)
         self.text(screen, f'시간 {elapsed//60:02}:{elapsed%60:02}', (652, 51), self.small, MUTED)
         for index, kind in enumerate(k for k,v in game.effects.items() if v > 0):
             x = 12 + index*157
@@ -187,7 +216,7 @@ class IceUI:
         self.panel(screen, (128, 145, 544, 320))
         self.icon(screen, game.penguin_left, (400, 204), (58, 70))
         self.text(screen, '게임 오버', (400, 255), self.title, (177,58,70), center=True)
-        self.text(screen, '목숨 3개를 모두 사용했습니다.', (400, 305), self.body, MUTED, center=True)
+        self.text(screen, '모든 목숨을 사용했습니다.', (400, 305), self.body, MUTED, center=True)
         elapsed = max(0, round(game.time))
         self.text(screen, f'이번 탐험 {game.score}점 · {elapsed//60:02}:{elapsed%60:02}', (400, 340), self.heading, BLUE, center=True)
         self.panel(screen, (205, 376, 390, 52), dark=True)

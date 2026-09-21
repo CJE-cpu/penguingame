@@ -126,12 +126,15 @@ class EndingSequence:
             ('완주 시간', f'{elapsed//60:02}:{elapsed%60:02}'),
             ('시간 보너스', f'+{game.time_bonus}점'),
             ('구조한 친구', f'{game.rescued}/3'),
-            ('남은 목숨', f'{game.lives}/3'),
+            ('남은 목숨', None),
         ]
         for index, (label, value) in enumerate(rows):
             y = 205+index*48
             ui.text(screen, label, (190, y), ui.body, (67, 99, 117))
-            ui.text(screen, value, (610, y), ui.heading, (36, 101, 127), center=True)
+            if value is None:
+                ui.life_icons(screen, game, (558, y+10), (22, 28), 34)
+            else:
+                ui.text(screen, value, (610, y), ui.heading, (36, 101, 127), center=True)
             pg.draw.line(screen, (190, 222, 229), (190, y+34), (610, y+34))
         ui.panel(screen, (190, 445, 420, 42), dark=True)
         ui.text(screen, 'ENTER 자유 탐험으로 돌아가기', (400, 466), ui.body,

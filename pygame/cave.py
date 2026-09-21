@@ -190,7 +190,7 @@ class CaveExpedition:
             if not game.consume_life(False):
                 return
             self.reset_position()
-            self.say(f'목숨 {game.lives}개 · 입구에서 다시 출발! 봉인석은 유지됩니다.')
+            self.say('목숨이 하나 줄었어요 · 입구에서 다시 출발! 봉인석은 유지됩니다.')
             return
         for i,stone in enumerate(self.stones):
             if i not in self.state['stones'] and self.player.colliderect(stone):
@@ -210,7 +210,7 @@ class CaveExpedition:
                     if not game.consume_life(True):
                         return
                     self.hurt = 0.35
-                    self.say(f'피격! 목숨 {game.lives}개 · 입구로 돌아갑니다.')
+                    self.say('피격! 목숨이 하나 줄어 입구로 돌아갑니다.')
                     return
         target = max(0,min(self.WIDTH-800,self.player.centerx-400))
         self.camera += (target-self.camera)*(1-math.exp(-10*dt))
@@ -297,7 +297,9 @@ class CaveExpedition:
         ui.text(screen,'선택 탐험 · 입구에서 E로 언제든 귀환',(28,56),ui.small)
         ui.text(screen,f"봉인석 {len(self.state['stones'])}/3",(470,26),ui.heading)
         ui.text(screen,'보물 발견' if game.caves[self.index]['treasure'] else '보물방 열림' if self.state['lever'] else '보물방 봉인',(650,28),ui.body)
-        ui.text(screen,f'{game.score}점 · 목숨 {game.lives}/3',(630,57),ui.small)
+        ui.text(screen,f'{game.score}점',(595,57),ui.small)
+        ui.text(screen,'목숨',(670,57),ui.small)
+        ui.life_icons(screen,game,(724,61),(15,19),21)
         message = self.notice if self.notice_left else ('E: 해안으로 귀환' if self.player.centerx<170 else
                   'E: 봉인 레버 작동' if self.near(self.lever) else
                   'E: 보물 상자 열기' if self.state['lever'] and self.near(self.chest) else
