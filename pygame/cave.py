@@ -23,6 +23,7 @@ class CaveExpedition:
         self.notice_left = 5.0
         self.pulses = []
         self.crumbles = {}
+        self.texture_cache = {}
         if index == 0:
             ground = [(0,550,650,50),(720,550,520,50),(1320,550,880,50)]
             ledges = [(370,445,180,24),(570,345,170,24),(810,445,190,24),
@@ -118,6 +119,45 @@ class CaveExpedition:
 
     def active_platforms(self):
         return [p for p in self.platforms if self.crumbles.get(tuple(p),(0,0))[1]<=0]
+
+    def platform_texture(self, size, fragile=False):
+        key = (size, fragile, self.index)
+        if key in self.texture_cache:
+            return self.texture_cache[key]
+        width, height = size
+        surface = pg.Surface(size, pg.SRCALPHA)
+        if self.index == 0:
+            deep, middle, edge, shine = ((18,58,82), (35,91,119),
+                                         (105,190,211), (190,242,248))
+        else:
+            deep, middle, edge, shine = ((42,38,70), (70,65,108),
+                                         (126,140,190), (207,224,250))
+        surface.fill(deep)
+        for y in range(7, height, 9):
+            shade = tuple(min(255, channel+((y//9)%3)*7) for channel in middle)
+            points = [(0, y)]
+            for x in range(0, width+24, 24):
+                points.append((x, y+((x//24)*7+y//9*3)%7-3))
+            points.append((width, min(height, y+8)))
+            points.append((0, min(height, y+8)))
+            pg.draw.polygon(surface, shade, points)
+        top = [(0, 7)] + [(x, 4+((x//18)*5+self.index*3)%6)
+                          for x in range(0, width+18, 18)] + [(width, 12), (0, 12)]
+        pg.draw.polygon(surface, edge, top)
+        pg.draw.line(surface, shine, (0, 3), (width, 3), 2)
+        for x in range(17, width, 47):
+            y = 16+((x*11+self.index*13)%max(18, height-18))
+            color = (132,205,221) if self.index == 0 else (143,151,203)
+            pg.draw.line(surface, color, (x, y),
+                         (min(width-1, x+13), min(height-1, y+8)), 1)
+            pg.draw.line(surface, color, (min(width-1, x+13), min(height-1, y+8)),
+                         (min(width-1, x+8), min(height-1, y+16)), 1)
+        if fragile:
+            for x in (width//3, width*2//3):
+                pg.draw.line(surface, (239,159,184), (x, 1), (x-8, 11), 2)
+                pg.draw.line(surface, (239,159,184), (x-8, 11), (x+5, 20), 2)
+        self.texture_cache[key] = surface
+        return surface
 
     def update(self, game, dt, direction, jump, slide):
         self.time += dt
@@ -223,6 +263,21 @@ class CaveExpedition:
         atmosphere = pg.Surface((800,600),pg.SRCALPHA)
         atmosphere.fill((8,27,50,55) if self.index==0 else (30,19,50,75))
         screen.blit(atmosphere,(0,0))
+        # Layered ceiling and wall strata make the caverns feel enclosed instead
+        # of like the outdoor ice tiles placed over a dark background.
+        ceiling = pg.Surface((800, 155), pg.SRCALPHA)
+        ceiling_color = (17,54,75,235) if self.index == 0 else (43,35,72,235)
+        ceiling_points = [(0, 0), (800, 0)]
+        for x in range(800, -21, -20):
+            depth = 66+((x//20)*17+self.index*29)%55
+            ceiling_points.append((x, depth))
+        pg.draw.polygon(ceiling, ceiling_color, ceiling_points)
+        for x in range(22, 800, 73):
+            length = 18+(x*7+self.index*19)%43
+            pg.draw.polygon(ceiling, (91,157,180,170) if self.index == 0 else (111,105,157,170),
+                            [(x-9, 68), (x+9, 68), (x, 68+length)])
+            pg.draw.line(ceiling, (189,235,242,150), (x-5, 70), (x, 68+length-4), 2)
+        screen.blit(ceiling, (0, 0))
         # Distant translucent rock silhouettes stay behind the playable ledges.
         rocks = pg.Surface((800,600),pg.SRCALPHA)
         for layer in range(2):
@@ -244,7 +299,7 @@ class CaveExpedition:
             if tuple(platform) in self.crumbles:
                 elapsed = self.crumbles[tuple(platform)][0]
                 rect.move_ip(round(math.sin(elapsed*60)*elapsed*5),round(math.sin(elapsed*45)*elapsed*2))
-            screen.blit(game.platform_texture(kind,platform.size),rect)
+            screen.blit(self.platform_texture(platform.size, kind == 'crumble'),rect)
         game.art.grounded(screen,game.cave_image,(80-self.camera,550))
         if self.arch:
             arch = self.arch.move(-self.camera,0)

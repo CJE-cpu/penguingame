@@ -416,9 +416,14 @@ class Game:
         obstacles += [j['rect'] for j in self.content.journals] + [self.content.hole, self.content.lever]
         obstacles += [c['rect'] for c in self.content.crystals]
         for enemy in self.enemies:
-            margin = 48 if enemy.kind in ('skua', 'spirit') else 0
-            obstacles.append(pg.Rect(enemy.left, enemy.base_y-margin,
-                                     enemy.right-enemy.left, enemy.rect.height+margin*2))
+            # Reserve the full patrol plus enough reaction room for a player who
+            # has just collected a potion. This also covers seal charges, spirit
+            # jumps and the skua's vertical flight arc.
+            vertical = 95 if enemy.kind in ('skua', 'spirit') else 38
+            patrol = pg.Rect(enemy.left, enemy.base_y-vertical,
+                             enemy.right-enemy.left,
+                             enemy.rect.height+vertical*2)
+            obstacles.append(patrol.inflate(440, 24))
         return obstacles
 
     def arrange_potions(self, placements):

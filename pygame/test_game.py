@@ -692,6 +692,32 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
 
+    def test_potions_leave_reaction_space_from_every_enemy_patrol(self):
+        g = self.game
+        for kind, item in g.items:
+            pickup = pg.Rect(0, 0, 40, 52)
+            pickup.midbottom = item.midbottom
+            for enemy in g.enemies:
+                vertical = 95 if enemy.kind in ('skua', 'spirit') else 38
+                patrol = pg.Rect(enemy.left, enemy.base_y-vertical,
+                                 enemy.right-enemy.left,
+                                 enemy.rect.height+vertical*2)
+                self.assertFalse(pickup.inflate(360, 0).colliderect(patrol),
+                                 (kind, item, enemy.uid, patrol))
+
+    def test_cave_platforms_use_distinct_layered_textures(self):
+        g = self.game
+        first = CaveExpedition(g, 0)
+        second = CaveExpedition(g, 1)
+        blue = first.platform_texture((180, 50))
+        violet = second.platform_texture((180, 50))
+        fragile = second.platform_texture((180, 50), True)
+        self.assertNotEqual(pg.image.tobytes(blue, 'RGB'),
+                            pg.image.tobytes(violet, 'RGB'))
+        self.assertNotEqual(pg.image.tobytes(violet, 'RGB'),
+                            pg.image.tobytes(fragile, 'RGB'))
+        self.assertGreater(len(set(pg.image.tobytes(blue, 'RGB'))), 6)
+
     def test_exit_dialog_pauses_and_preserves_nested_screen(self):
         g = self.game
         g.coach.enabled = True
