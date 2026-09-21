@@ -184,7 +184,8 @@ class IceUI:
 
     def intro_buttons(self, game):
         choices = [('tutorial', 'ENTER 튜토리얼 보기'),
-                   ('skip', 'N 튜토리얼 보지 않기')]
+                   ('skip', 'N 바로 시작'),
+                   ('quiet', 'G 안내 없이 시작')]
         if game.progress.available:
             choices.append(('continue', 'C 이어하기'))
         gap = 10

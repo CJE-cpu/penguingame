@@ -236,15 +236,16 @@ class Game:
         self.max_score += 300 + 2*(30+50) + TIME_BONUS_MAX # Caverns, guardians and time bonus.
         self.arrange_potions(placements)
 
-    def start(self, practice=True):
+    def start(self, practice=True, guidance=True):
         self.progress.clear()
         self.started = True
-        self.coach.enabled = True
+        self.coach.enabled = practice or guidance
         if practice:
             self.tutorial = TutorialStage(self)
         else:
             self.region_banner = 2.4
-            self.coach.explain('move')
+            if guidance:
+                self.coach.explain('move')
 
     def continue_adventure(self):
         if not self.progress.available:
@@ -318,6 +319,8 @@ class Game:
                 self.start(True)
             elif key == pg.K_n:
                 self.start(False)
+            elif key == pg.K_g:
+                self.start(False, False)
             return False
         if key == pg.K_n and self.tutorial:
             self.finish_tutorial()
@@ -398,6 +401,8 @@ class Game:
                     self.start(True)
                 elif action == 'skip':
                     self.start(False)
+                elif action == 'quiet':
+                    self.start(False, False)
                 elif action == 'continue':
                     self.continue_adventure()
                 return
