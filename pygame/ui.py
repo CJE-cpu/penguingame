@@ -180,7 +180,7 @@ class IceUI:
         self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 376), self.small, MUTED, center=True)
         self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,391),self.small,MUTED,center=True)
         self.panel(screen, (220, 407, 360, 45), dark=True)
-        self.text(screen, 'ENTER 계속 · F3 기록 · R 새 모험', (400, 429), self.body, 'white', center=True)
+        self.text(screen, 'ENTER 엔딩 보기 · F3 기록 · R 새 모험', (400, 429), self.body, 'white', center=True)
 
     def game_over(self, game, screen):
         self.veil(screen)

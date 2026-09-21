@@ -175,6 +175,37 @@ class AdventureChecks(unittest.TestCase):
         g.update(0)
         self.assertEqual(g.score, starting_score+expected)
 
+    def test_ending_sequence_pauses_game_and_returns_to_free_exploration(self):
+        g = self.game
+        g.won = True
+        g.finish_open = True
+        g.score = 2600
+        g.time = 430
+        g.time_bonus = 940
+        before = g.time
+        g.update(1.0)
+        self.assertEqual(g.time, before)
+        g.handle_key(pg.K_RETURN)
+        self.assertIsNotNone(g.ending)
+        frames = []
+        for page in range(4):
+            g.ending.time = 1.0
+            g.draw(self.screen)
+            frames.append(pg.image.tobytes(self.screen, 'RGB'))
+            self.assertEqual(g.time, before)
+            if page < 3:
+                g.handle_key(pg.K_RETURN)
+                self.assertEqual(g.ending.page, page+1)
+        self.assertEqual(len(set(frames)), 4)
+        g.handle_key(pg.K_LEFT)
+        self.assertEqual(g.ending.page, 2)
+        g.handle_key(pg.K_RIGHT)
+        self.assertEqual(g.ending.page, 3)
+        g.handle_key(pg.K_RETURN)
+        self.assertIsNone(g.ending)
+        self.assertFalse(g.finish_open)
+        self.assertTrue(g.won)
+
     def test_grounded_objects_use_visible_base_as_floor(self):
         g = self.game
         for image in (g.igloo_image,g.cave_image,g.chest_image,

@@ -16,6 +16,7 @@ from window import GameWindow
 from cave import CaveExpedition
 from records import ScoreRecords, ScoreUI
 from progress import AdventureSave
+from ending import EndingSequence
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1800
@@ -199,6 +200,7 @@ class Game:
         self.won = False
         self.finish_open = False
         self.game_over = False
+        self.ending = None
         self.lives = STARTING_LIVES
         self.time_bonus = 0
         self.time = 0.0
@@ -287,6 +289,13 @@ class Game:
                 self.progress.clear()
                 self.reset()
             return False
+        if self.ending:
+            if key in (pg.K_RETURN, pg.K_SPACE, pg.K_RIGHT):
+                if self.ending.advance():
+                    self.ending = None
+            elif key == pg.K_LEFT:
+                self.ending.back()
+            return False
         if not self.started:
             if key == pg.K_c and self.progress.available:
                 self.continue_adventure()
@@ -332,6 +341,7 @@ class Game:
             self.content.action(self)
         elif key == pg.K_RETURN and self.won:
             self.finish_open = False
+            self.ending = EndingSequence()
         elif self.content.book_open and key in (pg.K_LEFT,pg.K_RIGHT,pg.K_a,pg.K_d):
             self.content.book_page = (self.content.book_page+(1 if key in (pg.K_RIGHT,pg.K_d) else -1))%7
         elif key in (pg.K_SPACE,pg.K_UP,pg.K_w):
@@ -585,6 +595,9 @@ class Game:
             return
         if self.coach.modal:
             return
+        if self.ending:
+            self.ending.update(dt)
+            return
         if self.tutorial:
             self.tutorial.update(self,dt,direction,jump,slide,swim_vertical)
             return
@@ -597,12 +610,12 @@ class Game:
             self.explain_nearby(slide)
             if self.coach.modal:
                 return
+        if self.won and self.finish_open:
+            self.content.notice_left = max(0,self.content.notice_left-dt)
+            return
         self.time += dt
         if self.content.diving:
             self.content.swim(self,dt,direction,swim_vertical)
-            return
-        if self.won and self.finish_open:
-            self.content.notice_left = max(0,self.content.notice_left-dt)
             return
         self.invincible = max(0.0, self.invincible - dt)
         self.grow_guard = max(0.0,self.grow_guard-dt)
@@ -760,6 +773,9 @@ class Game:
     def draw_scene(self, screen):
         if not self.started:
             self.draw_intro(screen)
+            return
+        if self.ending:
+            self.ending.draw(self, screen)
             return
         if self.cave_expedition:
             self.cave_expedition.draw(self,screen)
