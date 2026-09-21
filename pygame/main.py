@@ -388,7 +388,19 @@ class Game:
             elif confirm.collidepoint(pos):
                 self.confirm_restart()
             return
-        self.score_ui.click(self,pos)
+        if self.score_ui.click(self,pos):
+            return
+        if not self.started:
+            for action, rect, _label in self.ui.intro_buttons(self):
+                if not rect.collidepoint(pos):
+                    continue
+                if action == 'tutorial':
+                    self.start(True)
+                elif action == 'skip':
+                    self.start(False)
+                elif action == 'continue':
+                    self.continue_adventure()
+                return
 
     def save_score(self):
         if not getattr(self,'started',False) or self.tutorial or self.score<=0:

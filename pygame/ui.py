@@ -173,14 +173,26 @@ class IceUI:
             self.text(screen, title, (x+60,y+10), self.body)
             self.text(screen, detail, (x+60,y+38), self.small, MUTED)
         self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료 확인', (400, 456), self.small, MUTED, center=True)
-        self.panel(screen, (119, 483, 562, 49), dark=True)
-        start_label = 'ENTER 튜토리얼 · N 새 모험'
-        if game.progress.available:
-            start_label += ' · C 이어하기'
-        self.text(screen, start_label, (400, 507), self.heading, 'white', center=True)
+        for action, rect, label in self.intro_buttons(game):
+            self.panel(screen, rect, dark=action != 'skip')
+            self.text(screen, label, rect.center, self.body,
+                      'white' if action != 'skip' else INK, center=True,
+                      max_width=rect.width-14)
         if game.progress.error:
             self.text(screen, game.progress.error, (400, 535), self.small, (194,91,74), center=True)
         self.text(screen, 'F3 점수 기록 · F4 이름 변경(시작 전) · 설명창과 기록 창은 게임 정지', (400, 552), self.small, MUTED, center=True)
+
+    def intro_buttons(self, game):
+        choices = [('tutorial', 'ENTER 튜토리얼 보기'),
+                   ('skip', 'N 튜토리얼 보지 않기')]
+        if game.progress.available:
+            choices.append(('continue', 'C 이어하기'))
+        gap = 10
+        total_width = 562
+        width = (total_width-gap*(len(choices)-1))//len(choices)
+        left = 119
+        return [(action, pg.Rect(left+index*(width+gap), 483, width, 49), label)
+                for index, (action, label) in enumerate(choices)]
 
     def exit_buttons(self):
         return pg.Rect(188,334,194,54),pg.Rect(418,334,194,54)
