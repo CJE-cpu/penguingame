@@ -39,18 +39,22 @@ export function createPostgresApp({
 } = {}) {
   if (!databaseUrl) throw new Error("DATABASE_URL is required.");
   const sql = neon(databaseUrl);
-  const schemaReady = sql.transaction([
-    sql`CREATE TABLE IF NOT EXISTS users (
+  let schemaPromise;
+  const ensureSchema = () => {
+    if (!schemaPromise)
+      schemaPromise = sql
+        .transaction([
+          sql`CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE,
       nickname TEXT NOT NULL, salt TEXT NOT NULL,
       password_hash TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL
     )`,
-    sql`CREATE TABLE IF NOT EXISTS sessions (
+          sql`CREATE TABLE IF NOT EXISTS sessions (
       token_hash TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at BIGINT NOT NULL
     )`,
-    sql`CREATE TABLE IF NOT EXISTS scores (
+          sql`CREATE TABLE IF NOT EXISTS scores (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       run_id TEXT NOT NULL, score INTEGER NOT NULL, fish INTEGER NOT NULL,
@@ -58,9 +62,15 @@ export function createPostgresApp({
       cleared BOOLEAN NOT NULL, played_at TIMESTAMPTZ NOT NULL,
       source TEXT NOT NULL DEFAULT 'desktop', UNIQUE(user_id, run_id)
     )`,
-    sql`CREATE INDEX IF NOT EXISTS scores_user_date ON scores(user_id, played_at)`,
-    sql`CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at)`,
-  ]);
+          sql`CREATE INDEX IF NOT EXISTS scores_user_date ON scores(user_id, played_at)`,
+          sql`CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at)`,
+        ])
+        .catch((error) => {
+          schemaPromise = undefined;
+          throw error;
+        });
+    return schemaPromise;
+  };
 
   const app = express();
   app.disable("x-powered-by");
@@ -86,7 +96,7 @@ export function createPostgresApp({
   app.use(cookieParser());
   app.use("/api", async (req, res, next) => {
     try {
-      await schemaReady;
+      await ensureSchema();
       res.set("Cache-Control", "no-store");
       if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
         const origin = req.get("origin");
@@ -377,5 +387,5 @@ export function createPostgresApp({
             : error.message,
     });
   });
-  return { app, sql, schemaReady };
+  return { app, sql, ensureSchema };
 }
