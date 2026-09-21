@@ -9,15 +9,9 @@ ENDING_NAMES = ('첫 번째 엔딩 · 홀로 귀환',
 
 
 class EndingSequence:
-    STORY_TITLES = (
-        ('긴 여정의 끝', '조용한 보금자리', '다시 떠날 약속', ENDING_NAMES[0]),
-        ('가득 찬 배낭', '풍성한 식탁', '다음 여행의 지도', ENDING_NAMES[1]),
-        ('함께 돌아가는 길', '따뜻한 보금자리', '남극의 밤', ENDING_NAMES[2]),
-        ('황금빛 귀환', '보물이 밝힌 집', '전설이 된 밤', ENDING_NAMES[3]))
-
     def __init__(self, ending_type=3):
         self.ending_type = max(1, min(4, ending_type))
-        self.TITLES = self.STORY_TITLES[self.ending_type-1]
+        self.title = ENDING_NAMES[self.ending_type-1]
         self.page = 0
         self.time = 0.0
         self.finished = False
@@ -26,17 +20,11 @@ class EndingSequence:
         self.time += dt
 
     def advance(self):
-        if self.page < len(self.TITLES)-1:
-            self.page += 1
-            self.time = 0.0
-            return False
         self.finished = True
         return True
 
     def back(self):
-        if self.page:
-            self.page -= 1
-            self.time = 0.0
+        return
 
     def _fade(self, screen):
         age = min(1.0, self.time/0.55)
@@ -52,7 +40,7 @@ class EndingSequence:
             ui.text(screen, line, (400, 490+index*22), ui.small,
                     (224, 246, 251), center=True, max_width=620)
         ui.panel(screen, (248, 556, 304, 30), dark=True)
-        ui.text(screen, f'{self.page+1}/{len(self.TITLES)}  ·  ENTER 다음  ·  ← 이전',
+        ui.text(screen, 'ENTER 자유 탐험으로 돌아가기',
                 (400, 571), ui.small, 'white', center=True)
 
     def _home_scene(self, game, screen):
@@ -82,7 +70,7 @@ class EndingSequence:
             ('모든 물고기를 품에 안고 마지막 이글루로 돌아왔습니다.', '풍성한 먹이는 새로운 여정을 준비할 힘이 됩니다.'),
             ('긴 빙붕을 건너 펭귄과 친구들이 함께 집으로 돌아갑니다.', '이제 누구도 남극에 혼자 남지 않았어요.'),
             ('친구들과 보물을 싣고 황금빛 발자국을 남기며 돌아옵니다.', '남극의 오래된 비밀이 마침내 세상에 모습을 드러냈습니다.'))
-        self._caption(game, screen, self.TITLES[0], lines[self.ending_type-1])
+        self._caption(game, screen, self.title, lines[self.ending_type-1])
 
     def _feast_scene(self, game, screen):
         screen.blit(game.scene_backgrounds[5], (0, 0))
@@ -110,7 +98,7 @@ class EndingSequence:
             ('모은 물고기로 식탁을 채우자 긴 여행의 피로가 녹았습니다.', '다음에는 이 풍요를 함께 나눌 친구를 찾아야 합니다.'),
             ('모은 물고기를 나누고 탐험 이야기를 들려주는 축제가 열렸습니다.', '보금자리는 친구들의 웃음으로 더 따뜻해졌어요.'),
             ('동굴의 보물이 이글루를 밝히고 모두를 위한 축제가 열렸습니다.', '황금빛 결정에는 오래된 남극 탐험가의 지도가 숨어 있었습니다.'))
-        self._caption(game, screen, self.TITLES[1], lines[self.ending_type-1])
+        self._caption(game, screen, self.title, lines[self.ending_type-1])
 
     def _night_scene(self, game, screen):
         screen.fill((8, 24, 54))
@@ -143,45 +131,13 @@ class EndingSequence:
             ('별빛 아래 물고기 떼의 길을 지도에 표시했습니다.', '다음 여행에는 함께 웃을 친구를 찾기로 했습니다.'),
             ('밤하늘의 오로라 아래, 네 펭귄은 다음 모험을 약속했습니다.', '남극의 작은 발자국은 오래도록 이어질 거예요.'),
             ('보물의 빛이 오로라와 만나 남극 하늘에 새로운 길을 그렸습니다.', '네 펭귄의 모험은 오래도록 전설로 전해질 거예요.'))
-        self._caption(game, screen, self.TITLES[2], lines[self.ending_type-1])
-
-    def _record_scene(self, game, screen):
-        screen.blit(game.scene_backgrounds[5], (0, 0))
-        game.ui.veil(screen)
-        ui = game.ui
-        ui.panel(screen, (105, 70, 590, 430))
-        ui.text(screen, self.TITLES[3], (400, 112), ui.title, center=True)
-        ui.text(screen, 'LITTLE FEET, BIG ADVENTURES', (400, 157), ui.small,
-                (53, 116, 137), center=True)
-        elapsed = max(0, round(game.time))
-        rows = [
-            ('달성한 엔딩', f'{self.ending_type}/4'),
-            ('최종 점수', f'{game.score}점'),
-            ('모은 물고기', f'{game.total-len(game.fish)}/{game.total}'),
-            ('구조한 친구', f'{game.rescued}/3'),
-            ('동굴 보물', f'{sum(c["treasure"] for c in game.caves)}/{len(game.caves)}'),
-        ]
-        for index, (label, value) in enumerate(rows):
-            y = 205+index*48
-            ui.text(screen, label, (190, y), ui.body, (67, 99, 117))
-            if value is None:
-                ui.life_icons(screen, game, (558, y+10), (22, 28), 34)
-            else:
-                ui.text(screen, value, (610, y), ui.heading, (36, 101, 127), center=True)
-            pg.draw.line(screen, (190, 222, 229), (190, y+34), (610, y+34))
-        ui.panel(screen, (190, 445, 420, 42), dark=True)
-        ui.text(screen, 'ENTER 자유 탐험으로 돌아가기', (400, 466), ui.body,
-                'white', center=True)
-        ui.text(screen, '4/4  ·  ← 이전', (400, 526), ui.small,
-                (44, 83, 103), center=True)
+        self._caption(game, screen, self.title, lines[self.ending_type-1])
 
     def draw(self, game, screen):
-        if self.page == 0:
+        if self.ending_type == 1:
             self._home_scene(game, screen)
-        elif self.page == 1:
+        elif self.ending_type in (2, 4):
             self._feast_scene(game, screen)
-        elif self.page == 2:
-            self._night_scene(game, screen)
         else:
-            self._record_scene(game, screen)
+            self._night_scene(game, screen)
         self._fade(screen)

@@ -10,6 +10,7 @@ import pygame as pg
 from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy, TIME_BONUS_MAX, TIME_BONUS_RATE
 from window import GameWindow
 from cave import CaveExpedition
+from ending import EndingSequence, ENDING_NAMES
 from records import ScoreRecords
 from unittest.mock import patch
 
@@ -188,20 +189,11 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(g.time, before)
         g.handle_key(pg.K_RETURN)
         self.assertIsNotNone(g.ending)
-        frames = []
-        for page in range(4):
-            g.ending.time = 1.0
-            g.draw(self.screen)
-            frames.append(pg.image.tobytes(self.screen, 'RGB'))
-            self.assertEqual(g.time, before)
-            if page < 3:
-                g.handle_key(pg.K_RETURN)
-                self.assertEqual(g.ending.page, page+1)
-        self.assertEqual(len(set(frames)), 4)
+        g.ending.time = 1.0
+        g.draw(self.screen)
+        self.assertEqual(g.time, before)
         g.handle_key(pg.K_LEFT)
-        self.assertEqual(g.ending.page, 2)
-        g.handle_key(pg.K_RIGHT)
-        self.assertEqual(g.ending.page, 3)
+        self.assertEqual(g.ending.page, 0)
         g.handle_key(pg.K_RETURN)
         self.assertIsNone(g.ending)
         self.assertFalse(g.finish_open)
@@ -233,6 +225,23 @@ class AdventureChecks(unittest.TestCase):
                 self.assertTrue(g.won)
                 self.assertEqual(g.ending_type, expected)
                 self.assertTrue(g.finish_open)
+
+    def test_each_result_opens_only_its_matching_ending(self):
+        g = self.game
+        frames = []
+        for ending_type in range(1, 5):
+            g.ending_type = ending_type
+            g.rescued = 3 if ending_type >= 3 else 0
+            g.fish = [] if ending_type >= 2 else [('orange', pg.Rect(-1000, 0, 36, 24))]
+            for cave in g.caves:
+                cave['treasure'] = ending_type == 4
+            sequence = EndingSequence(ending_type)
+            sequence.time = 1.0
+            sequence.draw(g, self.screen)
+            frames.append(pg.image.tobytes(self.screen, 'RGB'))
+            self.assertEqual(sequence.title, ENDING_NAMES[ending_type-1])
+            self.assertTrue(sequence.advance())
+        self.assertEqual(len(set(frames)), 4)
 
     def test_grounded_objects_use_visible_base_as_floor(self):
         g = self.game
