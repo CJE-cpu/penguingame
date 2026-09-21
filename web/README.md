@@ -1,6 +1,6 @@
 # PENGUIN CLUB — 프론트엔드 포트폴리오
 
-남극 펭귄 게임을 소개하고 탐험 세계와 플레이 기록을 웹으로 연결하는 React·TypeScript 프로젝트입니다. 로그인과 점수 대시보드는 Express API와 SQLite에 연결됩니다.
+남극 펭귄 게임을 소개하고 탐험 세계와 플레이 기록을 웹으로 연결하는 React·TypeScript 프로젝트입니다. 로그인과 점수 대시보드는 로컬에서 Express·SQLite, Vercel에서 Express Functions·Neon PostgreSQL에 연결됩니다.
 
 ## 로컬 실행
 
@@ -15,6 +15,16 @@ npm run dev
 사이트: http://127.0.0.1:5173 / API: http://127.0.0.1:3001
 
 `npm run dev` 하나로 두 서버가 실행됩니다. 종료는 Ctrl+C입니다. 개발 모드에서는 Vite가 `/api` 요청을 서버로 전달하므로 별도의 CORS 설정이 필요하지 않습니다.
+
+## Vercel 배포
+
+프로덕션은 Vercel Functions와 싱가포르 리전의 Neon PostgreSQL을 사용합니다. `vercel.json`이 `/api` 요청을 Express Function으로 전달하고, 나머지 경로는 React 앱으로 연결합니다.
+
+```powershell
+npx vercel --prod
+```
+
+Neon 연동이 없는 새 프로젝트에는 `DATABASE_URL` 환경 변수가 필요합니다. 비밀번호는 scrypt 해시만 저장되며 세션 쿠키는 HttpOnly, Secure, SameSite=Lax로 설정됩니다.
 
 ## 화면과 기능
 
