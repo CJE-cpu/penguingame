@@ -144,6 +144,8 @@ class Game:
         self.run_id = uuid4().hex
         self.exit_open = False
         self.exit_choice = False
+        self.restart_open = False
+        self.restart_choice = False
         self.quit_requested = False
         self.coach = Coach()
         self.tutorial = None
@@ -276,18 +278,31 @@ class Game:
                 else:
                     self.exit_open = False
             return False
+        if self.restart_open:
+            if key in (pg.K_ESCAPE, pg.K_n, pg.K_r):
+                self.restart_open = False
+            elif key in (pg.K_LEFT, pg.K_RIGHT, pg.K_TAB):
+                self.restart_choice = not self.restart_choice
+            elif key == pg.K_y:
+                self.confirm_restart()
+            elif key in (pg.K_RETURN, pg.K_SPACE):
+                if self.restart_choice:
+                    self.confirm_restart()
+                else:
+                    self.restart_open = False
+            return False
         if self.score_ui.key(self,key):
             return False
         if key == pg.K_ESCAPE:
             self.ask_exit()
             return False
+        if key == pg.K_r and self.started:
+            self.ask_restart()
+            return False
         if self.game_over:
             if key == pg.K_RETURN:
                 self.reset()
                 self.start(False)
-            elif key == pg.K_r:
-                self.progress.clear()
-                self.reset()
             return False
         if self.ending:
             if key in (pg.K_RETURN, pg.K_SPACE, pg.K_RIGHT):
@@ -303,10 +318,6 @@ class Game:
                 self.start(True)
             elif key == pg.K_n:
                 self.start(False)
-            return False
-        if key == pg.K_r:
-            self.progress.clear()
-            self.reset()
             return False
         if key == pg.K_n and self.tutorial:
             self.finish_tutorial()
@@ -353,6 +364,15 @@ class Game:
             self.exit_open = True
             self.exit_choice = False
 
+    def ask_restart(self):
+        if not self.restart_open:
+            self.restart_open = True
+            self.restart_choice = False
+
+    def confirm_restart(self):
+        self.progress.clear()
+        self.reset()
+
     def handle_click(self, pos):
         if self.exit_open:
             cancel,confirm = self.ui.exit_buttons()
@@ -360,6 +380,13 @@ class Game:
                 self.exit_open = False
             elif confirm.collidepoint(pos):
                 self.quit_requested = True
+            return
+        if self.restart_open:
+            cancel, confirm = self.ui.restart_buttons()
+            if cancel.collidepoint(pos):
+                self.restart_open = False
+            elif confirm.collidepoint(pos):
+                self.confirm_restart()
             return
         self.score_ui.click(self,pos)
 
@@ -589,7 +616,7 @@ class Game:
         return False
 
     def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0):
-        if self.exit_open or self.quit_requested or self.score_ui.open or self.game_over:
+        if self.exit_open or self.restart_open or self.quit_requested or self.score_ui.open or self.game_over:
             return
         if not self.started:
             return
@@ -767,6 +794,8 @@ class Game:
         self.score_ui.draw(self,screen)
         if self.game_over:
             self.ui.game_over(self,screen)
+        if self.restart_open:
+            self.ui.restart_dialog(self,screen)
         if self.exit_open:
             self.ui.exit_dialog(self,screen)
 

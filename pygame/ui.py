@@ -185,6 +185,25 @@ class IceUI:
     def exit_buttons(self):
         return pg.Rect(188,334,194,54),pg.Rect(418,334,194,54)
 
+    def restart_buttons(self):
+        return pg.Rect(188, 342, 194, 54), pg.Rect(418, 342, 194, 54)
+
+    def restart_dialog(self, game, screen):
+        self.veil(screen)
+        self.panel(screen, (112, 158, 576, 300))
+        self.text(screen, '새 모험을 시작할까요?', (400, 207), self.heading, center=True)
+        self.text(screen, '현재 점수는 기록되지만 체크포인트 진행은 삭제됩니다.',
+                  (400, 257), self.body, MUTED, center=True, max_width=530)
+        self.text(screen, '수집품, 구조, 동굴 기록과 남은 목숨이 처음 상태로 돌아갑니다.',
+                  (400, 291), self.small, MUTED, center=True, max_width=530)
+        for index, (rect, label) in enumerate(zip(self.restart_buttons(), ('계속하기', '새 모험'))):
+            selected = bool(index) == game.restart_choice
+            self.panel(screen, rect, dark=selected)
+            self.text(screen, label, rect.center, self.body,
+                      'white' if selected else INK, center=True)
+        self.text(screen, '← → 선택 · ENTER 확인 · R / ESC 취소 · Y 즉시 확인',
+                  (400, 430), self.small, MUTED, center=True)
+
     def exit_dialog(self, game, screen):
         self.veil(screen)
         self.panel(screen,(112,169,576,269))

@@ -312,6 +312,10 @@ class AdventureChecks(unittest.TestCase):
         g.score = 125
         run = g.run_id
         g.handle_key(pg.K_r)
+        self.assertTrue(g.restart_open)
+        self.assertEqual(g.run_id, run)
+        g.handle_key(pg.K_RIGHT)
+        g.handle_key(pg.K_RETURN)
         self.assertEqual(g.records.best['얼음별']['score'],125)
         self.assertEqual(g.records.history[0]['run'],run)
         self.assertNotEqual(g.run_id,run)
@@ -320,6 +324,31 @@ class AdventureChecks(unittest.TestCase):
         g.score = 900
         g.reset()
         self.assertEqual(len(g.records.history),1)
+
+    def test_restart_confirmation_defaults_to_cancel_pauses_and_supports_mouse(self):
+        g = self.game
+        g.score = 80
+        run = g.run_id
+        position = g.player.copy()
+        g.handle_key(pg.K_r)
+        self.assertTrue(g.restart_open)
+        self.assertFalse(g.restart_choice)
+        g.update(2, 1, True)
+        self.assertEqual(g.player, position)
+        g.handle_key(pg.K_RETURN)
+        self.assertFalse(g.restart_open)
+        self.assertEqual(g.run_id, run)
+        g.handle_key(pg.K_r)
+        g.handle_key(pg.K_ESCAPE)
+        self.assertFalse(g.restart_open)
+        g.handle_key(pg.K_r)
+        g.handle_click(g.ui.restart_buttons()[0].center)
+        self.assertFalse(g.restart_open)
+        g.handle_key(pg.K_r)
+        g.handle_click(g.ui.restart_buttons()[1].center)
+        self.assertNotEqual(g.run_id, run)
+        self.assertEqual(g.score, 0)
+        self.assertFalse(g.started)
 
     def test_score_ui_korean_name_and_pause_preserve_current_game(self):
         g = self.game
