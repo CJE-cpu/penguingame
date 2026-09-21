@@ -16,7 +16,7 @@ from window import GameWindow
 from cave import CaveExpedition
 from records import ScoreRecords, ScoreUI
 from progress import AdventureSave
-from ending import EndingSequence
+from ending import EndingSequence, ENDING_NAMES
 
 WIDTH, HEIGHT = 800, 600
 REGION_WIDTH = 1800
@@ -200,6 +200,7 @@ class Game:
         self.started = False
         self.falls = 0
         self.won = False
+        self.ending_type = 0
         self.finish_open = False
         self.game_over = False
         self.ending = None
@@ -264,6 +265,21 @@ class Game:
         self.coach.enabled = True
         self.coach.seen = learned
         self.region_banner = 2.4
+
+    def ending_result(self):
+        fish_complete = not self.fish
+        friends_complete = self.rescued == len(self.babies)
+        treasure_complete = all(cave['treasure'] for cave in self.caves)
+        if fish_complete and friends_complete and treasure_complete:
+            return 4
+        if fish_complete and friends_complete:
+            return 3
+        if fish_complete:
+            return 2
+        return 1
+
+    def ending_name(self):
+        return ENDING_NAMES[max(1, self.ending_type)-1]
 
     def handle_key(self, key):
         if self.exit_open:
@@ -355,7 +371,7 @@ class Game:
             self.content.action(self)
         elif key == pg.K_RETURN and self.won:
             self.finish_open = False
-            self.ending = EndingSequence()
+            self.ending = EndingSequence(self.ending_type)
         elif self.content.book_open and key in (pg.K_LEFT,pg.K_RIGHT,pg.K_a,pg.K_d):
             self.content.book_page = (self.content.book_page+(1 if key in (pg.K_RIGHT,pg.K_d) else -1))%7
         elif key in (pg.K_SPACE,pg.K_UP,pg.K_w):
@@ -413,6 +429,7 @@ class Game:
         return self.records.record({'run':self.run_id,'name':self.player_name,'score':self.score,
                                     'fish':self.total-len(self.fish),'rescued':self.rescued,
                                     'seconds':round(self.time),'cleared':self.won,
+                                    'ending':self.ending_type,
                                     'date':datetime.now().isoformat(timespec='seconds')})
 
     def explain_nearby(self, slide):
@@ -796,9 +813,9 @@ class Game:
         self.items = remaining_items
         self.content.update(self,dt)
         self.update_adventure(0)
-        if (not self.won and not self.fish and self.rescued == len(self.babies) and self.content.escape_cleared
-                and self.content.nearby(self,self.checkpoints[-1])):
+        if not self.won and self.content.nearby(self,self.checkpoints[-1]):
             self.won = True
+            self.ending_type = self.ending_result()
             self.time_bonus = max(0, TIME_BONUS_MAX-round(self.time*TIME_BONUS_RATE))
             self.score += self.time_bonus
             self.finish_open = True

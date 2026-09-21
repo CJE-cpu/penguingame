@@ -178,6 +178,7 @@ class AdventureChecks(unittest.TestCase):
     def test_ending_sequence_pauses_game_and_returns_to_free_exploration(self):
         g = self.game
         g.won = True
+        g.ending_type = 3
         g.finish_open = True
         g.score = 2600
         g.time = 430
@@ -205,6 +206,33 @@ class AdventureChecks(unittest.TestCase):
         self.assertIsNone(g.ending)
         self.assertFalse(g.finish_open)
         self.assertTrue(g.won)
+
+    def test_last_igloo_selects_one_of_four_endings(self):
+        cases = [
+            (False, 0, False, 1),
+            (False, 3, True, 1),  # Friends-only uses the first of four endings.
+            (True, 0, False, 2),
+            (True, 3, False, 3),
+            (True, 3, True, 4),
+        ]
+        for fish_complete, rescued, treasure_complete, expected in cases:
+            with self.subTest(ending=expected, fish=fish_complete,
+                              rescued=rescued, treasure=treasure_complete):
+                g = self.game
+                g.reset()
+                g.started = True
+                if fish_complete:
+                    g.fish.clear()
+                g.rescued = rescued
+                for index, baby in enumerate(g.babies):
+                    baby['rescued'] = index < rescued
+                for cave in g.caves:
+                    cave['treasure'] = treasure_complete
+                self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)
+                g.update(0)
+                self.assertTrue(g.won)
+                self.assertEqual(g.ending_type, expected)
+                self.assertTrue(g.finish_open)
 
     def test_grounded_objects_use_visible_base_as_floor(self):
         g = self.game
@@ -1124,7 +1152,9 @@ class AdventureChecks(unittest.TestCase):
         g.rescued = 3
         g.fish = []
         g.update(1/60)
-        self.assertFalse(g.won)
+        self.assertTrue(g.won)
+        self.assertEqual(g.ending_type,3)
+        g.finish_open = False
         c.action(g)
         self.assertTrue(c.escape_active)
         c.escape_left = 0.01

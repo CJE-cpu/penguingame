@@ -157,8 +157,8 @@ class IceUI:
         self.text(screen, '남극 펭귄의 모험', (146, 43), self.title)
         self.text(screen, '남극을 탐험하고 물고기와 친구들을 찾으세요.', (147, 98), self.small, MUTED)
         self.panel(screen, (54, 136, 692, 58), dark=True)
-        self.text(screen, '물고기 30마리 + 친구 3마리 구조 + 빙붕 탈출 후 귀환', (400, 154), self.body, 'white', center=True)
-        self.text(screen, '목숨 3개 · 빠른 완주 최대 +1,800점 · 친구 구조 +100점', (400, 177), self.small, (224,248,255), center=True)
+        self.text(screen, '마지막 이글루 도착 시 모험 완료 · 수집 결과에 따라 4가지 엔딩', (400, 154), self.body, 'white', center=True)
+        self.text(screen, '물고기 · 친구 · 동굴 보물을 모두 찾으면 시크릿 엔딩', (400, 177), self.small, (224,248,255), center=True)
         cards = [
             (game.penguin_right, '배로 미끄러지기', '↓ + 이동: 빠른 활주 · 얼음 껍질 돌파'),
             (game.fish_images['blue'], '잠수 탐험 · 산소 35초', '해안 구멍 E · 방향키 수영 · 구멍으로 귀환'),
@@ -233,8 +233,14 @@ class IceUI:
         self.veil(screen)
         self.panel(screen, (130, 122, 540, 354))
         self.icon(screen, game.igloo_image, (400, 169), (84,60))
-        self.text(screen, '모험을 마쳤어요!', (400, 227), self.title, center=True)
-        self.text(screen, '물고기와 친구들을 데리고 빙붕을 넘어 돌아왔습니다.', (400, 269), self.body, MUTED, center=True)
+        self.text(screen, game.ending_name(), (400, 227), self.title, center=True)
+        finish_lines = (
+            '마지막 이글루에 도착했습니다. 남겨 둔 목표는 자유 탐험에서 이어갈 수 있어요.',
+            '모든 물고기를 모아 풍성한 식탁과 함께 돌아왔습니다.',
+            '물고기와 친구들을 모두 데리고 따뜻한 보금자리로 돌아왔습니다.',
+            '친구와 물고기, 동굴의 보물까지 찾아 전설적인 탐험을 완성했습니다.')
+        self.text(screen, finish_lines[max(1, game.ending_type)-1], (400, 269), self.body, MUTED,
+                  center=True, max_width=490)
         self.text(screen, f'{game.score}점', (400, 305), self.title, BLUE, center=True)
         elapsed = max(0, round(game.time))
         self.text(screen, f'완주 {elapsed//60:02}:{elapsed%60:02} · 시간 보너스 +{game.time_bonus}점', (400, 349), self.body, (177,95,36), center=True)
