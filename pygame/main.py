@@ -146,6 +146,9 @@ class Game:
         self.exit_choice = False
         self.restart_open = False
         self.restart_choice = False
+        self.ending_prompt_open = False
+        self.ending_prompt_choice = False
+        self.home_prompt_dismissed = False
         self.quit_requested = False
         self.coach = Coach()
         self.tutorial = None
@@ -281,6 +284,20 @@ class Game:
     def ending_name(self):
         return ENDING_NAMES[max(1, self.ending_type)-1]
 
+    def confirm_ending(self):
+        self.ending_prompt_open = False
+        self.won = True
+        self.ending_type = self.ending_result()
+        self.time_bonus = max(0, TIME_BONUS_MAX-round(self.time*TIME_BONUS_RATE))
+        self.score += self.time_bonus
+        self.finish_open = True
+        self.save_score()
+
+    def continue_collecting(self):
+        self.ending_prompt_open = False
+        self.ending_prompt_choice = False
+        self.home_prompt_dismissed = True
+
     def handle_key(self, key):
         if self.exit_open:
             if key in (pg.K_ESCAPE,pg.K_n):
@@ -307,6 +324,19 @@ class Game:
                     self.confirm_restart()
                 else:
                     self.restart_open = False
+            return False
+        if self.ending_prompt_open:
+            if key in (pg.K_ESCAPE, pg.K_n):
+                self.continue_collecting()
+            elif key in (pg.K_LEFT, pg.K_RIGHT, pg.K_TAB):
+                self.ending_prompt_choice = not self.ending_prompt_choice
+            elif key == pg.K_y:
+                self.confirm_ending()
+            elif key in (pg.K_RETURN, pg.K_SPACE):
+                if self.ending_prompt_choice:
+                    self.confirm_ending()
+                else:
+                    self.continue_collecting()
             return False
         if self.score_ui.key(self,key):
             return False
@@ -406,6 +436,13 @@ class Game:
                 self.restart_open = False
             elif confirm.collidepoint(pos):
                 self.confirm_restart()
+            return
+        if self.ending_prompt_open:
+            collect, ending = self.ui.ending_prompt_buttons()
+            if collect.collidepoint(pos):
+                self.continue_collecting()
+            elif ending.collidepoint(pos):
+                self.confirm_ending()
             return
         if self.score_ui.click(self,pos):
             return
@@ -655,7 +692,8 @@ class Game:
         return False
 
     def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0):
-        if self.exit_open or self.restart_open or self.quit_requested or self.score_ui.open or self.game_over:
+        if (self.exit_open or self.restart_open or self.ending_prompt_open or
+                self.quit_requested or self.score_ui.open or self.game_over):
             return
         if not self.started:
             return
@@ -813,13 +851,12 @@ class Game:
         self.items = remaining_items
         self.content.update(self,dt)
         self.update_adventure(0)
-        if not self.won and self.content.nearby(self,self.checkpoints[-1]):
-            self.won = True
-            self.ending_type = self.ending_result()
-            self.time_bonus = max(0, TIME_BONUS_MAX-round(self.time*TIME_BONUS_RATE))
-            self.score += self.time_bonus
-            self.finish_open = True
-            self.save_score()
+        near_home = self.content.nearby(self,self.checkpoints[-1])
+        if not near_home:
+            self.home_prompt_dismissed = False
+        elif not self.won and not self.home_prompt_dismissed:
+            self.ending_prompt_open = True
+            self.ending_prompt_choice = False
         if self.player.top > HEIGHT:
             self.respawn()
             return
@@ -835,6 +872,8 @@ class Game:
             self.ui.game_over(self,screen)
         if self.restart_open:
             self.ui.restart_dialog(self,screen)
+        if self.ending_prompt_open:
+            self.ui.ending_prompt(self,screen)
         if self.exit_open:
             self.ui.exit_dialog(self,screen)
 

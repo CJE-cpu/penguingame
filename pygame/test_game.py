@@ -169,6 +169,10 @@ class AdventureChecks(unittest.TestCase):
         starting_score = g.score
         g.update(0)
         expected = max(0, TIME_BONUS_MAX-round(120*TIME_BONUS_RATE))
+        self.assertTrue(g.ending_prompt_open)
+        self.assertFalse(g.ending_prompt_choice)
+        g.handle_key(pg.K_RIGHT)
+        g.handle_key(pg.K_RETURN)
         self.assertTrue(g.won)
         self.assertEqual(g.time_bonus, expected)
         self.assertEqual(g.score, starting_score+expected)
@@ -222,6 +226,8 @@ class AdventureChecks(unittest.TestCase):
                     cave['treasure'] = treasure_complete
                 self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)
                 g.update(0)
+                self.assertTrue(g.ending_prompt_open)
+                g.handle_key(pg.K_y)
                 self.assertTrue(g.won)
                 self.assertEqual(g.ending_type, expected)
                 self.assertTrue(g.finish_open)
@@ -242,6 +248,28 @@ class AdventureChecks(unittest.TestCase):
             self.assertEqual(sequence.title, ENDING_NAMES[ending_type-1])
             self.assertTrue(sequence.advance())
         self.assertEqual(len(set(frames)), 4)
+
+    def test_last_igloo_prompt_can_continue_and_reopen(self):
+        g = self.game
+        self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)
+        g.update(0)
+        self.assertTrue(g.ending_prompt_open)
+        self.assertFalse(g.won)
+        collect, ending = g.ui.ending_prompt_buttons()
+        g.handle_click(collect.center)
+        self.assertFalse(g.ending_prompt_open)
+        self.assertTrue(g.home_prompt_dismissed)
+        g.update(0)
+        self.assertFalse(g.ending_prompt_open)
+        self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx-300)
+        g.update(0)
+        self.assertFalse(g.home_prompt_dismissed)
+        self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)
+        g.update(0)
+        self.assertTrue(g.ending_prompt_open)
+        g.handle_click(ending.center)
+        self.assertTrue(g.won)
+        self.assertTrue(g.finish_open)
 
     def test_grounded_objects_use_visible_base_as_floor(self):
         g = self.game
@@ -494,6 +522,9 @@ class AdventureChecks(unittest.TestCase):
                                 g.lives, g.game_over = 3, False
                                 self.place(src, start, direction*270, grown=True)
                                 for tick in range(65):
+                                    # Route probes isolate physics from the last-igloo modal.
+                                    g.ending_prompt_open = False
+                                    g.home_prompt_dismissed = True
                                     g.update(1/60, direction if tick < hold else 0, tick == 0)
                                     if (g.on_ground and g.player.bottom == dst.top
                                             and g.player.right > dst.left and g.player.left < dst.right):
@@ -538,6 +569,8 @@ class AdventureChecks(unittest.TestCase):
         g.content.escape_cleared = True
         self.place(g.region_grounds[-1][0],g.checkpoints[-1].centerx)
         g.update(1/60)
+        self.assertTrue(g.ending_prompt_open)
+        g.handle_key(pg.K_y)
         self.assertTrue(g.won)
 
     def test_scene_rendering(self):
@@ -1161,6 +1194,8 @@ class AdventureChecks(unittest.TestCase):
         g.rescued = 3
         g.fish = []
         g.update(1/60)
+        self.assertTrue(g.ending_prompt_open)
+        g.handle_key(pg.K_y)
         self.assertTrue(g.won)
         self.assertEqual(g.ending_type,3)
         g.finish_open = False
@@ -1179,11 +1214,6 @@ class AdventureChecks(unittest.TestCase):
         score = g.score
         c.update(g,1)
         self.assertEqual(g.score,score)
-        self.place(g.region_grounds[5][0],g.checkpoints[-1].centerx)
-        g.update(1/60)
-        self.assertTrue(g.won)
-        self.assertTrue(g.finish_open)
-        g.finish_open = False
         old_x = g.player.x
         g.update(1/60,1)
         self.assertGreater(g.player.x,old_x)

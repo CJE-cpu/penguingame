@@ -8,6 +8,8 @@ MUTED = (67, 99, 117)
 ICE = (235, 247, 248)
 EDGE = (161, 206, 215)
 BLUE = (36, 101, 127)
+ENDING_LABELS = ('첫 번째 엔딩 · 홀로 귀환', '두 번째 엔딩 · 풍요로운 귀환',
+                 '세 번째 엔딩 · 모두 함께', '시크릿 엔딩 · 남극의 보물')
 
 
 class IceUI:
@@ -200,6 +202,28 @@ class IceUI:
 
     def restart_buttons(self):
         return pg.Rect(188, 342, 194, 54), pg.Rect(418, 342, 194, 54)
+
+    def ending_prompt_buttons(self):
+        return pg.Rect(160, 354, 224, 56), pg.Rect(416, 354, 224, 56)
+
+    def ending_prompt(self, game, screen):
+        self.veil(screen)
+        self.panel(screen, (105, 125, 590, 330))
+        self.icon(screen, game.igloo_image, (400, 174), (80, 58))
+        self.text(screen, '마지막 이글루에 도착했어요', (400, 224), self.heading, center=True)
+        prospective = ENDING_LABELS[game.ending_result()-1]
+        self.text(screen, f'현재 결과: {prospective}', (400, 269), self.body, BLUE, center=True)
+        self.text(screen,
+                  f'물고기 {game.total-len(game.fish)}/{game.total} · 친구 {game.rescued}/{len(game.babies)} · 동굴 보물 {sum(c["treasure"] for c in game.caves)}/{len(game.caves)}',
+                  (400, 305), self.small, MUTED, center=True, max_width=530)
+        for index, (rect, label) in enumerate(zip(self.ending_prompt_buttons(),
+                                                  ('수집 계속하기', '엔딩 보기'))):
+            selected = bool(index) == game.ending_prompt_choice
+            self.panel(screen, rect, dark=selected)
+            self.text(screen, label, rect.center, self.body,
+                      'white' if selected else INK, center=True)
+        self.text(screen, '← → 선택 · ENTER 확인 · ESC 계속 수집 · Y 엔딩 바로 보기',
+                  (400, 430), self.small, MUTED, center=True)
 
     def restart_dialog(self, game, screen):
         self.veil(screen)
