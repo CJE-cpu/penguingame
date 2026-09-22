@@ -249,6 +249,17 @@ class AdventureChecks(unittest.TestCase):
             self.assertTrue(sequence.advance())
         self.assertEqual(len(set(frames)), 4)
 
+    def test_finish_summary_uses_actual_collection_counts(self):
+        g = self.game
+        g.fish = g.fish[:7]
+        g.rescued = 1
+        g.ending_type = 1
+        with patch.object(g.ui, 'text', wraps=g.ui.text) as draw_text:
+            g.ui.finish(g, self.screen)
+        labels = [call.args[1] for call in draw_text.call_args_list]
+        self.assertTrue(any('물고기 23/30' in label and '구조 1/3' in label
+                            for label in labels))
+
     def test_last_igloo_prompt_can_continue_and_reopen(self):
         g = self.game
         self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)

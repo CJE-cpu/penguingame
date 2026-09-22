@@ -268,7 +268,9 @@ class IceUI:
         self.text(screen, f'{game.score}점', (400, 305), self.title, BLUE, center=True)
         elapsed = max(0, round(game.time))
         self.text(screen, f'완주 {elapsed//60:02}:{elapsed%60:02} · 시간 보너스 +{game.time_bonus}점', (400, 349), self.body, (177,95,36), center=True)
-        self.text(screen, f'물고기 {game.total}마리 · 구조 {game.rescued}마리 · 적 처치 {game.defeated}마리', (400, 376), self.small, MUTED, center=True)
+        collected = game.total-len(game.fish)
+        self.text(screen, f'물고기 {collected}/{game.total} · 구조 {game.rescued}/{len(game.babies)} · 적 처치 {game.defeated}마리',
+                  (400, 376), self.small, MUTED, center=True)
         self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,391),self.small,MUTED,center=True)
         self.panel(screen, (220, 407, 360, 45), dark=True)
         self.text(screen, 'ENTER 엔딩 보기 · F3 기록 · R 새 모험', (400, 429), self.body, 'white', center=True)
