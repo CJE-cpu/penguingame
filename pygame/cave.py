@@ -145,6 +145,19 @@ class CaveExpedition:
                           for x in range(0, width+18, 18)] + [(width, 12), (0, 12)]
         pg.draw.polygon(surface, edge, top)
         pg.draw.line(surface, shine, (0, 3), (width, 3), 2)
+        # Broken lower edges and mineral flecks keep platforms from reading as
+        # flat outdoor tiles when seen against the cavern wall.
+        pg.draw.line(surface, tuple(max(0, channel-12) for channel in deep),
+                     (0, height-2), (width, height-2), 3)
+        for x in range(11, width, 29):
+            fleck_y = 12+((x*17+self.index*31)%max(5, height-15))
+            pg.draw.ellipse(surface, (*shine, 105),
+                            (x, fleck_y, 2+(x//29)%3, 1+(x//17)%2))
+        if height <= 26:
+            for x in range(15, width-4, 36):
+                drop = 4+(x*7+self.index*5)%8
+                pg.draw.polygon(surface, (*deep, 235),
+                                [(x, height-5), (x+9, height-5), (x+4, height-1+drop)])
         for x in range(17, width, 47):
             y = 16+((x*11+self.index*13)%max(18, height-18))
             color = (132,205,221) if self.index == 0 else (143,151,203)
@@ -156,6 +169,9 @@ class CaveExpedition:
             for x in (width//3, width*2//3):
                 pg.draw.line(surface, (239,159,184), (x, 1), (x-8, 11), 2)
                 pg.draw.line(surface, (239,159,184), (x-8, 11), (x+5, 20), 2)
+                pg.draw.line(surface, (210,116,157), (x-8, 11), (x-17, 15), 1)
+            for x in range(8, width, 31):
+                pg.draw.circle(surface, (44,39,73), (x, 5+(x//31)%5), 2)
         self.texture_cache[key] = surface
         return surface
 
@@ -263,6 +279,38 @@ class CaveExpedition:
         atmosphere = pg.Surface((800,600),pg.SRCALPHA)
         atmosphere.fill((8,27,50,55) if self.index==0 else (30,19,50,75))
         screen.blit(atmosphere,(0,0))
+        # World-space mineral seams move with the camera and break up the
+        # repeated panorama. Blue crystal veins distinguish the first cavern;
+        # violet sediment and old fractures distinguish the collapsed shelf.
+        wall = pg.Surface((800, 600), pg.SRCALPHA)
+        vein = (72,205,224,48) if self.index == 0 else (178,121,196,45)
+        shadow = (7,36,58,48) if self.index == 0 else (28,20,55,52)
+        for i in range(17):
+            world_x = 65+i*139
+            x = round(world_x-self.camera*0.42)
+            base_y = 165+(i*73)%295
+            direction = -1 if i%2 else 1
+            points = [(x, base_y), (x+direction*13, base_y-27),
+                      (x+direction*29, base_y-11), (x+direction*43, base_y-43)]
+            pg.draw.lines(wall, shadow, False, [(px+3, py+4) for px,py in points], 5)
+            pg.draw.lines(wall, vein, False, points, 2)
+            for branch in (1, 2):
+                px, py = points[branch]
+                fork = -direction if (i+branch)%2 else direction
+                pg.draw.line(wall, vein, (px, py), (px+fork*13, py-12), 1)
+        if self.index == 0:
+            for i in range(10):
+                x = round(70+i*241-self.camera*0.3)
+                y = 350+(i*47)%130
+                pg.draw.polygon(wall, (95,222,238,58),
+                                [(x,y+35),(x+13,y),(x+25,y+35)])
+                pg.draw.line(wall, (206,252,255,75), (x+13,y+3), (x+13,y+31), 2)
+        else:
+            for i in range(14):
+                x = round(35+i*169-self.camera*0.34)
+                y = 185+(i*61)%280
+                pg.draw.ellipse(wall, (42,31,73,70), (x,y,70+(i%3)*18,15), 3)
+        screen.blit(wall, (0, 0))
         # Layered ceiling and wall strata make the caverns feel enclosed instead
         # of like the outdoor ice tiles placed over a dark background.
         ceiling = pg.Surface((800, 155), pg.SRCALPHA)
@@ -272,6 +320,11 @@ class CaveExpedition:
             depth = 66+((x//20)*17+self.index*29)%55
             ceiling_points.append((x, depth))
         pg.draw.polygon(ceiling, ceiling_color, ceiling_points)
+        strata = (74,128,151,150) if self.index == 0 else (91,81,132,155)
+        for y in (23, 42, 58):
+            points = [(x, y+round(math.sin((x+self.camera*.2)*.018+y)*5))
+                      for x in range(-10, 821, 18)]
+            pg.draw.lines(ceiling, strata, False, points, 2)
         for x in range(22, 800, 73):
             length = 18+(x*7+self.index*19)%43
             pg.draw.polygon(ceiling, (91,157,180,170) if self.index == 0 else (111,105,157,170),
@@ -293,6 +346,14 @@ class CaveExpedition:
             y = 240+(i*67)%300
             pg.draw.circle(screen,(80,132,154),(x,y),1)
         pg.draw.rect(screen,(20,69,96),(0,550,800,50))
+        # Low mist softens the hard join between the scrolling wall and floor.
+        mist = pg.Surface((800, 92), pg.SRCALPHA)
+        for band in range(5):
+            alpha = 22-band*3
+            y = 18+band*14+round(math.sin(self.time*.5+band)*3)
+            pg.draw.ellipse(mist, (133,202,215,alpha), (-90+band*105,y,420,48))
+            pg.draw.ellipse(mist, (133,202,215,alpha), (330+band*80,y+5,430,42))
+        screen.blit(mist, (0,508))
         for platform in self.active_platforms():
             rect = platform.move(-self.camera,0)
             kind = 'crumble' if tuple(platform) in self.fragile else 'ice'
