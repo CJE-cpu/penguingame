@@ -786,6 +786,15 @@ class AdventureChecks(unittest.TestCase):
                 self.assertFalse(pickup.inflate(360, 0).colliderect(patrol),
                                  (kind, item, enemy.uid, patrol))
 
+    def test_enemies_do_not_spawn_on_collectibles_or_friends(self):
+        g = self.game
+        occupied = [rect for _kind, rect in g.fish+g.items]
+        occupied += [baby['rect'] for baby in g.babies]
+        for enemy in g.enemies:
+            for rect in occupied:
+                self.assertFalse(enemy.rect.colliderect(rect),
+                                 (enemy.uid, enemy.rect, rect))
+
     def test_cave_platforms_use_distinct_layered_textures(self):
         g = self.game
         first = CaveExpedition(g, 0)

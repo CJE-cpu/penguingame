@@ -239,6 +239,28 @@ class Game:
         self.max_score += 6*60 + 170 + 200 + 6*40 + 500
         self.max_score += 300 + 2*(30+50) + TIME_BONUS_MAX # Caverns, guardians and time bonus.
         self.arrange_potions(placements)
+        self.separate_enemy_spawns()
+
+    def separate_enemy_spawns(self):
+        """Keep the initial frame readable without changing enemy patrol routes."""
+        pickups = [rect for _kind, rect in self.fish+self.items]
+        pickups += [baby['rect'] for baby in self.babies]
+        for enemy in self.enemies:
+            if not any(enemy.rect.colliderect(rect) for rect in pickups):
+                continue
+            last = max(enemy.left, enemy.right-enemy.rect.width)
+            candidates = list(range(enemy.left, last+1, 24))
+            if not candidates or candidates[-1] != last:
+                candidates.append(last)
+            candidates.sort(key=lambda x: abs(x-enemy.rect.x))
+            for x in candidates:
+                trial = enemy.rect.copy()
+                trial.x = x
+                if any(trial.inflate(18, 8).colliderect(rect) for rect in pickups):
+                    continue
+                enemy.rect.x = x
+                enemy.x = float(x)
+                break
 
     def start(self, practice=True, guidance=True):
         self.progress.clear()
