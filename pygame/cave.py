@@ -474,8 +474,12 @@ class CaveExpedition:
             if tuple(platform) in self.crumbles:
                 elapsed = self.crumbles[tuple(platform)][0]
                 rect.move_ip(round(math.sin(elapsed*60)*elapsed*5),round(math.sin(elapsed*45)*elapsed*2))
-            screen.blit(game.platform_texture(kind, platform.size,
-                                               platform in self.grounds), rect)
+            ground = platform in self.grounds
+            variant = ('ground' if ground else 'chip' if platform.width <= 120
+                       else 'tier' if platform.width >= 230
+                       else ('bridge', 'shelf', 'deep')[(platform.x//90) % 3])
+            screen.blit(game.platform_texture(kind, platform.size, ground,
+                                               (False, False), variant), rect)
         if self.arch:
             arch = self.arch.move(-self.camera,0)
             # Use the same painted material as the cave platforms so the low

@@ -187,6 +187,7 @@ class Game:
         self.quality_index = 0 if sys.platform == 'emscripten' else 2
         self.platforms = []
         self.platform_kinds = {}
+        self.platform_variants = {}
         self.grounds = []
         self.region_grounds = []
         self.region_ledges = []
@@ -197,7 +198,7 @@ class Game:
             self.region_grounds.append(grounds)
             self.region_ledges.append(ledges)
             self.grounds.extend(grounds)
-            for rect in grounds + ledges:
+            for platform_index, rect in enumerate(grounds + ledges):
                 self.platforms.append(rect)
                 kind = ('ice' if region in (1, 3) else 'cave' if region == 2
                         else 'fracture' if region == 4 else 'sunset' if region == 5
@@ -205,6 +206,15 @@ class Game:
                 if region == 4 and rect in ledges:
                     kind = 'crumble'
                 self.platform_kinds[tuple(rect)] = kind
+                if rect in grounds:
+                    variant = 'ground'
+                elif rect.width <= 130:
+                    variant = 'chip'
+                elif rect.width >= 280:
+                    variant = 'tier'
+                else:
+                    variant = ('bridge', 'shelf', 'deep')[platform_index % 3]
+                self.platform_variants[tuple(rect)] = variant
         self.ground_keys = {tuple(p) for p in self.grounds}
         self.validate_platform_layout()
         self.records = ScoreRecords(score_path)
@@ -718,17 +728,32 @@ class Game:
                 if platform.colliderect(other):
                     raise ValueError(f'Overlapping platforms: {platform} / {other}')
 
-    def platform_texture(self, kind, size, ground=False, joins=(False, False)):
-        """Build a cached platform by repeating the painted ice-shelf asset."""
-        key = (kind, size, ground, joins)
+    def platform_texture(self, kind, size, ground=False, joins=(False, False),
+                         variant='shelf'):
+        """Build varied arcade-like tiers from the shared Antarctic materials."""
+        if ground:
+            variant = 'ground'
+        key = (kind, size, ground, joins, variant)
         if key not in self.platform_textures:
             width, height = size
-            visual_height = max(height, 72)
+            profile_heights = {'chip': 54, 'bridge': 48, 'shelf': 72,
+                               'deep': 94, 'tier': 82, 'ground': 96}
+            visual_height = max(height, profile_heights.get(variant, 72))
             surface = pg.Surface((width, visual_height), pg.SRCALPHA)
             shelf = pg.transform.smoothscale(self.shelf_images[kind],
                                               (360, visual_height))
-            for x in range(0, width, shelf.get_width()):
+            offset = {'chip': -42, 'bridge': -118, 'shelf': 0,
+                      'deep': -176, 'tier': -78, 'ground': 0}.get(variant, 0)
+            for x in range(offset, width, shelf.get_width()):
                 surface.blit(shelf, (x, 0))
+            # A dedicated top material makes snow, smooth ice and cracked ice
+            # readable at a glance while the underside keeps the same world art.
+            cap = pg.transform.smoothscale(self.platform_images[kind], (160, 20))
+            cap_offset = {'chip': -23, 'bridge': -71, 'deep': -109}.get(variant, 0)
+            for x in range(cap_offset, width, cap.get_width()):
+                surface.blit(cap, (x, 0))
+            pg.draw.line(surface, (231, 250, 253, 210),
+                         (4, 2), (max(4, width-5), 2), 2)
             self.platform_textures[key] = surface
         return self.platform_textures[key]
     def draw_background(self, screen):
@@ -1231,7 +1256,9 @@ class Game:
             kind = self.platform_kinds[tuple(platform)]
             ground = tuple(platform) in self.ground_keys
             joins = self.ground_join_sides(platform) if ground else (False, False)
-            screen.blit(self.platform_texture(kind, platform.size, ground, joins), rect)
+            variant = self.platform_variants[tuple(platform)]
+            screen.blit(self.platform_texture(kind, platform.size, ground, joins,
+                                              variant), rect)
             if kind == 'crumble' and tuple(platform) in self.crumbles:
                 progress = min(1, self.crumbles[tuple(platform)][0] / 0.8)
                 pg.draw.rect(screen, (245, 92, 125), (rect.x, rect.y-4, int(rect.width*progress), 3))
