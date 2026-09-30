@@ -209,11 +209,9 @@ class Game:
                 if rect in grounds:
                     variant = 'ground'
                 elif rect.width <= 130:
-                    variant = 'chip'
-                elif rect.width >= 280:
-                    variant = 'tier'
+                    variant = 'thin'
                 else:
-                    variant = ('bridge', 'shelf', 'deep')[platform_index % 3]
+                    variant = 'normal'
                 self.platform_variants[tuple(rect)] = variant
         self.ground_keys = {tuple(p) for p in self.grounds}
         self.validate_platform_layout()
@@ -729,29 +727,21 @@ class Game:
                     raise ValueError(f'Overlapping platforms: {platform} / {other}')
 
     def platform_texture(self, kind, size, ground=False, joins=(False, False),
-                         variant='shelf'):
-        """Build varied arcade-like tiers from the shared Antarctic materials."""
+                         variant='normal'):
+        """Build a clear thin, normal or ground shelf without stacked caps."""
         if ground:
             variant = 'ground'
         key = (kind, size, ground, joins, variant)
         if key not in self.platform_textures:
             width, height = size
-            profile_heights = {'chip': 54, 'bridge': 48, 'shelf': 72,
-                               'deep': 94, 'tier': 82, 'ground': 96}
-            visual_height = max(height, profile_heights.get(variant, 72))
+            profile_heights = {'thin': 48, 'normal': 64, 'ground': 78}
+            visual_height = max(height, profile_heights.get(variant, 64))
             surface = pg.Surface((width, visual_height), pg.SRCALPHA)
             shelf = pg.transform.smoothscale(self.shelf_images[kind],
                                               (360, visual_height))
-            offset = {'chip': -42, 'bridge': -118, 'shelf': 0,
-                      'deep': -176, 'tier': -78, 'ground': 0}.get(variant, 0)
+            offset = {'thin': -42, 'normal': 0, 'ground': 0}.get(variant, 0)
             for x in range(offset, width, shelf.get_width()):
                 surface.blit(shelf, (x, 0))
-            # A dedicated top material makes snow, smooth ice and cracked ice
-            # readable at a glance while the underside keeps the same world art.
-            cap = pg.transform.smoothscale(self.platform_images[kind], (160, 20))
-            cap_offset = {'chip': -23, 'bridge': -71, 'deep': -109}.get(variant, 0)
-            for x in range(cap_offset, width, cap.get_width()):
-                surface.blit(cap, (x, 0))
             pg.draw.line(surface, (231, 250, 253, 210),
                          (4, 2), (max(4, width-5), 2), 2)
             self.platform_textures[key] = surface
