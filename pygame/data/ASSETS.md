@@ -1,4 +1,10 @@
 Tool: built-in image_gen.
+Shield potion update: `shield-potion.png`, generated with the built-in image
+generation tool using the growth, speed and former reverse potion sprites as
+style references. Prompt: isolated transparent cyan potion with the same cork,
+glass highlights and navy outline, a white-and-blue shield emblem and small
+hexagonal frost sparkles; no arrows, letters, UI or ground shadow.
+
 Platform texture update: `antarctic-ice-shelf-tile-v3.png`, generated with the built-in image generation tool. Prompt: transparent horizontally repeating side-view Antarctic ice shelf with an uneven snow cap, layered cyan ice, embedded crystals, natural cracks and a dark rocky underside; no characters, text, UI or border. The game repeats this bitmap and applies regional color tints for outdoor and cave platforms.
 Prompt 1: transparent pixel-art sprite atlas: left-facing penguin, three orange fish swimming poses, icy sparkle and falling icicle.
 Prompt 2 (replacement): Antarctica coastal pixel-art landscape with immense white ice shelf cliffs, jagged snow-covered Antarctic mountains, deep blue Southern Ocean, pale blue sky and snowy ground at bottom; no animals, trees, buildings or text.

@@ -138,9 +138,7 @@ class Game:
         self.chest_image = load_image('golden-treasure-chest.png', (36, 30), keep_aspect=True)
         self.item_images = {kind: load_image(filename + '-potion.png', (30, 36), keep_aspect=True)
                             for kind, filename in [('grow', 'growth'), ('speed', 'speed'),
-                                                   ('shield', 'reverse')]}
-        self.item_images['shield'].fill((145, 225, 255, 255),
-                                        special_flags=pg.BLEND_RGBA_MULT)
+                                                   ('shield', 'shield')]}
         self.platform_images = {kind: load_image(filename + '-platform-tile-v2.png', (160, 30))
                                 for kind, filename in [('snow', 'snow'), ('ice', 'smooth-ice'), ('crumble', 'cracked-ice')]}
         # Region variants share silhouettes but receive the local background's

@@ -114,12 +114,12 @@ export const collection = [
       "더 빠른 발걸음으로 넓은 눈밭을 건너요. 발판 끝에서는 속도를 조절하세요.",
   },
   {
-    name: "반전 물약",
+    name: "보호막 물약",
     category: "아이템",
-    image: "reverse-potion.png",
-    value: "8초 · 좌우 조작 반전",
+    image: "shield-potion.png",
+    value: "6초 · 적의 공격 무효화",
     description:
-      "왼쪽과 오른쪽이 바뀌어요. 옆길에 한 개만 놓여 있으니 조심해서 선택하세요.",
+      "얼음 결정 보호막이 펭귄을 감싸요. 위험한 적과 마주치기 전에 사용하세요.",
   },
   {
     name: "아기 펭귄",

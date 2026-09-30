@@ -99,14 +99,32 @@ class InteractionEffects:
                     y = round(game.player.bottom-phase*85)
                     pg.draw.circle(layer,(*colors[kind],round(220*(1-phase))),(x,y),3)
             elif kind == 'shield':
-                for i in range(2):
-                    angle = game.time*3+i*math.pi
-                    pg.draw.arc(layer,(*colors[kind],220),(cx-radius,cy-radius,radius*2,radius*2),angle,angle+1.8,4)
-                    end = angle+1.8
-                    x,y = cx+math.cos(end)*radius,cy-math.sin(end)*radius
-                    tangent = end+math.pi/2
-                    tip = (round(x+math.cos(tangent)*7),round(y-math.sin(tangent)*7))
-                    pg.draw.polygon(layer,(*colors[kind],240),[tip,(round(x-6),round(y-4)),(round(x+6),round(y+4))])
+                pulse = math.sin(game.time*5)*2
+                rx, ry = radius+7+pulse, radius+14+pulse
+                barrier = []
+                for point in range(10):
+                    angle = -math.pi/2 + point*math.tau/10
+                    barrier.append((round(cx+math.cos(angle)*rx),
+                                    round(cy+math.sin(angle)*ry)))
+                pg.draw.polygon(layer,(*colors[kind],32),barrier)
+                pg.draw.polygon(layer,(184,241,255,205),barrier,3)
+                inner = [(round(cx+(x-cx)*0.88),round(cy+(y-cy)*0.88))
+                         for x,y in barrier]
+                pg.draw.lines(layer,(76,177,237,125),True,inner,2)
+                # Upper-left facets make the barrier read as curved ice glass.
+                pg.draw.line(layer,(244,254,255,210),barrier[8],barrier[9],3)
+                pg.draw.line(layer,(225,250,255,170),barrier[9],barrier[0],2)
+                for shard in range(5):
+                    angle = game.time*1.7+shard*math.tau/5
+                    orbit_x = cx+math.cos(angle)*(rx+7)
+                    orbit_y = cy+math.sin(angle)*(ry+4)
+                    size = 3 if shard%2 else 4
+                    points = [(round(orbit_x),round(orbit_y-size)),
+                              (round(orbit_x+size),round(orbit_y)),
+                              (round(orbit_x),round(orbit_y+size)),
+                              (round(orbit_x-size),round(orbit_y))]
+                    pg.draw.polygon(layer,(211,249,255,225),points)
+                    pg.draw.line(layer,(93,192,239,210),points[1],points[2],1)
         if game.effects['speed']:
             direction = -1 if game.facing_right else 1
             for i in range(3):
