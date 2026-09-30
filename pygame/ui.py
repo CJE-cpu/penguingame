@@ -1,5 +1,6 @@
 """Ice-themed Korean interface, drawn at native resolution."""
 import math
+from collections import OrderedDict
 from pathlib import Path
 import pygame as pg
 
@@ -13,6 +14,9 @@ ENDING_LABELS = ('첫 번째 엔딩 · 홀로 귀환', '두 번째 엔딩 · 풍
 
 
 class IceUI:
+    EFFECT_SLOT = pg.Rect(12, 94, 147, 43)
+    OBJECTIVE_SLOT = pg.Rect(570, 94, 218, 43)
+
     def __init__(self):
         fonts = Path(__file__).resolve().parent/'data'/'fonts'
         regular = fonts/'GowunDodum-Regular.ttf'
@@ -22,22 +26,54 @@ class IceUI:
         self.body = pg.font.Font(str(regular) if regular.exists() else fallback,18)
         self.heading = pg.font.Font(str(rounded) if rounded.exists() else fallback,25)
         self.title = pg.font.Font(str(rounded) if rounded.exists() else fallback,38)
+        self.shadow_cache = {}
+        self.panel_cache = {}
+        self.veil_layer = pg.Surface((800, 600), pg.SRCALPHA)
+        self.veil_layer.fill((13, 41, 68, 145))
+        self.life_cache = {}
+        self.text_cache = OrderedDict()
 
     def panel(self, screen, rect, dark=False):
         rect = pg.Rect(rect)
-        shadow = pg.Surface((rect.width + 8, rect.height + 8), pg.SRCALPHA)
-        pg.draw.rect(shadow, (17, 51, 79, 48), (3, 4, rect.width, rect.height), border_radius=11)
+        key = (rect.width, rect.height)
+        shadow = self.shadow_cache.get(key)
+        if shadow is None:
+            shadow = pg.Surface((rect.width + 8, rect.height + 8), pg.SRCALPHA)
+            pg.draw.rect(shadow, (17, 51, 79, 48), (3, 4, rect.width, rect.height), border_radius=11)
+            self.shadow_cache[key] = shadow
         screen.blit(shadow, rect.topleft)
-        pg.draw.rect(screen, BLUE if dark else ICE, rect, border_radius=10)
-        pg.draw.rect(screen, (134, 188, 204) if dark else EDGE, rect, 1, border_radius=10)
+        panel_key = (rect.width, rect.height, dark)
+        panel = self.panel_cache.get(panel_key)
+        if panel is None:
+            panel = pg.Surface(rect.size, pg.SRCALPHA)
+            fill = (*BLUE, 235) if dark else (*ICE, 238)
+            border = (134, 188, 204, 245) if dark else (*EDGE, 245)
+            pg.draw.rect(panel, fill, panel.get_rect(), border_radius=10)
+            pg.draw.rect(panel, border, panel.get_rect(), 1, border_radius=10)
+            # A faint top highlight keeps the frosted panels readable over both
+            # bright snow and dark cave backgrounds.
+            pg.draw.line(panel, (255, 255, 255, 90), (10, 2),
+                         (max(10, rect.width-11), 2), 1)
+            self.panel_cache[panel_key] = panel
+        screen.blit(panel, rect.topleft)
 
     def text(self, screen, text, pos, font=None, color=INK, center=False, max_width=None):
         if font in (self.heading,self.title):
             text = text.replace('·',' / ')
-        image = (font or self.body).render(text, True, color)
-        if max_width and image.get_width()>max_width:
-            ratio = max_width/image.get_width()
-            image = pg.transform.smoothscale(image,(max_width,max(1,round(image.get_height()*ratio))))
+        font = font or self.body
+        color_key = color if isinstance(color, str) else tuple(color)
+        key = (id(font), text, color_key, max_width)
+        image = self.text_cache.get(key)
+        if image is None:
+            image = font.render(text, True, color)
+            if max_width and image.get_width()>max_width:
+                ratio = max_width/image.get_width()
+                image = pg.transform.smoothscale(image,(max_width,max(1,round(image.get_height()*ratio))))
+            self.text_cache[key] = image
+            if len(self.text_cache) > 384:
+                self.text_cache.popitem(last=False)
+        else:
+            self.text_cache.move_to_end(key)
         screen.blit(image, image.get_rect(center=pos) if center else pos)
 
     def icon(self, screen, image, center, size=(30, 30)):
@@ -48,44 +84,40 @@ class IceUI:
 
     def life_icons(self, screen, game, start, size=(20, 25), gap=27):
         """Draw three penguin lives; spent lives become faint silhouettes."""
-        source = game.penguin_right
-        ratio = min(size[0]/source.get_width(), size[1]/source.get_height())
-        sprite = pg.transform.smoothscale(
-            source, (max(1, round(source.get_width()*ratio)),
-                     max(1, round(source.get_height()*ratio))))
+        cache_key = (size, game.lives)
+        icons = self.life_cache.get(cache_key)
+        if icons is None:
+            source = game.penguin_right
+            ratio = min(size[0]/source.get_width(), size[1]/source.get_height())
+            sprite = pg.transform.smoothscale(
+                source, (max(1, round(source.get_width()*ratio)),
+                         max(1, round(source.get_height()*ratio))))
+            active = pg.Surface((size[0]+8, size[1]+8), pg.SRCALPHA)
+            pg.draw.ellipse(active, (255, 224, 116, 90), active.get_rect())
+            active.blit(sprite, sprite.get_rect(center=active.get_rect().center))
+            spent = pg.Surface((size[0]+8, size[1]+8), pg.SRCALPHA)
+            mask = pg.mask.from_surface(sprite, 80)
+            silhouette = mask.to_surface(setcolor=(119, 143, 153, 90), unsetcolor=(0, 0, 0, 0))
+            spent.blit(silhouette, silhouette.get_rect(center=spent.get_rect().center))
+            pg.draw.line(spent, (177, 87, 91), (5, 5), (size[0]+3, size[1]+3), 2)
+            pg.draw.line(spent, (177, 87, 91), (size[0]+3, 5), (5, size[1]+3), 2)
+            icons = (active, spent)
+            self.life_cache[cache_key] = icons
         for index in range(3):
             center = (start[0]+index*gap, start[1])
-            if index < game.lives:
-                halo = pg.Surface((size[0]+8, size[1]+8), pg.SRCALPHA)
-                pg.draw.ellipse(halo, (255, 224, 116, 90), halo.get_rect())
-                screen.blit(halo, halo.get_rect(center=center))
-                screen.blit(sprite, sprite.get_rect(center=center))
-            else:
-                faded = pg.Surface(sprite.get_size(), pg.SRCALPHA)
-                mask = pg.mask.from_surface(sprite, 80)
-                silhouette = mask.to_surface(setcolor=(119, 143, 153, 90),
-                                              unsetcolor=(0, 0, 0, 0))
-                faded.blit(silhouette, (0, 0))
-                screen.blit(faded, faded.get_rect(center=center))
-                pg.draw.line(screen, (177, 87, 91),
-                             (center[0]-6, center[1]-6),
-                             (center[0]+6, center[1]+6), 2)
-                pg.draw.line(screen, (177, 87, 91),
-                             (center[0]+6, center[1]-6),
-                             (center[0]-6, center[1]+6), 2)
+            icon = icons[0] if index < game.lives else icons[1]
+            screen.blit(icon, icon.get_rect(center=center))
 
     def veil(self, screen):
-        veil = pg.Surface(screen.get_size(), pg.SRCALPHA)
-        veil.fill((13, 41, 68, 145))
-        screen.blit(veil, (0, 0))
+        screen.blit(self.veil_layer, (0, 0))
 
     def hud(self, game, screen, regions):
-        self.panel(screen, (12, 12, 776, 73))
+        self.panel(screen, (12, 12, 776, 62))
         region = min(len(regions)-1, game.player.centerx//game.region_width)
-        self.text(screen, regions[region][0], (28, 21), self.body)
-        self.text(screen, f'탐험 {region+1}/6 · 이글루 {game.checkpoint_index+1}', (28, 49), self.small, MUTED)
+        self.text(screen, regions[region][0], (28, 18), self.body)
+        self.text(screen, f'{region+1}/6 구역 · 저장 {game.checkpoint_index+1}', (28, 43), self.small, MUTED)
         for x in (225,370,510,635):
-            pg.draw.line(screen,EDGE,(x,29),(x,68))
+            pg.draw.line(screen,EDGE,(x,24),(x,62))
         self.icon(screen, game.fish_images['gold'], (249, 46))
         self.text(screen, str(game.score), (274, 20), self.heading)
         self.text(screen, '모은 점수', (274, 51), self.small, MUTED)
@@ -100,40 +132,35 @@ class IceUI:
         self.life_icons(screen, game, (697, 34), (18, 23), 27)
         self.text(screen, f'시간 {elapsed//60:02}:{elapsed%60:02}', (652, 51), self.small, MUTED)
         for index, kind in enumerate(k for k,v in game.effects.items() if v > 0):
-            x = 12 + index*157
+            x = self.EFFECT_SLOT.x + index*157
             self.panel(screen, (x, 94, 147, 43))
             self.icon(screen, game.item_images[kind], (x+23, 115), (22, 29))
-            name = {'grow':'성장', 'speed':'가속', 'reverse':'반전'}[kind]
+            name = {'grow':'성장', 'speed':'가속', 'shield':'보호막'}[kind]
             self.text(screen, f'{name} {game.effects[kind]:.1f}초', (x+43, 99), self.small)
             pg.draw.rect(screen, (186, 219, 232), (x+43, 123, 89, 4), border_radius=2)
             pg.draw.rect(screen, BLUE, (x+43, 123, round(89*min(1,game.effects[kind]/8)), 4), border_radius=2)
-        self.panel(screen, (12, 565, 565, 27))
-        self.text(screen, '← → 이동  SPACE 점프  ↓ 활주  E 행동  TAB 일지  R 재시작', (25, 569), self.small)
-        for i, (_, color) in enumerate(regions):
-            pg.draw.rect(screen, color, (598+i*30, 574, 28, 8), border_radius=3)
-        for index,baby in enumerate(game.babies):
-            if baby['rescued'] or index == game.carried_baby:
-                continue
-            x = 598+round(baby['rect'].centerx/game.world_width*180)
-            pg.draw.polygon(screen,(255,219,85),[(x,567),(x-4,573),(x+4,573)])
-        marker = 598 + int(game.player.centerx/game.world_width*180)
-        pg.draw.circle(screen, BLUE, (marker, 578), 5)
-        pg.draw.circle(screen, 'white', (marker, 578), 3)
 
     def rescue_guide(self,game,screen):
         target = game.rescue_target()
         if target is None or game.won:
             return
         kind,rect = target
-        self.panel(screen,(12,147,262,43))
-        self.icon(screen,game.baby_image if kind=='baby' else game.igloo_image,(35,168),(27,30))
+        # Keep objectives in a dedicated right slot; potion timers own the
+        # left slot and context prompts use only the space between them.
+        x, y, width, height = self.OBJECTIVE_SLOT
+        self.panel(screen,(x,y,width,height))
+        self.icon(screen,game.baby_image if kind=='baby' else game.igloo_image,
+                  (x+23,y+22),(24,27))
         dx,dy = rect.centerx-game.player.centerx,rect.centery-game.player.centery
         horizontal = '오른쪽' if dx>40 else '왼쪽' if dx<-40 else '근처'
         vertical = ' 위' if dy<-45 else ' 아래' if dy>45 else ''
-        self.text(screen,'친구 위치' if kind=='baby' else '친구와 이글루로', (57,150),self.small)
-        self.text(screen,horizontal+vertical,(57,169),self.small,MUTED)
+        distance = abs(dx)
+        range_text = '가까움' if distance < 260 else '조금 멂' if distance < 720 else '멀리'
+        title = ('친구 ' if kind=='baby' else '이글루 ')+horizontal+vertical
+        self.text(screen,title,(x+44,y+5),self.small,max_width=135)
+        self.text(screen,range_text,(x+44,y+23),self.small,MUTED)
         angle = math.atan2(dy,dx)
-        cx,cy = 246,168
+        cx,cy = x+width-18,y+height//2
         tip = (round(cx+math.cos(angle)*11),round(cy+math.sin(angle)*11))
         left = (round(cx+math.cos(angle+2.5)*8),round(cy+math.sin(angle+2.5)*8))
         right = (round(cx+math.cos(angle-2.5)*8),round(cy+math.sin(angle-2.5)*8))
@@ -159,14 +186,14 @@ class IceUI:
         self.text(screen, '남극 펭귄의 모험', (146, 43), self.title)
         self.text(screen, '남극을 탐험하고 물고기와 친구들을 찾으세요.', (147, 98), self.small, MUTED)
         self.panel(screen, (54, 136, 692, 58), dark=True)
-        self.text(screen, '마지막 이글루 도착 시 모험 완료 · 수집 결과에 따라 4가지 엔딩', (400, 154), self.body, 'white', center=True)
+        self.text(screen, '마지막 이글루 발견 후 E로 모험 완료 · 수집 결과에 따라 4가지 엔딩', (400, 154), self.body, 'white', center=True)
         self.text(screen, '물고기 · 친구 · 동굴 보물을 모두 찾으면 시크릿 엔딩', (400, 177), self.small, (224,248,255), center=True)
         cards = [
             (game.penguin_right, '배로 미끄러지기', '↓ + 이동: 빠른 활주 · 얼음 껍질 돌파'),
             (game.fish_images['blue'], '잠수 탐험 · 산소 35초', '해안 구멍 E · 방향키 수영 · 구멍으로 귀환'),
             (game.baby_image, '친구마다 다른 구조 미션', '얼음 깨기 · 먹이 3마리 · 깃발 레버 E'),
             (game.chest_image, '봉인된 동굴의 보물', '동굴 E · 봉인석 3개 → 레버 → 보물'),
-            (game.igloo_image, '친구들과 꾸미는 보금자리', '마지막 이글루 E · 물고기로 둥지와 장식'),
+            (game.igloo_image, '친구들과 꾸미는 보금자리', '마지막 이글루 F · 물고기로 둥지와 장식'),
             (game.platform_images['crumble'], '빙붕 탈출과 연구 의뢰', '탈출 32초 · 결정 6개 · TAB 의뢰 확인')]
         for index, (image, title, detail) in enumerate(cards):
             x, y = 54+(index%2)*352, 206+(index//2)*77
@@ -210,7 +237,7 @@ class IceUI:
         self.veil(screen)
         self.panel(screen, (105, 125, 590, 330))
         self.icon(screen, game.igloo_image, (400, 174), (80, 58))
-        self.text(screen, '마지막 이글루에 도착했어요', (400, 224), self.heading, center=True)
+        self.text(screen, '모험을 마무리할까요?', (400, 224), self.heading, center=True)
         prospective = ENDING_LABELS[game.ending_result()-1]
         self.text(screen, f'현재 결과: {prospective}', (400, 269), self.body, BLUE, center=True)
         self.text(screen,

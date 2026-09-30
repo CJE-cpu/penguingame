@@ -41,10 +41,14 @@ async function request(
     headers: response.headers,
   };
 }
-async function register(state, email = "penguin@example.test") {
+async function register(
+  state,
+  email = "penguin@example.test",
+  nickname = "눈송이",
+) {
   return request(state, "/api/auth/register", {
     method: "POST",
-    body: { nickname: "눈송이", email, password: "Penguin-test-123" },
+    body: { nickname, email, password: "Penguin-test-123" },
   });
 }
 const entry = (overrides = {}) => ({
@@ -77,6 +81,13 @@ test("registration hashes passwords, creates an HttpOnly session and persists af
       "눈송이",
     );
     assert.equal((await register(state)).status, 409);
+    const duplicateNickname = await register(
+      state,
+      "another@example.test",
+      " 눈송이 ",
+    );
+    assert.equal(duplicateNickname.status, 409);
+    assert.match(duplicateNickname.data.error, /닉네임/);
     await state.close();
     state = await server(dbPath);
     assert.equal(
@@ -140,8 +151,8 @@ test("login failures, logout and missing sessions do not expose protected record
 test("score imports update one run, preserve higher scores and isolate account histories", async () => {
   const state = await server();
   try {
-    const a = await register(state, "a@example.test");
-    const b = await register(state, "b@example.test");
+    const a = await register(state, "a@example.test", "첫째 펭귄");
+    const b = await register(state, "b@example.test", "둘째 펭귄");
     const send = (records) =>
       request(state, "/api/scores/import", {
         method: "POST",
@@ -160,13 +171,24 @@ test("score imports update one run, preserve higher scores and isolate account h
         cleared: false,
       }),
     ]);
+    const browserEnding = await request(state, "/api/scores/import", {
+      method: "POST",
+      cookie: a.cookie,
+      body: {
+        source: "browser",
+        records: [entry({ run: "browser-ending", score: 700, fish: 9, rescued: 0 })],
+      },
+    });
+    assert.equal(browserEnding.status, 200);
     const dashboard = (
       await request(state, "/api/dashboard", { cookie: a.cookie })
     ).data;
-    assert.equal(dashboard.summary.games, 2);
+    assert.equal(dashboard.summary.games, 3);
     assert.equal(dashboard.summary.best, 1300);
-    assert.equal(dashboard.summary.average, 900);
-    assert.equal(dashboard.summary.clears, 1);
+    assert.equal(dashboard.summary.average, 833);
+    assert.equal(dashboard.summary.clears, 2);
+    assert.equal(dashboard.records.find((row) => row.id)?.source !== undefined, true);
+    assert.equal(dashboard.records.find((row) => row.score === 700)?.source, "browser");
     assert.equal(dashboard.summary.rank, 1);
     assert.equal(
       (await request(state, "/api/dashboard", { cookie: b.cookie })).data
@@ -205,7 +227,7 @@ test("invalid and mixed imports are rejected atomically and cross-site writes fa
       (
         await request(state, "/api/scores/import", {
           ...opts,
-          body: { records: [entry({ fish: 20 })] },
+          body: { records: [entry({ fish: 31 })] },
         })
       ).status,
       400,

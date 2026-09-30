@@ -16,8 +16,33 @@ export function Sprite({ className = "" }: { className?: string }) {
   const [frame, setFrame] = useState(0);
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = setInterval(() => setFrame((value) => (value + 1) % 8), 145);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let cancelled = false;
+    const start = () => {
+      if (cancelled || document.hidden || timer) return;
+      timer = setInterval(() => setFrame((value) => (value + 1) % 8), 145);
+    };
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = undefined;
+    };
+    const onVisibility = () => (document.hidden ? stop() : start());
+    const warmFrames = () => Promise.all(
+      Array.from({ length: 7 }, (_, index) => {
+        const image = new Image();
+        image.src = `/assets/walk-${index + 1}.png`;
+        return image.decode().catch(() => undefined);
+      }),
+    ).then(start);
+    const idle = window.requestIdleCallback?.(() => void warmFrames(), { timeout: 700 });
+    if (!window.requestIdleCallback) void warmFrames();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      stop();
+      if (idle !== undefined) window.cancelIdleCallback?.(idle);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
   return (
     <img
@@ -120,6 +145,7 @@ export function SiteHeader() {
             <NavLink to="/" end>
               모험의 시작
             </NavLink>
+            <NavLink to="/play">게임 플레이</NavLink>
             <NavLink to="/explore">탐험 지도</NavLink>
             <NavLink to="/collection">탐험 도감</NavLink>
             <NavLink to="/dashboard">점수 대시보드</NavLink>
@@ -168,6 +194,7 @@ export function SiteFooter() {
           </p>
         </div>
         <div className="footer-links">
+          <Link to="/play">게임 플레이</Link>
           <Link to="/explore">탐험 지도</Link>
           <Link to="/collection">탐험 도감</Link>
           <Link to="/dashboard">나의 기록</Link>

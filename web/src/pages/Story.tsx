@@ -50,7 +50,7 @@ export default function Story() {
           <p>
             Pygame 게임의 이미지와 탐험 세계를 React·TypeScript로 확장했습니다.
             반응형 화면, 인터랙티브 지도와 도감, 계정 인증, 점수 차트와 기록
-            업로드가 하나의 흐름으로 이어집니다.
+            자동 저장이 하나의 흐름으로 이어집니다.
           </p>
         </div>
         <a

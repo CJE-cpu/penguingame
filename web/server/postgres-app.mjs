@@ -54,6 +54,7 @@ export function createPostgresApp({
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at BIGINT NOT NULL
     )`,
+          sql`CREATE UNIQUE INDEX IF NOT EXISTS users_nickname_unique ON users (LOWER(nickname))`,
           sql`CREATE TABLE IF NOT EXISTS scores (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -209,6 +210,10 @@ export function createPostgresApp({
       await sql`SELECT id FROM users WHERE LOWER(email)=${email}`;
     if (existing[0])
       throw fail(409, "이미 가입한 이메일입니다. 로그인해 주세요.");
+    const nicknameExists =
+      await sql`SELECT id FROM users WHERE LOWER(nickname)=LOWER(${nickname})`;
+    if (nicknameExists[0])
+      throw fail(409, "이미 사용 중인 닉네임입니다. 다른 이름을 선택해 주세요.");
     const salt = randomBytes(16).toString("hex");
     const passwordHash = await derive(password, salt, 32, {
       N: 16384,
@@ -221,7 +226,11 @@ export function createPostgresApp({
       await sql`INSERT INTO users (id,email,nickname,salt,password_hash,created_at)
         VALUES (${user.id},${email},${nickname},${salt},${passwordHash.toString("hex")},${new Date().toISOString()})`;
     } catch (error) {
-      if (error.code === "23505") throw fail(409, "이미 가입한 이메일입니다.");
+      if (error.code === "23505") {
+        if (error.constraint === "users_nickname_unique")
+          throw fail(409, "이미 사용 중인 닉네임입니다. 다른 이름을 선택해 주세요.");
+        throw fail(409, "이미 가입한 이메일입니다.");
+      }
       throw error;
     }
     await startSession(req, res, user);
@@ -328,8 +337,7 @@ export function createPostgresApp({
           r.date.length > 40 ||
           !Number.isFinite(Date.parse(r.date)) ||
           Date.parse(r.date) > Date.now() + 86400000 ||
-          Date.parse(r.date) < 0 ||
-          (r.cleared && (r.fish !== 30 || r.rescued !== 3))
+          Date.parse(r.date) < 0
         )
           throw fail(
             400,
@@ -351,7 +359,7 @@ export function createPostgresApp({
       const queries = entries.map(
         (r) => sql`INSERT INTO scores
         (id,user_id,run_id,score,fish,rescued,seconds,cleared,played_at,source)
-        VALUES (${randomUUID()},${req.user.id},${r.run},${r.score},${r.fish},${r.rescued},${r.seconds},${r.cleared},${r.date},'desktop')
+        VALUES (${randomUUID()},${req.user.id},${r.run},${r.score},${r.fish},${r.rescued},${r.seconds},${r.cleared},${r.date},${req.body.source === 'browser' ? 'browser' : 'desktop'})
         ON CONFLICT(user_id,run_id) DO UPDATE SET
           score=EXCLUDED.score, fish=GREATEST(scores.fish,EXCLUDED.fish),
           rescued=GREATEST(scores.rescued,EXCLUDED.rescued),

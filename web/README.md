@@ -7,7 +7,7 @@
 Node.js 24 이상이 필요합니다. Python은 웹사이트 실행에 필요하지 않습니다.
 
 ```powershell
-cd C:\CJE\python_ex\web
+cd C:\CJE\python_ex\publish-penguingame\web
 npm ci
 npm run dev
 ```

@@ -1,6 +1,19 @@
 """Slice generated atlases at runtime, preserving alpha and shared proportions."""
 import pygame as pg
 
+SHADOW = (24, 57, 72)
+
+
+def contact_shadow(screen, feet, width, airborne=False):
+    """Draw the shared cool shadow used by characters and grounded props."""
+    if airborne:
+        return
+    x, y = round(feet[0]), round(feet[1])
+    width = max(12, round(width * 0.72))
+    pg.draw.ellipse(screen, SHADOW, (x-width//2, y-3, width, 7))
+    pg.draw.line(screen, (177, 224, 232),
+                 (x-width//3, y-1), (x+width//3, y-1), 1)
+
 
 def atlas_cells(path, columns, rows):
     sheet = pg.image.load(str(path)).convert_alpha()
@@ -147,7 +160,7 @@ class WorldArt:
         bounds = image.get_bounding_rect(128)
         rect = image.get_rect(midbottom=(x,y+image.get_height()-self.contact_row(image)))
         if snow:
-            pg.draw.ellipse(screen,(146,195,207),(x-bounds.w//2,y-1,bounds.w,6))
+            contact_shadow(screen, (x, y+2), bounds.w)
         screen.blit(image,rect)
         if snow:
             pg.draw.line(screen,(231,249,252),(x-bounds.w//3,y+3),(x+bounds.w//3,y+3),2)

@@ -40,6 +40,7 @@ class AdventureSave:
             'time': round(game.time, 3),
             'fish': [list(self._rect_key(entry)) for entry in game.fish],
             'items': [list(self._rect_key(entry)) for entry in game.items],
+            'life_items': [[rect.x, rect.y] for rect in game.life_items],
             'enemies': [enemy.uid for enemy in game.enemies],
             'defeated': game.defeated,
             'hits': game.hits,
@@ -58,6 +59,7 @@ class AdventureSave:
                     'defeated': sorted(cave.get('expedition', {}).get('defeated', set())),
                 },
             } for cave in game.caves],
+            'boss': {'defeated': game.boss.defeated},
             'content': {
                 'wallet': game.content.wallet,
                 'upgrades': game.content.upgrades,
@@ -67,6 +69,8 @@ class AdventureSave:
                 'research': game.content.research_claimed,
                 'escape_cleared': game.content.escape_cleared,
                 'ocean_fish': [list(self._rect_key(entry)) for entry in game.content.ocean_fish],
+                'ocean_beacons': [entry['active'] for entry in game.content.ocean_beacons],
+                'ocean_relic': game.content.ocean_relic_found,
             },
         }
 
@@ -122,6 +126,14 @@ class AdventureSave:
                 raise ValueError('Invalid content')
             game.fish = self._remaining(game.fish, data.get('fish'))
             game.items = self._remaining(game.items, data.get('items'))
+            saved_lives = data.get('life_items')
+            if saved_lives is not None and not isinstance(saved_lives, list):
+                raise ValueError('Invalid life item list')
+            if saved_lives is not None:
+                life_keys = {tuple(value) for value in saved_lives
+                             if isinstance(value, list) and len(value) == 2}
+                game.life_items = [rect for rect in game.life_items
+                                   if (rect.x, rect.y) in life_keys]
             enemy_ids = set(data.get('enemies', []))
             game.enemies = [enemy for enemy in game.enemies if enemy.uid in enemy_ids]
             game.score = max(0, min(game.max_score, int(data.get('score', 0))))
@@ -153,6 +165,8 @@ class AdventureSave:
                     'cleared': bool(expedition.get('cleared')),
                     'defeated': {i for i in expedition.get('defeated', []) if i in (0, 1)},
                 }
+            boss_state = data.get('boss', {})
+            game.boss.restore_defeated(bool(boss_state.get('defeated', False)))
             game.content.wallet = max(0, min(1000, int(content.get('wallet', 0))))
             game.content.upgrades = max(0, min(3, int(content.get('upgrades', 0))))
             for name, target in [('quests', game.content.quests),
@@ -168,13 +182,17 @@ class AdventureSave:
                 else:
                     target[:] = [bool(value) for value in values]
             game.content.escape_cleared = bool(content.get('escape_cleared'))
+            beacon_states = content.get('ocean_beacons')
+            if isinstance(beacon_states, list) and len(beacon_states) == len(game.content.ocean_beacons):
+                for beacon, active in zip(game.content.ocean_beacons, beacon_states):
+                    beacon['active'] = bool(active)
+            game.content.ocean_relic_found = bool(content.get('ocean_relic', False))
             game.content.ocean_fish = self._remaining(game.content.ocean_fish,
                                                        content.get('ocean_fish'))
             game.started = True
             game.coach.enabled = True
             game.tutorial = None
-            game.spawn = (game.checkpoints[checkpoint].x + 25,
-                          game.checkpoints[checkpoint].bottom - game.player.height)
+            game.spawn = game.checkpoint_spawn(checkpoint)
             game.player.topleft = game.spawn
             game.x, game.y = map(float, game.player.topleft)
             game.camera_x = max(0, min(game.world_width - 800, game.player.centerx - 400))

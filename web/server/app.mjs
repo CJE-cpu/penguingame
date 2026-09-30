@@ -99,6 +99,16 @@ export function createApp({
     );
     CREATE INDEX IF NOT EXISTS scores_user_date ON scores(user_id,played_at);
     CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);`);
+  try {
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS users_nickname_unique ON users(nickname COLLATE NOCASE)",
+    );
+  } catch (error) {
+    // Older local databases may already contain duplicate nicknames. New
+    // registrations are still blocked by the explicit lookup below; keep the
+    // server available instead of making an existing installation unbootable.
+    if (!String(error.message).includes("UNIQUE")) throw error;
+  }
   const app = express();
   app.disable("x-powered-by");
   if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
@@ -206,6 +216,12 @@ export function createApp({
       throw fail(400, "비밀번호는 8~128자로 입력해 주세요.");
     if (db.prepare("SELECT id FROM users WHERE email=?").get(email))
       throw fail(409, "이미 가입한 이메일입니다. 로그인해 주세요.");
+    if (
+      db
+        .prepare("SELECT id FROM users WHERE nickname=? COLLATE NOCASE")
+        .get(nickname)
+    )
+      throw fail(409, "이미 사용 중인 닉네임입니다. 다른 이름을 선택해 주세요.");
     const salt = randomBytes(16).toString("hex");
     const passwordHash = await derive(password, salt, 32, {
       N: 16384,
@@ -224,6 +240,8 @@ export function createApp({
         new Date().toISOString(),
       );
     } catch (error) {
+      if (String(error.message).includes("users.nickname"))
+        throw fail(409, "이미 사용 중인 닉네임입니다. 다른 이름을 선택해 주세요.");
       if (String(error.message).includes("UNIQUE"))
         throw fail(409, "이미 가입한 이메일입니다.");
       throw error;
@@ -359,8 +377,7 @@ export function createApp({
           r.date.length > 40 ||
           !Number.isFinite(Date.parse(r.date)) ||
           Date.parse(r.date) > Date.now() + 86400000 ||
-          Date.parse(r.date) < 0 ||
-          (r.cleared && (r.fish !== 30 || r.rescued !== 3))
+          Date.parse(r.date) < 0
         )
           throw fail(
             400,
@@ -402,7 +419,7 @@ export function createApp({
             r.seconds,
             Number(r.cleared),
             r.date,
-            "desktop",
+            req.body.source === "browser" ? "browser" : "desktop",
           ).changes;
         db.exec("COMMIT");
       } catch (error) {

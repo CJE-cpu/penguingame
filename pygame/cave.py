@@ -17,6 +17,7 @@ class CaveExpedition:
         self.camera = 0.0
         self.invincible = 1.0
         self.hurt = 0.0
+        self.stone_boost = 0.0
         self.right = True
         self.sliding = False
         self.notice = '봉인석 3개를 찾은 뒤 레버를 작동해 보물방을 여세요.'
@@ -24,6 +25,11 @@ class CaveExpedition:
         self.pulses = []
         self.crumbles = {}
         self.texture_cache = {}
+        self.atmosphere_layer = pg.Surface((800, 600), pg.SRCALPHA)
+        self.wall_layer = pg.Surface((800, 600), pg.SRCALPHA)
+        self.ceiling_layer = pg.Surface((800, 155), pg.SRCALPHA)
+        self.rock_layer = pg.Surface((800, 600), pg.SRCALPHA)
+        self.mist_layer = pg.Surface((800, 92), pg.SRCALPHA)
         if index == 0:
             ground = [(0,550,650,50),(720,550,520,50),(1320,550,880,50)]
             ledges = [(370,445,180,24),(570,345,170,24),(810,445,190,24),
@@ -39,6 +45,10 @@ class CaveExpedition:
         self.grounds = [pg.Rect(*r) for r in ground]
         self.ledges = [pg.Rect(*r) for r in ledges]
         self.platforms = self.grounds+self.ledges
+        for platform_index, platform in enumerate(self.platforms):
+            if any(platform.colliderect(other)
+                   for other in self.platforms[platform_index+1:]):
+                raise ValueError('Cave platforms must not overlap')
         self.fragile = {tuple(r) for r in self.ledges[3:5]} if index else set()
         self.lever = pg.Rect(1780,507,36,43)
         self.gate = pg.Rect(1880,0,30,550)
@@ -49,6 +59,30 @@ class CaveExpedition:
                         if i not in self.state['defeated']]
         self.player = pg.Rect(55,498,40,52)
         self.reset_position()
+        self.build_static_ceiling()
+
+    def build_static_ceiling(self):
+        """Render cave decoration that never changes once per expedition."""
+        ceiling = self.ceiling_layer
+        ceiling.fill((0, 0, 0, 0))
+        ceiling_color = (17,54,75,235) if self.index == 0 else (43,35,72,235)
+        ceiling_points = [(0, 0), (800, 0)]
+        for x in range(800, -21, -20):
+            depth = 66+((x//20)*17+self.index*29)%55
+            ceiling_points.append((x, depth))
+        pg.draw.polygon(ceiling, ceiling_color, ceiling_points)
+        strata = (74,128,151,150) if self.index == 0 else (91,81,132,155)
+        for y in (23, 42, 58):
+            points = [(x, y+round(math.sin(x*.018+y)*5))
+                      for x in range(-10, 821, 18)]
+            pg.draw.lines(ceiling, strata, False, points, 2)
+        icicle = (91,157,180,170) if self.index == 0 else (111,105,157,170)
+        for x in range(22, 800, 73):
+            length = 18+(x*7+self.index*19)%43
+            pg.draw.polygon(ceiling, icicle,
+                            [(x-9, 68), (x+9, 68), (x, 68+length)])
+            pg.draw.line(ceiling, (189,235,242,150),
+                         (x-5, 70), (x, 68+length-4), 2)
 
     def say(self, text):
         self.notice,self.notice_left = text,3.0
@@ -58,6 +92,7 @@ class CaveExpedition:
         self.player.midbottom = (80,550)
         self.x,self.y = map(float,self.player.topleft)
         self.vy = 0.0
+        self.jump_hold = 0.0
         self.grounded = True
         self.sliding = False
         self.invincible = 2.0
@@ -85,6 +120,7 @@ class CaveExpedition:
             if not game.caves[self.index]['treasure']:
                 game.caves[self.index]['treasure'] = True
                 game.score += 100
+                game.audio.play('rescue')
                 self.pulses.append((self.chest.center,0.8))
                 self.say('보물 발견! +100점 · 오른쪽 출구에서 E로 지름길 개방')
             else:
@@ -120,8 +156,8 @@ class CaveExpedition:
     def active_platforms(self):
         return [p for p in self.platforms if self.crumbles.get(tuple(p),(0,0))[1]<=0]
 
-    def platform_texture(self, size, fragile=False):
-        key = (size, fragile, self.index)
+    def platform_texture(self, size, fragile=False, ground=False):
+        key = (size, fragile, ground, self.index)
         if key in self.texture_cache:
             return self.texture_cache[key]
         width, height = size
@@ -133,32 +169,86 @@ class CaveExpedition:
             deep, middle, edge, shine = ((42,38,70), (70,65,108),
                                          (126,140,190), (207,224,250))
         surface.fill(deep)
-        for y in range(7, height, 9):
-            shade = tuple(min(255, channel+((y//9)%3)*7) for channel in middle)
-            points = [(0, y)]
-            for x in range(0, width+24, 24):
-                points.append((x, y+((x//24)*7+y//9*3)%7-3))
-            points.append((width, min(height, y+8)))
-            points.append((0, min(height, y+8)))
-            pg.draw.polygon(surface, shade, points)
+        if ground:
+            # Broad, offset rock layers match the painted cave wall. Thin
+            # repeated diagonals looked like a mechanical conveyor belt.
+            pg.draw.polygon(surface, middle,
+                            [(0, 12), (width, 12), (width, min(height, 30)),
+                             (0, min(height, 35))])
+            lower = tuple(max(0, channel-8) for channel in middle)
+            if height > 31:
+                pg.draw.polygon(surface, lower,
+                                [(0, 34), (width, 29), (width, height), (0, height)])
+            spans = (137, 191, 163, 223)
+            x = 54
+            index = 0
+            while x < width:
+                depth = min(height-3, 28+(index*13)%31)
+                pg.draw.lines(surface, edge, False,
+                              [(x, 11), (x-6, depth-8), (x+2, depth)], 1)
+                x += spans[index % len(spans)]
+                index += 1
+            # Large inset slabs give ground blocks the same sculpted density as
+            # the raised ledges without repeating a narrow stripe pattern.
+            slab_light = tuple(min(255, channel+13) for channel in middle)
+            for slab_index, slab_x in enumerate(range(24, width-18, 96)):
+                slab_width = min(62+(slab_index%3)*9, width-slab_x-3)
+                slab_y = 22+(slab_index*11)%max(3, height-31)
+                pg.draw.polygon(surface, slab_light,
+                                [(slab_x, slab_y),
+                                 (slab_x+slab_width, slab_y-2),
+                                 (slab_x+slab_width-8, min(height-3, slab_y+11)),
+                                 (slab_x+6, min(height-3, slab_y+13))])
+                pg.draw.line(surface, deep,
+                             (slab_x+6, min(height-2, slab_y+13)),
+                             (slab_x+slab_width-8, min(height-2, slab_y+11)), 1)
+        else:
+            # Floating ledges get one sculpted underside rather than horizontal
+            # stripes that visually collide with ledges behind them.
+            pg.draw.polygon(surface,middle,[(0,9),(width,9),(width-9,height-1),
+                                            (10,height-1)])
+            for x in range(16,width-8,37):
+                pg.draw.line(surface,deep,(x,13),(x-5,min(height-1,21)),2)
+            # Alternating underside facets remove the plain rectangular block
+            # silhouette seen on several short cave platforms.
+            for facet_index, x in enumerate(range(12, width-12, 31)):
+                bottom = height-2-(facet_index%2)*3
+                pg.draw.polygon(surface,
+                                edge if facet_index%2 else middle,
+                                [(x, 12), (min(width-4,x+25), 12),
+                                 (min(width-7,x+19), bottom),
+                                 (x+5, bottom)])
+                pg.draw.line(surface, shine,
+                             (x+3, 14), (min(width-8,x+14), bottom-3), 1)
         top = [(0, 7)] + [(x, 4+((x//18)*5+self.index*3)%6)
                           for x in range(0, width+18, 18)] + [(width, 12), (0, 12)]
         pg.draw.polygon(surface, edge, top)
         pg.draw.line(surface, shine, (0, 3), (width, 3), 2)
-        # Broken lower edges and mineral flecks keep platforms from reading as
-        # flat outdoor tiles when seen against the cavern wall.
-        pg.draw.line(surface, tuple(max(0, channel-12) for channel in deep),
-                     (0, height-2), (width, height-2), 3)
+        if not ground:
+            pg.draw.line(surface, tuple(max(0, channel-12) for channel in deep),
+                         (9, height-2), (width-10, height-2), 2)
         for x in range(11, width, 29):
             fleck_y = 12+((x*17+self.index*31)%max(5, height-15))
             pg.draw.ellipse(surface, (*shine, 105),
                             (x, fleck_y, 2+(x//29)%3, 1+(x//17)%2))
+        # Sparse mineral clusters distinguish the blue and violet caverns and
+        # remain readable on both full ground and small blocks.
+        mineral = ((91, 218, 224), (176, 145, 230))[self.index]
+        for cluster_index, x in enumerate(range(42, width-10, 121)):
+            base_y = min(height-3, 20+(cluster_index*17)%max(4, height-22))
+            pg.draw.polygon(surface, mineral,
+                            [(x, base_y), (x+4, base_y-8),
+                             (x+8, base_y), (x+5, base_y+4)])
+            pg.draw.polygon(surface, shine,
+                            [(x+8, base_y+1), (x+12, base_y-5),
+                             (x+15, base_y+2), (x+11, base_y+5)])
         if height <= 26:
             for x in range(15, width-4, 36):
                 drop = 4+(x*7+self.index*5)%8
                 pg.draw.polygon(surface, (*deep, 235),
                                 [(x, height-5), (x+9, height-5), (x+4, height-1+drop)])
-        for x in range(17, width, 47):
+        detail_step = 151 if ground else 47
+        for x in range(31, width, detail_step):
             y = 16+((x*11+self.index*13)%max(18, height-18))
             color = (132,205,221) if self.index == 0 else (143,151,203)
             pg.draw.line(surface, color, (x, y),
@@ -175,10 +265,11 @@ class CaveExpedition:
         self.texture_cache[key] = surface
         return surface
 
-    def update(self, game, dt, direction, jump, slide):
+    def update(self, game, dt, direction, jump, slide, jump_held=None):
         self.time += dt
         game.time += dt
         self.notice_left = max(0,self.notice_left-dt)
+        self.stone_boost = max(0.0, self.stone_boost-dt)
         self.invincible = max(0,self.invincible-dt)
         self.pulses = [(pos,life-dt) for pos,life in self.pulses if life>dt]
         if self.hurt:
@@ -214,7 +305,19 @@ class CaveExpedition:
         previous_top = self.player.top
         if jump and self.grounded:
             self.vy = -650
-        self.x += direction*(365 if self.sliding else 270)*dt
+            self.grounded = False
+            self.jump_hold = 0.22
+            game.audio.play('jump')
+        if self.vy < 0 and self.jump_hold > 0:
+            if jump_held is True:
+                self.vy -= 1050*dt
+                self.jump_hold = max(0.0,self.jump_hold-dt)
+            elif jump_held is False:
+                self.vy = max(self.vy,-390)
+                self.jump_hold = 0.0
+        move_speed = 330 if self.stone_boost else 270
+        self.x += direction*(390 if self.sliding and self.stone_boost
+                             else 365 if self.sliding else move_speed)*dt
         self.player.x = round(max(0,min(self.WIDTH-self.player.w,self.x)))
         obstacles = ([self.gate] if not self.state['lever'] else [])+([self.arch] if self.arch else [])
         for obstacle in obstacles:
@@ -243,6 +346,7 @@ class CaveExpedition:
                     self.crumbles.setdefault(tuple(platform),(0,0))
                 break
         if self.player.top>600:
+            game.audio.play('fall')
             if not game.consume_life(False):
                 return
             self.reset_position()
@@ -252,7 +356,10 @@ class CaveExpedition:
             if i not in self.state['stones'] and self.player.colliderect(stone):
                 self.state['stones'].add(i)
                 self.pulses.append((stone.center,0.8))
-                self.say(f"봉인석 {len(self.state['stones'])}/3 · 세 개를 모으면 레버를 작동하세요.")
+                game.audio.play('collect')
+                self.stone_boost = 5.0
+                self.invincible = max(self.invincible, 0.8)
+                self.say(f"봉인석 {len(self.state['stones'])}/3 · 결정의 힘으로 이동 가속 5초!")
         for i,enemy in list(self.enemies):
             enemy.update(dt,self.player)
             if self.player.colliderect(enemy.rect):
@@ -260,9 +367,11 @@ class CaveExpedition:
                     self.enemies.remove((i,enemy))
                     self.state['defeated'].add(i)
                     game.score += enemy.points
+                    game.audio.play('defeat')
                     self.vy = -400
                     self.pulses.append((enemy.rect.center,0.8))
                 elif not self.invincible:
+                    game.audio.play('hit')
                     if not game.consume_life(True):
                         return
                     self.hurt = 0.35
@@ -276,16 +385,19 @@ class CaveExpedition:
         # One continuous panorama covers the full scroll range without seams.
         drift = round(400*self.camera/(self.WIDTH-800))
         screen.blit(game.scene_backgrounds[2],(-drift,0))
-        atmosphere = pg.Surface((800,600),pg.SRCALPHA)
+        atmosphere = self.atmosphere_layer
+        atmosphere.fill((0, 0, 0, 0))
         atmosphere.fill((8,27,50,55) if self.index==0 else (30,19,50,75))
         screen.blit(atmosphere,(0,0))
         # World-space mineral seams move with the camera and break up the
         # repeated panorama. Blue crystal veins distinguish the first cavern;
         # violet sediment and old fractures distinguish the collapsed shelf.
-        wall = pg.Surface((800, 600), pg.SRCALPHA)
+        wall = self.wall_layer
+        wall.fill((0, 0, 0, 0))
         vein = (72,205,224,48) if self.index == 0 else (178,121,196,45)
         shadow = (7,36,58,48) if self.index == 0 else (28,20,55,52)
-        for i in range(17):
+        vein_count = {'performance':9, 'balanced':13, 'high':17}[game.quality]
+        for i in range(vein_count):
             world_x = 65+i*139
             x = round(world_x-self.camera*0.42)
             base_y = 165+(i*73)%295
@@ -313,27 +425,12 @@ class CaveExpedition:
         screen.blit(wall, (0, 0))
         # Layered ceiling and wall strata make the caverns feel enclosed instead
         # of like the outdoor ice tiles placed over a dark background.
-        ceiling = pg.Surface((800, 155), pg.SRCALPHA)
-        ceiling_color = (17,54,75,235) if self.index == 0 else (43,35,72,235)
-        ceiling_points = [(0, 0), (800, 0)]
-        for x in range(800, -21, -20):
-            depth = 66+((x//20)*17+self.index*29)%55
-            ceiling_points.append((x, depth))
-        pg.draw.polygon(ceiling, ceiling_color, ceiling_points)
-        strata = (74,128,151,150) if self.index == 0 else (91,81,132,155)
-        for y in (23, 42, 58):
-            points = [(x, y+round(math.sin((x+self.camera*.2)*.018+y)*5))
-                      for x in range(-10, 821, 18)]
-            pg.draw.lines(ceiling, strata, False, points, 2)
-        for x in range(22, 800, 73):
-            length = 18+(x*7+self.index*19)%43
-            pg.draw.polygon(ceiling, (91,157,180,170) if self.index == 0 else (111,105,157,170),
-                            [(x-9, 68), (x+9, 68), (x, 68+length)])
-            pg.draw.line(ceiling, (189,235,242,150), (x-5, 70), (x, 68+length-4), 2)
-        screen.blit(ceiling, (0, 0))
+        screen.blit(self.ceiling_layer, (0, 0))
         # Distant translucent rock silhouettes stay behind the playable ledges.
-        rocks = pg.Surface((800,600),pg.SRCALPHA)
-        for layer in range(2):
+        rocks = self.rock_layer
+        rocks.fill((0, 0, 0, 0))
+        rock_layers = 1 if game.quality == 'performance' else 2
+        for layer in range(rock_layers):
             for i in range(16):
                 x = round(i*205-self.camera*(0.18+layer*0.2))
                 height = 20+(i*43+layer*21)%80
@@ -341,34 +438,55 @@ class CaveExpedition:
                 pg.draw.polygon(rocks,color,[(x-25,85),(x+80,85),(x+35,85+height)])
                 pg.draw.polygon(rocks,color,[(x-30,550),(x+120,550),(x+60,480-(i%3)*23)])
         screen.blit(rocks,(0,0))
-        for i in range(35):
+        dust_count = {'performance':12, 'balanced':22, 'high':35}[game.quality]
+        for i in range(dust_count):
             x = round((i*137+self.time*6)%self.WIDTH-self.camera*0.65)
             y = 240+(i*67)%300
             pg.draw.circle(screen,(80,132,154),(x,y),1)
         pg.draw.rect(screen,(20,69,96),(0,550,800,50))
         # Low mist softens the hard join between the scrolling wall and floor.
-        mist = pg.Surface((800, 92), pg.SRCALPHA)
-        for band in range(5):
+        mist = self.mist_layer
+        mist.fill((0, 0, 0, 0))
+        mist_bands = {'performance':3, 'balanced':4, 'high':5}[game.quality]
+        for band in range(mist_bands):
             alpha = 22-band*3
             y = 18+band*14+round(math.sin(self.time*.5+band)*3)
             pg.draw.ellipse(mist, (133,202,215,alpha), (-90+band*105,y,420,48))
             pg.draw.ellipse(mist, (133,202,215,alpha), (330+band*80,y+5,430,42))
         screen.blit(mist, (0,508))
+        # The entrance belongs to the rear wall. Platforms and their top edge
+        # cover its base, so it reads as an opening cut into the ice.
+        entrance_x = round(80-self.camera)
+        entrance = pg.transform.smoothscale(game.cave_image, (150, 112))
+        entrance.set_alpha(178)
+        game.art.grounded(screen,entrance,(entrance_x,550),snow=False)
+        # Darken the doorway itself so the ice frame belongs to the rear wall;
+        # the player is drawn later and remains readable inside the opening.
+        pg.draw.ellipse(screen,(7,24,38),(entrance_x-31,474,62,76))
+        pg.draw.arc(screen,(82,148,170),(entrance_x-35,470,70,83),
+                    math.pi,math.tau,2)
         for platform in self.active_platforms():
             rect = platform.move(-self.camera,0)
-            kind = 'crumble' if tuple(platform) in self.fragile else 'ice'
+            if rect.right < -60 or rect.left > 860:
+                continue
+            kind = ('crumble' if tuple(platform) in self.fragile else
+                    'cave' if self.index == 0 else 'fracture')
             if tuple(platform) in self.crumbles:
                 elapsed = self.crumbles[tuple(platform)][0]
                 rect.move_ip(round(math.sin(elapsed*60)*elapsed*5),round(math.sin(elapsed*45)*elapsed*2))
-            screen.blit(self.platform_texture(platform.size, kind == 'crumble'),rect)
-        game.art.grounded(screen,game.cave_image,(80-self.camera,550))
+            screen.blit(game.platform_texture(kind, platform.size,
+                                               platform in self.grounds), rect)
         if self.arch:
             arch = self.arch.move(-self.camera,0)
-            # The low ceiling visibly matches the collider and leaves a slide gap.
-            pg.draw.rect(screen,(50,110,143),arch,border_radius=8)
-            pg.draw.rect(screen,(140,219,235),arch,2,border_radius=8)
-            for x in range(arch.left+8,arch.right-5,20):
-                pg.draw.polygon(screen,(155,227,244),[(x,arch.bottom-8),(x+10,arch.bottom-8),(x+5,arch.bottom)])
+            # Use the same painted material as the cave platforms so the low
+            # slide tunnel reads as a natural ice shelf, not a UI rectangle.
+            arch_kind = 'cave' if self.index == 0 else 'fracture'
+            arch_image = game.platform_texture(arch_kind, arch.size)
+            arch_image = pg.transform.smoothscale(arch_image, arch.size)
+            screen.blit(pg.transform.flip(arch_image, False, True), arch)
+            pg.draw.line(screen, (176, 231, 239),
+                         (arch.left+8, arch.bottom-2),
+                         (arch.right-8, arch.bottom-2), 2)
         for i,stone in enumerate(self.stones):
             if i in self.state['stones']:
                 continue
@@ -408,20 +526,18 @@ class CaveExpedition:
                 dot = (round(center[0]+math.cos(angle)*radius),round(center[1]+math.sin(angle)*radius))
                 pg.draw.circle(screen,(255,232,145),dot,max(1,round(life*4)))
         ui = game.ui
-        ui.panel(screen,(12,12,776,73))
+        ui.panel(screen,(12,12,776,62))
         ui.text(screen,self.TITLES[self.index],(28,23),ui.heading)
         ui.text(screen,'선택 탐험 · 입구에서 E로 언제든 귀환',(28,56),ui.small)
         ui.text(screen,f"봉인석 {len(self.state['stones'])}/3",(470,26),ui.heading)
         ui.text(screen,'보물 발견' if game.caves[self.index]['treasure'] else '보물방 열림' if self.state['lever'] else '보물방 봉인',(650,28),ui.body)
         ui.text(screen,f'{game.score}점',(595,57),ui.small)
         ui.text(screen,'목숨',(670,57),ui.small)
-        ui.life_icons(screen,game,(724,61),(15,19),21)
+        ui.life_icons(screen,game,(718,59),(15,19),21)
         message = self.notice if self.notice_left else ('E: 해안으로 귀환' if self.player.centerx<170 else
                   'E: 봉인 레버 작동' if self.near(self.lever) else
                   'E: 보물 상자 열기' if self.state['lever'] and self.near(self.chest) else
                   'E: 위쪽 지름길로 나가기' if self.near(self.exit) else '')
         if message:
-            ui.panel(screen,(90,98,620,35),dark=True)
-            ui.text(screen,message,(400,115),ui.small,'white',center=True,max_width=590)
-        ui.panel(screen,(12,565,776,28))
-        ui.text(screen,'← → 이동 · SPACE 점프 · ↓ 활주 · E 작동/귀환 · TAB 일지',(28,571),ui.small)
+            ui.panel(screen,(150,82,500,34),dark=True)
+            ui.text(screen,message,(400,99),ui.small,'white',center=True,max_width=470)

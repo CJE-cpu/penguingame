@@ -9,6 +9,7 @@ class InteractionEffects:
         self.trails = []
         self.trail_clock = 0.0
         self.size_scale = 1.0
+        self.layer = pg.Surface((800, 600), pg.SRCALPHA)
 
     def reset(self):
         self.bursts.clear()
@@ -40,7 +41,10 @@ class InteractionEffects:
                                          round(image.get_height()*self.size_scale)))
 
     def draw(self, game, screen):
-        layer = pg.Surface(screen.get_size(), pg.SRCALPHA)
+        if not self.bursts:
+            return
+        layer = self.layer
+        layer.fill((0, 0, 0, 0))
         for burst in self.bursts:
             age = 1.2-burst['life']
             x,y = burst['pos'];x -= game.camera_x
@@ -54,7 +58,7 @@ class InteractionEffects:
                     size = max(1,round(5*(1-age/0.8)))
                     pg.draw.line(layer,(*burst['color'],alpha),(px-size,py),(px+size,py),2)
                     pg.draw.line(layer,(*burst['color'],alpha),(px,py-size),(px,py+size),2)
-            if burst['kind'] in ('grow','speed','reverse'):
+            if burst['kind'] in ('grow','speed','shield'):
                 icon = game.item_images[burst['kind']]
                 scale = 1+age*0.5
                 icon = pg.transform.scale(icon,(round(icon.get_width()*scale),round(icon.get_height()*scale))).copy()
@@ -73,8 +77,11 @@ class InteractionEffects:
             ghost.set_alpha(round(125*life/0.3))
             screen.blit(ghost,ghost.get_rect(midbottom=(round(pos[0]-game.camera_x),pos[1])))
         active = [k for k,v in game.effects.items() if v>0]
-        colors = {'grow':(130,238,152), 'speed':(255,224,111), 'reverse':(214,163,255)}
-        layer = pg.Surface(screen.get_size(),pg.SRCALPHA)
+        if not active and game.grow_guard <= 0:
+            return
+        colors = {'grow':(130,238,152), 'speed':(255,224,111), 'shield':(123,211,255)}
+        layer = self.layer
+        layer.fill((0, 0, 0, 0))
         cx = round(game.player.centerx-game.camera_x)
         cy = game.player.centery
         if game.grow_guard>0:
@@ -91,7 +98,7 @@ class InteractionEffects:
                     x = round(cx+math.cos(angle)*(21+phase*10))
                     y = round(game.player.bottom-phase*85)
                     pg.draw.circle(layer,(*colors[kind],round(220*(1-phase))),(x,y),3)
-            elif kind == 'reverse':
+            elif kind == 'shield':
                 for i in range(2):
                     angle = game.time*3+i*math.pi
                     pg.draw.arc(layer,(*colors[kind],220),(cx-radius,cy-radius,radius*2,radius*2),angle,angle+1.8,4)

@@ -2,6 +2,7 @@
 from collections import deque
 import math
 import pygame as pg
+from art import contact_shadow
 
 
 class CombatMotion:
@@ -112,4 +113,6 @@ class BabyCompanion:
         state = ('jump' if len(self.route)>1 and self.route[1][1][1]<self.pos[1] else 'fall') if self.airborne else 'walk' if self.moving else 'idle'
         image = game.art.baby(state,self.walk_clock if self.moving else game.time,self.facing_right)
         x, y = self.pos
-        screen.blit(image, image.get_rect(midbottom=(round(x-game.camera_x), round(y))))
+        feet = (round(x-game.camera_x), round(y))
+        contact_shadow(screen, feet, image.get_width(), self.airborne)
+        screen.blit(image, image.get_rect(midbottom=feet))

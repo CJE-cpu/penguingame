@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   ArrowUpRight,
-  Download,
   Fish,
   Flag,
   Heart,
@@ -41,7 +40,7 @@ export default function Home() {
   const [ranks, setRanks] = useState<Rank[]>([]);
   useEffect(() => {
     const controller = new AbortController();
-    api<{ leaderboard: Rank[] }>("/demo", { signal: controller.signal })
+    api<{ leaderboard: Rank[] }>("/leaderboard", { signal: controller.signal })
       .then((data) => setRanks(data.leaderboard.slice(0, 3)))
       .catch(() => {});
     return () => controller.abort();
@@ -66,9 +65,9 @@ export default function Home() {
               우리의 작은 펭귄과 함께 남극을 탐험해요.
             </p>
             <div className="hero-actions">
-              <a href="/api/download" className="button button-dark">
-                모험 다운로드 <Download size={18} />
-              </a>
+              <Link to="/play" className="button button-dark">
+                지금 바로 플레이 <Play size={18} />
+              </Link>
               <button
                 className="button button-outline"
                 onClick={() => setPreview(0)}
@@ -77,8 +76,8 @@ export default function Home() {
               </button>
             </div>
             <div className="hero-note">
-              <span className="status-dot" /> Windows 데스크톱 게임{" "}
-              <span>·</span> 무료로 시작하는 모험
+              <span className="status-dot" /> 브라우저에서 바로 실행{" "}
+              <span>·</span> 설치 없이 시작하는 모험
             </div>
           </div>
           <div className="hero-art">
@@ -254,7 +253,7 @@ export default function Home() {
             <div className="rank-preview-head">
               <Trophy size={20} />
               <strong>탐험가 명예의 전당</strong>
-              <span className="sample-pill">예시 기록</span>
+              <span className="sample-pill">실제 기록</span>
             </div>
             {ranks.map((rank) => (
               <div className="rank-preview-row" key={rank.rank}>
@@ -319,9 +318,9 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <a href="/api/download" className="button button-dark">
-            게임 다운로드 <Download size={17} />
-          </a>
+          <Link to="/play" className="button button-dark" onClick={() => setPreview(null)}>
+            지금 바로 플레이 <Play size={17} />
+          </Link>
         </Modal>
       )}
     </>

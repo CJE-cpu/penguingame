@@ -1,6 +1,7 @@
 """Antarctic patrol, charge, flying and hopping enemies."""
 import math
 import pygame as pg
+from art import contact_shadow
 
 ENEMY_INFO = {'crab': ('게', (44,30), 30), 'seal': ('물범', (68,34), 40),
               'skua': ('도둑갈매기', (48,40), 45), 'spirit': ('얼음 정령', (36,40), 50)}
@@ -25,11 +26,14 @@ class Enemy:
         self.cooldown = 1.0
         self.warning = 0.0
         self.charge = 0.0
+        self.respawn_safe = 0.0
+        self.flipped_frames = {}
 
     def update(self, dt, player=None):
         self.previous_top = self.rect.top
         self.clock += dt
         self.cooldown = max(0,self.cooldown-dt)
+        self.respawn_safe = max(0.0, self.respawn_safe-dt)
         move_speed = self.speed
         if self.kind == 'seal':
             if self.warning:
@@ -78,12 +82,18 @@ class Enemy:
         frames = images[self.kind]
         image = frames[min(index,len(frames)-1)]
         if self.speed > 0:
-            image = pg.transform.flip(image,True,False)
+            frame_index = min(index,len(frames)-1)
+            if frame_index not in self.flipped_frames:
+                self.flipped_frames[frame_index] = pg.transform.flip(image,True,False)
+            image = self.flipped_frames[frame_index]
         return image
 
     def draw(self, screen, camera_x, images):
         image = self.sprite_image(images)
         rect = self.rect.move(-camera_x,0)
+        contact_shadow(screen, rect.midbottom, rect.width,
+                       self.kind == 'skua' or
+                       (self.kind == 'spirit' and self.rect.y < self.base_y))
         screen.blit(image,rect)
         if self.warning:
             pg.draw.polygon(screen,(255,209,90), [(rect.centerx,rect.y-19),(rect.centerx-7,rect.y-5),(rect.centerx+7,rect.y-5)])

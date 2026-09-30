@@ -7,11 +7,13 @@ import math
 import tempfile
 from pathlib import Path
 import pygame as pg
-from main import Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy, TIME_BONUS_MAX, TIME_BONUS_RATE
+from main import (Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy,
+                  TIME_BONUS_MAX, TIME_BONUS_RATE, RESPAWN_INVINCIBILITY)
 from window import GameWindow
 from cave import CaveExpedition
 from ending import EndingSequence, ENDING_NAMES
 from records import ScoreRecords
+from boss import SealBoss
 from unittest.mock import patch
 
 
@@ -68,9 +70,18 @@ class AdventureChecks(unittest.TestCase):
         g.velocity_x, g.velocity_y = velocity, 0
         g.on_ground = True
         g.surface_kind = g.platform_kinds[tuple(platform)]
-        g.effects = {'grow': 100 if grown else 0, 'speed': 0, 'reverse': 0}
+        g.effects = {'grow': 100 if grown else 0, 'speed': 0, 'shield': 0}
         g.crumbles.clear()
         g.won = False
+
+    def test_platform_art_starts_at_collision_surface(self):
+        """Transparent source padding must not make platforms look airborne."""
+        for shelf in self.game.shelf_images.values():
+            self.assertEqual(shelf.get_bounding_rect(min_alpha=8).top, 0)
+        platform = self.game.region_ledges[0][0]
+        kind = self.game.platform_kinds[tuple(platform)]
+        texture = self.game.platform_texture(kind, platform.size)
+        self.assertEqual(texture.get_bounding_rect(min_alpha=8).top, 0)
 
     def test_checkpoint_effect_only_on_first_visit_but_spawn_still_changes(self):
         g = self.game
@@ -156,6 +167,92 @@ class AdventureChecks(unittest.TestCase):
         self.assertFalse(g.game_over)
         self.assertEqual(g.lives, 3)
 
+    def test_extra_life_pickup_restores_one_and_waits_when_full(self):
+        g = self.game
+        self.assertEqual(len(g.life_items), 2)
+        pickup = g.life_items[0]
+        g.player.center = pickup.center
+        g.x, g.y = map(float, g.player.topleft)
+        g.lives = 3
+        g.update(0)
+        self.assertIn(pickup, g.life_items)
+        g.lives = 2
+        g.update(0)
+        self.assertEqual(g.lives, 3)
+        self.assertNotIn(pickup, g.life_items)
+
+    def test_boss_charge_lane_has_no_raised_platforms(self):
+        g = self.game
+        lane = pg.Rect(g.boss.arena.left+35, 0,
+                       g.boss.arena.width-70, g.boss.floor_y)
+        self.assertFalse(any(platform.colliderect(lane)
+                             for platform in g.region_ledges[2]))
+
+    def test_respawn_clears_checkpoint_enemy_and_prevents_immediate_second_death(self):
+        g = self.game
+        checkpoint = g.checkpoints[1]
+        g.spawn = (checkpoint.x + 25, checkpoint.bottom-g.player.height)
+        enemy = g.enemies[2]
+        enemy.rect.center = (g.spawn[0]+20, g.spawn[1]+26)
+        enemy.x = float(enemy.rect.x)
+        enemy.warning = 0.4
+        enemy.charge = 0.3
+        g.lives = 3
+
+        g.respawn(hit=True)
+
+        self.assertEqual(g.lives, 2)
+        self.assertGreaterEqual(g.invincible, 3.0)
+        self.assertGreaterEqual(abs(enemy.rect.centerx-g.player.centerx), 200)
+        self.assertEqual((enemy.warning, enemy.charge, enemy.velocity_y), (0, 0, 0))
+        lives = g.lives
+        for _ in range(120):
+            g.update(1/60)
+        self.assertEqual(g.lives, lives)
+
+    def test_sliding_checkpoint_respawns_above_ground_without_second_fall(self):
+        g = self.game
+        checkpoint = g.checkpoints[1]
+        ground = g.region_grounds[1][0]
+        g.player.size = (40, 28)
+        g.player.midbottom = checkpoint.midbottom
+        g.x, g.y = map(float, g.player.topleft)
+
+        g.update_adventure(0)
+
+        self.assertEqual(g.spawn[1], ground.top - 52)
+        g.respawn()
+        self.assertEqual(g.player.bottom, ground.top)
+        self.assertTrue(g.on_ground)
+        lives = g.lives
+        for _ in range(240):
+            g.update(1/60)
+        self.assertEqual(g.lives, lives)
+        self.assertLessEqual(g.player.bottom, ground.top)
+
+    def test_skua_patrol_crossing_checkpoint_is_safe_after_respawn(self):
+        g = self.game
+        checkpoint = g.checkpoints[3]
+        g.spawn = (checkpoint.x + 25, checkpoint.bottom-g.player.height)
+        skua = next(enemy for enemy in g.enemies if enemy.kind == 'skua')
+        skua.left = checkpoint.centerx-220
+        skua.right = checkpoint.centerx+220
+        skua.rect.centerx = checkpoint.centerx+210
+        skua.x = float(skua.rect.x)
+        g.last_hit_enemy = skua
+
+        g.respawn(hit=True)
+
+        self.assertGreater(skua.respawn_safe, RESPAWN_INVINCIBILITY)
+        self.assertGreaterEqual(abs(skua.rect.centerx-g.player.centerx), 180)
+        g.invincible = 0
+        skua.rect.center = g.player.center
+        skua.x = float(skua.rect.x)
+        lives = g.lives
+        g.update(1/60)
+        self.assertEqual(g.lives, lives)
+        self.assertEqual(g.combat.hurt, 0)
+
     def test_fast_clear_awards_time_bonus_only_once(self):
         g = self.game
         g.fish.clear()
@@ -169,6 +266,8 @@ class AdventureChecks(unittest.TestCase):
         starting_score = g.score
         g.update(0)
         expected = max(0, TIME_BONUS_MAX-round(120*TIME_BONUS_RATE))
+        self.assertFalse(g.ending_prompt_open)
+        g.handle_key(pg.K_e)
         self.assertTrue(g.ending_prompt_open)
         self.assertFalse(g.ending_prompt_choice)
         g.handle_key(pg.K_RIGHT)
@@ -179,6 +278,67 @@ class AdventureChecks(unittest.TestCase):
         g.finish_open = False
         g.update(0)
         self.assertEqual(g.score, starting_score+expected)
+
+    def test_seal_boss_charge_stun_and_three_hit_defeat(self):
+        g = self.game
+        boss = g.boss
+        g.player.center = (boss.arena.left+80, boss.floor_y-60)
+        self.assertEqual(boss.update(0, g.player), 'start')
+        self.assertTrue(boss.active)
+        boss.state = 'charge'
+        boss.direction = -1
+        boss.rect.left = boss.arena.left+18
+        boss.x = float(boss.rect.x)
+        self.assertEqual(boss.update(1/60, g.player), 'impact')
+        self.assertEqual(boss.state, 'stunned')
+        for expected in range(1, 4):
+            boss.state = 'stunned'
+            self.assertTrue(boss.stomp())
+            self.assertEqual(boss.hits, expected)
+        self.assertTrue(boss.defeated)
+        self.assertFalse(boss.active)
+
+    def test_stunned_boss_only_accepts_stomp_on_head_weakspot(self):
+        boss = self.game.boss
+        boss.active = True
+        boss.state = 'stunned'
+        boss.direction = -1
+        spot = boss.weakspot()
+        player = pg.Rect(0, 0, 34, 52)
+        player.midbottom = spot.midtop
+        player.move_ip(0, 8)
+        self.assertTrue(boss.can_stomp(player, spot.top-2, 180))
+        player.midbottom = (boss.rect.right-4, boss.rect.top+10)
+        self.assertFalse(boss.can_stomp(player, boss.rect.top, 180))
+        self.assertFalse(boss.can_stomp(player, spot.top-2, -180))
+
+    def test_boss_wall_impact_grants_ranged_ice_attack(self):
+        boss = self.game.boss
+        boss.active = True
+        boss.state = 'charge'
+        boss.direction = -1
+        boss.rect.left = boss.arena.left+18
+        boss.x = float(boss.rect.x)
+        self.assertEqual(boss.update(1/60, self.game.player), 'impact')
+        self.assertEqual(boss.ammo, 1)
+        player = pg.Rect(0, 0, 40, 52)
+        player.center = (boss.weakspot().centerx-80, boss.weakspot().centery)
+        self.assertTrue(boss.launch_ice(player, True))
+        self.assertEqual(boss.ammo, 0)
+        event = None
+        for _ in range(20):
+            event = boss.update(1/60, player) or event
+            if event:
+                break
+        self.assertEqual(event, 'ranged_hit')
+        self.assertEqual(boss.hits, 1)
+
+    def test_active_boss_arena_confines_player_after_weakspot_check(self):
+        boss = self.game.boss
+        boss.active = True
+        self.game.player.right = boss.arena.right+90
+        self.assertTrue(boss.confine(self.game.player))
+        self.assertEqual(self.game.player.right, boss.arena.right-12)
 
     def test_ending_sequence_pauses_game_and_returns_to_free_exploration(self):
         g = self.game
@@ -226,6 +386,8 @@ class AdventureChecks(unittest.TestCase):
                     cave['treasure'] = treasure_complete
                 self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)
                 g.update(0)
+                self.assertFalse(g.ending_prompt_open)
+                g.handle_key(pg.K_e)
                 self.assertTrue(g.ending_prompt_open)
                 g.handle_key(pg.K_y)
                 self.assertTrue(g.won)
@@ -260,23 +422,27 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(any('물고기 23/30' in label and '구조 1/3' in label
                             for label in labels))
 
-    def test_last_igloo_prompt_can_continue_and_reopen(self):
+    def test_last_igloo_unlocks_manual_prompt_without_reopening_automatically(self):
         g = self.game
         self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)
         g.update(0)
+        self.assertTrue(g.ending_unlocked)
+        self.assertIn(ENDING_NAMES[g.ending_result()-1], g.content.context(g))
+        self.assertFalse(g.ending_prompt_open)
+        g.handle_key(pg.K_e)
         self.assertTrue(g.ending_prompt_open)
         self.assertFalse(g.won)
         collect, ending = g.ui.ending_prompt_buttons()
         g.handle_click(collect.center)
         self.assertFalse(g.ending_prompt_open)
-        self.assertTrue(g.home_prompt_dismissed)
         g.update(0)
         self.assertFalse(g.ending_prompt_open)
         self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx-300)
         g.update(0)
-        self.assertFalse(g.home_prompt_dismissed)
         self.place(g.region_grounds[-1][0], g.checkpoints[-1].centerx)
         g.update(0)
+        self.assertFalse(g.ending_prompt_open)
+        g.handle_key(pg.K_e)
         self.assertTrue(g.ending_prompt_open)
         g.handle_click(ending.center)
         self.assertTrue(g.won)
@@ -533,9 +699,8 @@ class AdventureChecks(unittest.TestCase):
                                 g.lives, g.game_over = 3, False
                                 self.place(src, start, direction*270, grown=True)
                                 for tick in range(65):
-                                    # Route probes isolate physics from the last-igloo modal.
+                                    # Route probes isolate physics from modal state.
                                     g.ending_prompt_open = False
-                                    g.home_prompt_dismissed = True
                                     g.update(1/60, direction if tick < hold else 0, tick == 0)
                                     if (g.on_ground and g.player.bottom == dst.top
                                             and g.player.right > dst.left and g.player.left < dst.right):
@@ -580,6 +745,8 @@ class AdventureChecks(unittest.TestCase):
         g.content.escape_cleared = True
         self.place(g.region_grounds[-1][0],g.checkpoints[-1].centerx)
         g.update(1/60)
+        self.assertFalse(g.ending_prompt_open)
+        g.handle_key(pg.K_e)
         self.assertTrue(g.ending_prompt_open)
         g.handle_key(pg.K_y)
         self.assertTrue(g.won)
@@ -683,26 +850,26 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(g.animation.state, 'idle')
         self.assertFalse(g.animation.puffs)
 
-    def test_reverse_pickups_and_feedback(self):
+    def test_shield_pickups_refresh_and_preserve_controls(self):
         g = self.game
-        self.assertEqual(sum(kind=='reverse' for kind,rect in g.items),1)
+        self.assertEqual(sum(kind=='shield' for kind,rect in g.items),1)
         g.enemies = []
         self.place(g.region_grounds[0][0],75)
         rect = g.player.copy()
-        g.items = [('reverse',rect.copy()), ('reverse',rect.copy())]
+        g.items = [('shield',rect.copy()), ('shield',rect.copy())]
         g.update(1/60)
-        self.assertEqual(g.effects['reverse'],8)
+        self.assertEqual(g.effects['shield'],6)
         self.assertEqual(g.items,[])
         self.assertTrue(any('갱신' in b['text'] for b in g.feedback.bursts))
         old = g.player.x
         g.update(1/60,1)
-        self.assertLess(g.player.x,old)
-        g.items = [('reverse',g.player.copy())]
+        self.assertGreater(g.player.x,old)
+        g.items = [('shield',g.player.copy())]
         g.update(1/60)
         old = g.player.x
         g.update(1/60,1)
-        self.assertLess(g.player.x,old)
-        g.effects['reverse'] = 0.001
+        self.assertGreater(g.player.x,old)
+        g.effects['shield'] = 0.001
         old = g.player.x
         g.update(1/60,1)
         self.assertGreater(g.player.x,old)
@@ -749,23 +916,23 @@ class AdventureChecks(unittest.TestCase):
     def test_sparse_potions_and_visible_animation(self):
         g = self.game
         self.assertEqual(len(g.items),5)
-        self.assertEqual([sum(k==kind for k,r in g.items) for kind in ('grow','speed','reverse')],[2,2,1])
+        self.assertEqual([sum(k==kind for k,r in g.items) for kind in ('grow','speed','shield')],[2,2,1])
         for kind,rect in g.items:
             self.assertTrue(any(p.top==rect.bottom and p.left<=rect.left and p.right>=rect.right for p in g.platforms))
-            if kind == 'reverse':
+            if kind == 'shield':
                 self.assertTrue(any(p.top==rect.bottom for group in g.region_ledges for p in group))
         g.enemies = []
         self.place(g.region_grounds[0][0],75)
-        for kind in ('grow','speed','reverse'):
+        for kind in ('grow','speed','shield'):
             g.items = [(kind,g.player.copy())]
             g.update(1/60)
             self.assertEqual([k for k,v in g.effects.items() if v>0],[kind])
             self.assertEqual(g.feedback.bursts[-1]['kind'],kind)
-        g.effects = {'grow':8,'speed':0,'reverse':0}
+        g.effects = {'grow':8,'speed':0,'shield':0}
         g.feedback.update(0.15,g)
         self.assertTrue(1<g.feedback.size_scale<1.5)
         self.assertGreater(g.feedback.player_image(g).get_height(),56)
-        g.effects = {'grow':0,'speed':8,'reverse':0}
+        g.effects = {'grow':0,'speed':8,'shield':0}
         g.velocity_x = 270
         g.feedback.update(0.05,g)
         self.assertTrue(g.feedback.trails)
@@ -1178,9 +1345,30 @@ class AdventureChecks(unittest.TestCase):
         c.swimmer.update(100,80)
         g.update(0.1)
         self.assertEqual(c.swimmer.y,125)
-        c.draw_ocean(g,self.screen)
+        c.notice_left = 1
+        with patch.object(g.ui, 'text', wraps=g.ui.text) as draw_text:
+            c.draw_ocean(g,self.screen)
+        ocean_labels = [call.args[1] for call in draw_text.call_args_list]
+        self.assertEqual(len(ocean_labels), 1)
+        self.assertTrue(ocean_labels[0].startswith('남은 시간 '))
         g.update(0.7)
         self.assertFalse(c.ocean_rings)
+
+    def test_ocean_beacons_restore_air_and_unlock_relic(self):
+        g = self.game
+        content = g.content
+        content.diving = True
+        content.oxygen = 10
+        starting_score = g.score
+        for beacon in content.ocean_beacons:
+            content.swimmer.update(beacon['rect'].center)
+            content.swim(g, 0, 0, 0)
+            self.assertTrue(beacon['active'])
+        self.assertGreater(content.oxygen, 10)
+        content.swimmer.update(content.ocean_relic.center)
+        content.swim(g, 0, 0, 0)
+        self.assertTrue(content.ocean_relic_found)
+        self.assertEqual(g.score, starting_score+225)
 
     def test_journals_shortcut_home_and_escape(self):
         g = self.game
@@ -1214,6 +1402,8 @@ class AdventureChecks(unittest.TestCase):
         g.rescued = 3
         g.fish = []
         g.update(1/60)
+        self.assertFalse(g.ending_prompt_open)
+        g.handle_key(pg.K_e)
         self.assertTrue(g.ending_prompt_open)
         g.handle_key(pg.K_y)
         self.assertTrue(g.won)
@@ -1350,6 +1540,32 @@ class AdventureChecks(unittest.TestCase):
         for baby in g.babies:
             baby['rescued'] = True
         self.assertIsNone(g.rescue_target())
+
+    def test_potion_and_rescue_hud_slots_do_not_overlap(self):
+        ui = self.game.ui
+        self.assertFalse(ui.EFFECT_SLOT.colliderect(ui.OBJECTIVE_SLOT))
+        prompt = pg.Rect(ui.EFFECT_SLOT.right+10, 94,
+                         ui.OBJECTIVE_SLOT.left-ui.EFFECT_SLOT.right-18, 43)
+        self.assertFalse(prompt.colliderect(ui.EFFECT_SLOT))
+        self.assertFalse(prompt.colliderect(ui.OBJECTIVE_SLOT))
+
+    def test_holding_jump_reaches_higher_than_tapping(self):
+        g = self.game
+        ground = g.region_grounds[0][0]
+
+        def apex(held_frames):
+            self.place(ground, ground.left+180)
+            g.jump_hold = 0
+            positions = []
+            for frame in range(55):
+                g.update(1/60, jump=frame == 0,
+                         jump_held=frame < held_frames)
+                positions.append(g.player.top)
+            return min(positions)
+
+        tapped = apex(0)
+        held = apex(13)
+        self.assertLess(held, tapped-60)
 
 
 if __name__ == '__main__':

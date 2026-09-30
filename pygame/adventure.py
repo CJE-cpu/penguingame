@@ -8,7 +8,7 @@ JOURNALS = [
     ('동굴의 비밀', '동굴 구역과 빙붕 구역 오른쪽 땅의 얼음 입구에서 E를 누르면 별도의 내부를 탐험한다. 푸른 동굴은 낮은 활주 통로, 빙붕 동굴은 무너지는 다리가 특징이다.\n봉인석 3개를 찾아 오른쪽 레버에서 E로 보물방을 연다. 상자에서 E로 100점을 얻고, 끝의 출구에서 E로 나오면 150점과 먹이 3개, 높은 옆길로 이어지는 지름길을 얻는다.\n입구 근처 E로 언제든 돌아올 수 있다. 찾은 봉인석과 보물 기록은 유지되고, 같은 보상은 두 번 지급되지 않는다. 반전 물약은 바깥 동굴 구역의 오른쪽 위 옆길에 한 개 있다.'),
     ('눈보라 속 식사', '눈보라 구역의 가장 높은 발판 오른쪽에서 배고픈 친구를 만났다. 먹이 3마리를 가진 채 가까이서 E를 누르면 친구가 따라온다.\n먹이는 물고기 한 마리를 주울 때 한 개씩 늘어난다. 나눠 줘도 점수와 30마리 수집 목표는 줄어들지 않는다.\n바람은 왼쪽으로 분다. 속도 물약과 활주를 이용하되, 갈매기가 낮게 내려올 때는 잠시 기다리자.'),
     ('빙붕 탈출 기록', '갈라진 빙붕 입구부터 오른쪽 끝까지 32초 안에 건너면 탈출 성공이다. 발판은 밟은 뒤 0.8초에 무너지고 4초 뒤 복구된다.\n위쪽 길의 결정은 선택 수집품이다. 탈출 도중 억지로 돌아가지 말고, 완료 기록을 남긴 후 천천히 다시 찾아도 된다.\n추락하거나 시간이 끝나도 물고기, 일지와 구조 기록은 유지된다. 입구에서 도전을 다시 시작할 수 있다.'),
-    ('함께 만든 집', '보금자리의 가장 높은 발판 왼쪽에 길 안내 레버가 있다. 가까이서 E를 눌러 초록 깃발을 세운 뒤 오른쪽 친구를 만나자.\n마지막 이글루에서는 먹이 5개로 둥지, 8개로 깃발, 10개로 꽃밭을 만든다. 연구 의뢰 보상도 먹이로 사용할 수 있다.\n마지막 이글루에 도착하면 모험이 끝난다. 물고기, 친구와 두 동굴의 보물을 얼마나 모았는지에 따라 네 가지 엔딩 중 하나가 열린다.')]
+    ('함께 만든 집', '보금자리의 가장 높은 발판 왼쪽에 길 안내 레버가 있다. 가까이서 E를 눌러 초록 깃발을 세운 뒤 오른쪽 친구를 만나자.\n마지막 이글루에서는 F로 먹이 5개를 써 둥지, 8개로 깃발, 10개로 꽃밭을 만든다. 연구 의뢰 보상도 먹이로 사용할 수 있다.\n마지막 이글루를 발견하면 엔딩이 해금된다. 이후 이글루 근처에서 E를 눌러 원하는 때 모험을 마무리한다. 물고기, 친구와 두 동굴의 보물 수집 결과에 따라 네 가지 엔딩 중 하나가 열린다.')]
 HOME_UPGRADES = [('따뜻한 둥지', 5), ('탐험 깃발', 8), ('얼음 꽃밭', 10)]
 OXYGEN_DURATION = 35.0
 ESCAPE_DURATION = 32.0
@@ -17,6 +17,7 @@ RESEARCH_TASKS = [('해양 생태 조사',3,100,2),('탐험 기록 복원',3,150
 
 class AdventureContent:
     def __init__(self, game):
+        self.water_light_layer = pg.Surface((800, 600), pg.SRCALPHA)
         self.reset(game)
 
     def reset(self, game):
@@ -49,6 +50,10 @@ class AdventureContent:
         self.ocean_fish = [(kind, pg.Rect(x,y,36,24)) for kind,x,y in
                            [('orange',300,230),('blue',550,390),('orange',800,220),
                             ('gold',1040,450),('blue',1300,280),('gold',1540,400)]]
+        self.ocean_beacons = [{'rect': pg.Rect(x, y, 34, 54), 'active': False}
+                              for x, y in ((430, 420), (930, 165), (1450, 365))]
+        self.ocean_relic = pg.Rect(1660, 455, 44, 42)
+        self.ocean_relic_found = False
         self.escape_active = False
         self.escape_cleared = False
         self.escape_left = ESCAPE_DURATION
@@ -106,6 +111,7 @@ class AdventureContent:
                     self.research_claimed[i] = True
                     game.score += points
                     self.wallet += food
+                    game.audio.play('rescue')
                     self.say(f'{name} 완료! +{points}점 · 먹이 +{food}')
                     return
         home = game.checkpoints[-1]
@@ -160,12 +166,14 @@ class AdventureContent:
                 journal['found'] = True
                 self.book_page = index
                 game.score += 60
+                game.audio.play('collect')
                 game.feedback.emit(journal['rect'].center,'탐험 일지! +60',(255,224,124))
                 self.say('탐험 일지 발견! TAB으로 읽어 보세요.')
         for crystal in self.crystals:
             if not crystal['found'] and game.player.colliderect(crystal['rect']):
                 crystal['found'] = True
                 game.score += 40
+                game.audio.play('collect')
                 game.feedback.emit(crystal['rect'].center,'빙하 결정! +40',(128,227,255))
                 self.say('빙하 결정 발견! 6개를 모아 이글루에서 E로 조사 보상 받기')
         baby = game.babies[0] if game.babies else None
@@ -193,6 +201,13 @@ class AdventureContent:
         if movement.length_squared()>1:
             movement.normalize_ip()
         self.swimmer += movement*235*dt
+        # Current tunnels require steering and create a route between beacons.
+        for index, zone in enumerate((pg.Rect(360,150,250,330),
+                                      pg.Rect(890,120,260,360),
+                                      pg.Rect(1370,170,250,320))):
+            if zone.collidepoint(self.swimmer):
+                self.swimmer.y += math.sin(game.time*2.2+index)*55*dt
+                self.swimmer.x += (22 if index%2==0 else -18)*dt
         self.swimmer.x = max(35,min(1765,self.swimmer.x))
         self.swimmer.y = max(125,min(500,self.swimmer.y))
         if direction:
@@ -207,11 +222,27 @@ class AdventureContent:
                 points = {'orange':10,'blue':25,'gold':50}[kind]
                 game.score += points
                 self.wallet += 1
+                game.audio.play('collect')
                 self.ocean_rings.append((fish.center,0.65))
                 self.say(f'바닷속 물고기 발견! +{points}점')
             else:
                 remaining.append((kind,fish))
         self.ocean_fish = remaining
+        for beacon in self.ocean_beacons:
+            if not beacon['active'] and rect.colliderect(beacon['rect']):
+                beacon['active'] = True
+                self.oxygen = min(OXYGEN_DURATION, self.oxygen+5)
+                game.score += 25
+                game.audio.play('checkpoint')
+                self.ocean_rings.append((beacon['rect'].center, 0.8))
+                self.say('해저 신호기 작동! 산소 +5초 · 유물 봉인 약화')
+        if (not self.ocean_relic_found and all(b['active'] for b in self.ocean_beacons)
+                and rect.colliderect(self.ocean_relic)):
+            self.ocean_relic_found = True
+            game.score += 150
+            game.audio.play('rescue')
+            self.ocean_rings.append((self.ocean_relic.center, 1.0))
+            self.say('고대 해저 유물 발견! +150점')
         if self.oxygen <= 0:
             self.diving = False
             game.respawn()
@@ -225,6 +256,8 @@ class AdventureContent:
             return 'E: 길 안내 깃발 세우기'
         if self.nearby(game,self.hole):
             return 'E: 바닷속 탐험 · 산소 35초 · 구멍으로 돌아오기'
+        if self.nearby(game,game.checkpoints[-1]) and game.ending_unlocked:
+            return f'E: 모험 마무리 · {game.ending_preview_name()} / F: 보금자리 활동'
         if any(self.nearby(game,checkpoint) for checkpoint in game.checkpoints):
             progress = self.research_progress()
             for i,(name,goal,points,food) in enumerate(RESEARCH_TASKS):
@@ -256,7 +289,14 @@ class AdventureContent:
             rect = journal['rect'].move(-game.camera_x,round(math.sin(game.time*3)*3))
             game.art.place(screen,'journal',rect.midbottom)
         hole = self.hole.move(-game.camera_x,0)
-        game.art.place(screen,'dive-hole',hole.midbottom)
+        # Sink the opening into the snow surface. Anchoring the sprite by its
+        # bottom made the dark rim read as an object hovering above the shelf.
+        image = game.art.objects['dive-hole']
+        center = (hole.centerx,hole.bottom+2)
+        pg.draw.ellipse(screen,(38,103,137),(center[0]-37,center[1]-8,74,17))
+        screen.blit(image,image.get_rect(center=center))
+        pg.draw.arc(screen,(226,248,252),(center[0]-39,center[1]-10,78,19),
+                    math.pi,math.tau,2)
         for index,baby in enumerate(game.babies):
             if self.quests[index] or baby['rescued']:
                 continue
@@ -285,15 +325,20 @@ class AdventureContent:
             screen.blit(image,image.get_rect(midbottom=(x,floor)))
 
     def draw_hud(self, game, screen):
-        game.ui.panel(screen,(283,147,208,43))
-        game.ui.text(screen,f'먹이 {self.wallet} · 일지 {sum(j["found"] for j in self.journals)}/6',(297,150),game.ui.small)
-        game.ui.text(screen,f'결정 {sum(c["found"] for c in self.crystals)}/6 · TAB 기록/의뢰',(297,169),game.ui.small)
         message = self.notice if self.notice_left else self.context(game)
         if self.escape_active:
             message = f'빙붕 탈출 {max(0,self.escape_left):.1f}초 · 오른쪽 끝까지!'
         if message:
-            game.ui.panel(screen,(100,202,600,35),dark=True)
-            game.ui.text(screen,message,(400,219),game.ui.small,'white',center=True,max_width=570)
+            # Potion time stays on the left and the rescue target stays on the
+            # right. Context text expands only into currently unused slots.
+            left = (game.ui.EFFECT_SLOT.right+10
+                    if any(game.effects.values()) else 12)
+            right = (game.ui.OBJECTIVE_SLOT.left-8
+                     if game.rescue_target() is not None and not game.won else 788)
+            width = max(210, right-left)
+            game.ui.panel(screen,(left,94,width,43),dark=True)
+            game.ui.text(screen,message,(left+width//2,115),game.ui.small,
+                         'white',center=True,max_width=width-24)
 
     def draw_book(self, game, screen):
         game.ui.veil(screen)
@@ -302,12 +347,24 @@ class AdventureContent:
         game.ui.icon(screen,game.art.objects['journal-open'],(120,101),(38,28))
         if self.book_page==6:
             game.ui.text(screen,'남극 연구 기지의 의뢰',(106,141),game.ui.heading)
+            if game.ending_unlocked:
+                remaining = []
+                if game.fish:
+                    remaining.append(f'물고기 {len(game.fish)}마리')
+                missing_friends = len(game.babies)-game.rescued
+                if missing_friends:
+                    remaining.append(f'친구 {missing_friends}명')
+                missing_treasure = sum(not cave['treasure'] for cave in game.caves)
+                if missing_treasure:
+                    remaining.append(f'보물 {missing_treasure}개')
+                status = '모든 수집 조건 완료' if not remaining else '남은 조건: '+', '.join(remaining)
+                game.ui.text(screen,f'예상: {game.ending_result()}번째 엔딩 · {status}',(106,166),game.ui.small)
             progress = self.research_progress()
             tips = ['해안 얼음 구멍으로 잠수해 보너스 물고기를 찾으세요.',
                     '각 구역 두 번째 위쪽 발판 왼쪽에서 일지를 찾으세요.',
                     '구역마다 높은 옆길의 푸른 결정을 한 개씩 모으세요.']
             for i,(name,goal,points,food) in enumerate(RESEARCH_TASKS):
-                y = 188+i*89
+                y = 195+i*86
                 status = '보상 수령' if self.research_claimed[i] else 'E로 수령 가능' if progress[i]>=goal else '조사 중'
                 game.ui.text(screen,f'{name} · {min(goal,progress[i])}/{goal} · {status}',(106,y),game.ui.body)
                 game.ui.text(screen,tips[i],(106,y+28),game.ui.small)
@@ -333,19 +390,111 @@ class AdventureContent:
                 game.ui.text(screen,line,(106,185+index*24),game.ui.body)
         game.ui.text(screen,f'← → 페이지 {self.book_page+1}/7 · TAB / E 닫기 · 모험 일시정지',(400,504),game.ui.small,center=True)
 
-    def draw_water_light(self, screen, time, camera):
-        light = pg.Surface(screen.get_size(),pg.SRCALPHA)
-        for i in range(7):
+    def draw_water_light(self, screen, time, camera, quality='high'):
+        light = self.water_light_layer
+        light.fill((0, 0, 0, 0))
+        beam_count = {'performance':4, 'balanced':5, 'high':7}[quality]
+        for i in range(beam_count):
             x = round(i*310-camera*0.35+math.sin(time*0.3+i)*22)
             pg.draw.polygon(light,(160,232,247,16),[(x,85),(x+40,85),(x+155,560),(x+40,560)])
-        for y in range(90,600,6):
-            pg.draw.rect(light,(4,28,62,round((y-90)/510*48)),(0,y,800,6))
+        depth_step = {'performance':16, 'balanced':10, 'high':6}[quality]
+        for y in range(90,600,depth_step):
+            pg.draw.rect(light,(4,28,62,round((y-90)/510*48)),(0,y,800,depth_step))
         screen.blit(light,(0,0))
 
     def draw_ocean(self, game, screen):
         camera = max(0,min(1000,self.swimmer.x-400))
         screen.blit(game.ocean_background,(-round(camera),0))
-        self.draw_water_light(screen,game.time,camera)
+        self.draw_water_light(screen,game.time,camera,game.quality)
+        # Distant shelf silhouettes and hanging ice break up the open water
+        # while staying behind fish and the swimming route.
+        distant = (34, 101, 136)
+        for i in range(7):
+            world_x = 70+i*305
+            x = round(world_x-camera*.42)
+            shelf_y = 145+(i*47)%115
+            pg.draw.polygon(screen, distant,
+                            [(x-95, shelf_y), (x-42, shelf_y-5),
+                             (x+20, shelf_y-11), (x+76, shelf_y-12),
+                             (x+55, shelf_y+10), (x+31, shelf_y+17),
+                             (x+4, shelf_y+13), (x-21, shelf_y+25),
+                             (x-61, shelf_y+29)])
+            pg.draw.line(screen, (92, 173, 196),
+                         (x-83, shelf_y+1), (x+61, shelf_y-9), 2)
+            for spike in range(1+(i%3)):
+                spike_x = x-45+spike*31
+                length = 18+(i*11+spike*7)%26
+                pg.draw.polygon(screen, (48, 123, 154),
+                                [(spike_x-8, shelf_y+21),
+                                 (spike_x+8, shelf_y+19),
+                                 (spike_x, shelf_y+21+length)])
+                pg.draw.line(screen, (105, 188, 204),
+                             (spike_x-3, shelf_y+22),
+                             (spike_x, shelf_y+17+length), 1)
+        # Three moving depth layers give the dive a route and scale instead of
+        # leaving one flat panorama behind the collectibles.
+        for layer,(speed,color,base) in enumerate([
+                (.12,(19,74,105),500),(.28,(13,62,91),535)]):
+            points = [(-40,600)]
+            for world_x in range(-80,1940,110):
+                x = round(world_x-camera*speed)
+                ridge = base-18-((world_x//110*37+layer*23)%54)
+                points.append((x,ridge))
+            points.extend([(1880,600),(-40,600)])
+            pg.draw.polygon(screen,color,points)
+        # Pebble fields and shell-like glints make the seabed read as textured
+        # terrain instead of a single flat silhouette.
+        seabed_details = 18 if game.quality == 'performance' else 32
+        for i in range(seabed_details):
+            world_x = 34+i*59
+            x = round(world_x-camera*.88)
+            y = 548+(i*17)%34
+            radius = 2+(i*7)%5
+            pg.draw.ellipse(screen, (20, 79, 101),
+                            (x-radius*2, y-radius//2, radius*4, radius))
+            if i % 4 == 1:
+                pg.draw.arc(screen, (94, 176, 181),
+                            (x-7, y-7, 14, 9), math.pi, math.tau, 1)
+        # Ice columns and kelp groves divide the long swim into readable rooms.
+        detail = 5 if game.quality=='performance' else 8
+        for i in range(detail):
+            world_x = 210+i*225
+            x = round(world_x-camera)
+            height = 70+(i*43)%105
+            pg.draw.polygon(screen,(27,91,121),
+                            [(x-38,560),(x+39,560),(x+25,530-height),
+                             (x+7,548-height),(x-9,516-height),(x-24,542-height)])
+            pg.draw.polygon(screen,(48,133,158),
+                            [(x-22,558),(x+18,558),(x+11,536-height),
+                             (x-3,552-height),(x-13,526-height)])
+            pg.draw.line(screen,(119,207,215),(x-7,548),(x+8,531-height),2)
+            for stem in range(2+(i%2)):
+                base_x=x-48+stem*22
+                sway=round(math.sin(game.time*.8+i+stem)*8)
+                pg.draw.lines(screen,(34,124,105),False,
+                              [(base_x,565),(base_x-5,525),(base_x+sway,487)],4)
+        # Dark foreground arches occasionally frame the route and strengthen
+        # the feeling of swimming through submerged ice caverns.
+        for i in range(4):
+            world_x = 360+i*470
+            x = round(world_x-camera*1.08)
+            height = 88+(i%2)*34
+            color = (7, 43, 69)
+            pg.draw.polygon(screen, color,
+                            [(x-75,600),(x-62,548-height),(x-34,527-height),
+                             (x-15,558-height),(x+9,535-height),
+                             (x+37,554-height),(x+69,600)])
+            pg.draw.line(screen, (30, 93, 113),
+                         (x-56,548-height), (x-34,532-height), 2)
+        school_count = 4 if game.quality=='performance' else 7
+        for i in range(school_count):
+            world_x=(i*277+game.time*(12+i%2*8))%1800
+            x=round(world_x-camera)
+            y=160+(i*73)%260
+            for j in range(3):
+                px=x-j*18
+                pg.draw.polygon(screen,(44,107,133),
+                                [(px-6,y+j*7),(px+5,y+j*7-3),(px+5,y+j*7+3)])
         game.art.place(screen,'dive-hole',(100-camera,94))
         # A breathing ring connects the surface opening to its interaction area.
         if camera<170:
@@ -354,7 +503,44 @@ class AdventureContent:
         for i in range(10):
             x = i*190-camera+70
             game.art.place(screen,'ocean-rock' if i%3==0 else 'seaweed',(x,560))
-        for i in range(24):
+        for index, beacon in enumerate(self.ocean_beacons):
+            rect = beacon['rect'].move(-camera, 0)
+            color = (255, 224, 116) if beacon['active'] else (75, 151, 178)
+            glow = 8+round(math.sin(game.time*4+index)*3)
+            pg.draw.circle(screen, (*color, 80), rect.center, 18+glow, 2)
+            pg.draw.polygon(screen, color,
+                            [(rect.centerx,rect.top), (rect.right,rect.centery),
+                             (rect.centerx,rect.bottom), (rect.left,rect.centery)])
+            pg.draw.circle(screen, (231, 253, 255), rect.center, 5)
+        # Animated flow marks expose the current tunnels before the player
+        # enters them, turning movement into a readable navigation challenge.
+        for zone_index, zone in enumerate((pg.Rect(360,150,250,330),
+                                            pg.Rect(890,120,260,360),
+                                            pg.Rect(1370,170,250,320))):
+            direction = 1 if zone_index%2 == 0 else -1
+            for row in range(3):
+                y = zone.top+70+row*82
+                phase = (game.time*45+row*47)%120
+                x = round(zone.left-camera+phase)
+                color = (105, 197, 214)
+                pg.draw.arc(screen, color, (x-30,y-10,72,24), 0, math.pi, 2)
+                tip_x = x+38 if direction>0 else x-26
+                pg.draw.polygon(screen, color,
+                                [(tip_x,y+2),(tip_x-direction*9,y-4),
+                                 (tip_x-direction*9,y+8)])
+        relic = self.ocean_relic.move(-camera, 0)
+        if not self.ocean_relic_found:
+            unlocked = all(b['active'] for b in self.ocean_beacons)
+            color = (255, 224, 123) if unlocked else (55, 103, 133)
+            pg.draw.ellipse(screen, color, relic)
+            pg.draw.arc(screen, (218, 247, 249), relic.inflate(-8,-8),
+                        0, math.tau, 2)
+            for index, beacon in enumerate(self.ocean_beacons):
+                if not beacon['active']:
+                    pg.draw.circle(screen, (36, 75, 103),
+                                   (relic.left+12+index*10,relic.centery), 3)
+        bubble_count = {'performance':10, 'balanced':16, 'high':24}[game.quality]
+        for i in range(bubble_count):
             x = round((i*83+math.sin(game.time+i)*9)%1800-camera)
             y = round(540-(game.time*28+i*37)%425)
             pg.draw.circle(screen,(104,181,211),(x,y),3,1)
@@ -381,29 +567,10 @@ class AdventureContent:
         return_seconds = self.swimmer.distance_to((100,115))/235+3
         warning = self.oxygen<return_seconds+6
         oxygen_color = (216,110,82) if warning else (51,155,175)
-        game.ui.panel(screen,(12,12,776,72))
-        game.ui.text(screen,'남극 해양 탐험',(29,23),game.ui.heading)
-        game.ui.text(screen,f'물고기 {6-len(self.ocean_fish)}/6 · 먹이 {self.wallet}',(570,27),game.ui.body)
-        game.ui.text(screen,f'산소 {max(0,self.oxygen):04.1f}초',(29,57),game.ui.small,oxygen_color)
-        pg.draw.rect(screen,(200,222,226),(142,62,400,8),border_radius=4)
-        pg.draw.rect(screen,oxygen_color,(142,62,round(400*max(0,min(1,self.oxygen/OXYGEN_DURATION))),8),border_radius=4)
-        game.ui.text(screen,f'{game.score} 점',(570,56),game.ui.small)
-        near_exit = self.swimmer.distance_to((100,115))<85
-        game.ui.panel(screen,(528,95,260,38),dark=True)
-        cue = 'E를 눌러 해안으로 귀환' if near_exit else '← ↑ 출구로 돌아가세요' if warning else '왼쪽 위 얼음 구멍이 출구예요'
-        game.ui.text(screen,cue,(658,114),game.ui.small,'white',center=True,max_width=236)
-        game.ui.panel(screen,(12,526,676,31))
-        game.ui.text(screen,'방향키 / WASD 수영 · SPACE 상승 · 출구 근처 E 귀환',(28,532),game.ui.small)
-        game.ui.panel(screen,(12,564,776,29))
-        game.ui.text(screen,'탐험 경로',(26,570),game.ui.small)
-        start,end,y = 130,760,578
-        pg.draw.line(screen,(161,206,215),(start,y),(end,y),3)
-        pg.draw.circle(screen,(62,150,150),(start+35,y),5)
-        for kind,rect in self.ocean_fish:
-            pg.draw.circle(screen,(217,160,55) if kind=='gold' else (67,134,171),(start+round(rect.centerx/1800*(end-start)),y),3)
-        marker = start+round(self.swimmer.x/1800*(end-start))
-        pg.draw.circle(screen,(25,57,76),(marker,y),5)
-        pg.draw.circle(screen,'white',(marker,y),2)
-        if self.notice_left:
-            game.ui.panel(screen,(130,151,540,34),dark=True)
-            game.ui.text(screen,self.notice,(400,168),game.ui.small,'white',center=True,max_width=510)
+        game.ui.panel(screen,(286,14,228,58),dark=True)
+        game.ui.text(screen,f'남은 시간 {max(0,self.oxygen):04.1f}초',
+                     (400,34),game.ui.body,'white',center=True)
+        pg.draw.rect(screen,(77,112,126),(306,56,188,8),border_radius=4)
+        pg.draw.rect(screen,oxygen_color,
+                     (306,56,round(188*max(0,min(1,self.oxygen/OXYGEN_DURATION))),8),
+                     border_radius=4)

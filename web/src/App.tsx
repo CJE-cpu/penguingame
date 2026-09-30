@@ -9,6 +9,7 @@ const Collection = lazy(() => import("./pages/Collection"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Login = lazy(() => import("./pages/Login"));
 const Story = lazy(() => import("./pages/Story"));
+const Play = lazy(() => import("./pages/Play"));
 const titles: Record<string, string> = {
   "/": "남극 펭귄의 모험",
   "/explore": "탐험 지도",
@@ -16,6 +17,7 @@ const titles: Record<string, string> = {
   "/dashboard": "점수 대시보드",
   "/login": "탐험가 로그인",
   "/story": "만드는 이야기",
+  "/play": "웹 게임 플레이",
 };
 export default function App() {
   const location = useLocation();
@@ -51,6 +53,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/story" element={<Story />} />
+            <Route path="/play" element={<Play />} />
             <Route
               path="*"
               element={

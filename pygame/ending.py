@@ -32,6 +32,21 @@ class EndingSequence:
         veil.fill((8, 28, 48, round(210*(1-age))))
         screen.blit(veil, (0, 0))
 
+    def _challenge_badges(self, game, screen):
+        """Show optional run goals without changing the ending score."""
+        ui = game.ui
+        goals = (('무피격', game.hits == 0),
+                 ('무추락', game.falls == 0),
+                 ('5분', game.time <= 300))
+        ui.panel(screen, (178, 18, 444, 50))
+        ui.text(screen, '탐험 도전', (195, 33), ui.small)
+        for index, (label, earned) in enumerate(goals):
+            rect = pg.Rect(274 + index*112, 28, 102, 30)
+            pg.draw.rect(screen, (53, 118, 139) if earned else (191, 207, 212),
+                         rect, border_radius=8)
+            ui.text(screen, label + (' 성공' if earned else ' 미달'), rect.center,
+                    ui.small, 'white' if earned else (88, 108, 117), center=True)
+
     def _caption(self, game, screen, title, lines):
         ui = game.ui
         ui.panel(screen, (64, 430, 672, 118), dark=True)
@@ -101,7 +116,12 @@ class EndingSequence:
         self._caption(game, screen, self.title, lines[self.ending_type-1])
 
     def _night_scene(self, game, screen):
-        screen.fill((8, 24, 54))
+        # Reuse the painterly home landscape so the ending belongs to the same
+        # world instead of switching to flat vector mountains.
+        screen.blit(game.scene_backgrounds[5], (0, 0))
+        night = pg.Surface((800, 600), pg.SRCALPHA)
+        night.fill((5, 18, 48, 188))
+        screen.blit(night, (0, 0))
         for index in range(55):
             x = (index*149+37)%800
             y = 35+(index*71)%335
@@ -116,16 +136,18 @@ class EndingSequence:
                 points.append((x, y))
             pg.draw.lines(aurora, color, False, points, 18-band*3)
         screen.blit(aurora, (0, 0))
-        pg.draw.polygon(screen, (26, 57, 81), [(0, 430), (130, 315), (240, 430),
-                                                (390, 285), (560, 430), (690, 330),
-                                                (800, 425), (800, 600), (0, 600)])
+        snow_glow = pg.Surface((800, 170), pg.SRCALPHA)
+        for y in range(170):
+            alpha = max(0, 42-y//4)
+            pg.draw.line(snow_glow, (91, 171, 193, alpha), (0, y), (800, y))
+        screen.blit(snow_glow, (0, 385))
         group_size = 1+game.rescued
         positions = (335, 380, 420, 462)[:group_size]
         for index, x in enumerate(positions):
             image = game.penguin_right if index == 0 else game.art.baby('idle', self.time+index)
             size = (42, 56) if index == 0 else (25, 32)
             image = pg.transform.smoothscale(image, size)
-            screen.blit(image, image.get_rect(midbottom=(x, 432)))
+            screen.blit(image, image.get_rect(midbottom=(x, 440)))
         lines = (
             ('오로라 아래에서 오늘의 짧은 휴식을 기록했습니다.', '내일은 남겨 둔 물고기와 친구를 찾아 다시 출발합니다.'),
             ('별빛 아래 물고기 떼의 길을 지도에 표시했습니다.', '다음 여행에는 함께 웃을 친구를 찾기로 했습니다.'),
@@ -140,4 +162,5 @@ class EndingSequence:
             self._feast_scene(game, screen)
         else:
             self._night_scene(game, screen)
+        self._challenge_badges(game, screen)
         self._fade(screen)

@@ -129,6 +129,7 @@ export default function Login() {
                   maxLength={16}
                 />
               </span>
+              <small>2~16자 · 다른 탐험가와 중복할 수 없어요.</small>
             </label>
           )}
           <label className="form-field">
@@ -206,7 +207,7 @@ export default function Login() {
           이메일은 로그인에 사용되며 순위표에는 공개되지 않습니다.
         </p>
         <Link to="/dashboard" className="text-link auth-demo-link">
-          가입 전에 예시 대시보드 둘러보기 <ArrowUpRightIcon />
+          기록이 없는 대시보드 확인하기 <ArrowUpRightIcon />
         </Link>
       </div>
     </main>

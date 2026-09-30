@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+﻿import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -21,17 +21,28 @@ import {
   Info,
   RefreshCw,
   Trophy,
-  Upload,
-  X,
 } from "lucide-react";
 import { useAuth } from "../auth";
 import { api, ApiError, errorMessage, formatDate, formatNumber } from "../api";
-import { EmptyState, LoadingState, Modal, PageHeading } from "../components";
-import type { DashboardData, DesktopRecord } from "../types";
+import { EmptyState, LoadingState, PageHeading } from "../components";
+import type { DashboardData } from "../types";
+
+const formatDuration = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}분 ${String(rest).padStart(2, "0")}초`;
+};
+
+const emptyDashboard: DashboardData = {
+  demo: false,
+  summary: { best: 0, average: 0, games: 0, clears: 0, rank: null },
+  records: [],
+  trend: [],
+  leaderboard: [],
+};
 
 export default function Dashboard() {
   const { user, loading: authLoading, refresh } = useAuth();
-  const [demo, setDemo] = useState(!user);
   const [range, setRange] = useState("all");
   const [tab, setTab] = useState("records");
   const [page, setPage] = useState(0);
@@ -39,49 +50,38 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
-  const [upload, setUpload] = useState(false);
-  const [notice, setNotice] = useState("");
-  const navigate = useNavigate();
   useEffect(() => {
-    setDemo(!user);
-    setPage(0);
+    if (!user) return;
+    const refreshScores = (event?: Event) => {
+      if (event instanceof StorageEvent && event.key !== "penguin-score-updated") return;
+      setRevision((value) => value + 1);
+    };
+    window.addEventListener("penguin-score-updated", refreshScores);
+    window.addEventListener("storage", refreshScores);
+    window.addEventListener("focus", refreshScores);
+    return () => {
+      window.removeEventListener("penguin-score-updated", refreshScores);
+      window.removeEventListener("storage", refreshScores);
+      window.removeEventListener("focus", refreshScores);
+    };
   }, [user]);
   useEffect(() => {
     if (authLoading) return;
+    if (!user) {
+      setData(emptyDashboard);
+      setLoading(false);
+      setError("");
+      setPage(0);
+      return;
+    }
     const controller = new AbortController();
     setLoading(true);
     setError("");
     setPage(0);
-    api<DashboardData>(demo ? "/demo" : `/dashboard?range=${range}`, {
+    api<DashboardData>(`/dashboard?range=${range}`, {
       signal: controller.signal,
     })
       .then((result) => {
-        if (demo && range !== "all") {
-          const after = Date.now() - (range === "week" ? 7 : 30) * 86400000;
-          const records = result.records.filter(
-            (row) => Date.parse(row.date) >= after,
-          );
-          result = {
-            ...result,
-            records: [...records].reverse(),
-            trend: records,
-            summary: {
-              ...result.summary,
-              games: records.length,
-              clears: records.filter((r) => r.cleared).length,
-              best: records.length
-                ? Math.max(...records.map((r) => r.score))
-                : 0,
-              average: records.length
-                ? Math.round(
-                    records.reduce((sum, r) => sum + r.score, 0) /
-                      records.length,
-                  )
-                : 0,
-            },
-          };
-        } else if (demo)
-          result = { ...result, records: [...result.records].reverse() };
         setData(result);
       })
       .catch((err) => {
@@ -93,7 +93,7 @@ export default function Dashboard() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [demo, range, revision, authLoading, refresh]);
+  }, [user, range, revision, authLoading, refresh]);
   const trend = useMemo(
     () =>
       data?.trend.map((row, i) => ({
@@ -104,13 +104,6 @@ export default function Dashboard() {
     [data],
   );
   const latest = data?.records[0];
-  const startImport = () => {
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    setUpload(true);
-  };
   const exportRecords = () => {
     if (!data) return;
     const lines = [
@@ -133,9 +126,7 @@ export default function Dashboard() {
     );
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = demo
-      ? "penguin-demo-records.csv"
-      : "penguin-my-records.csv";
+    anchor.download = "penguin-my-records.csv";
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -145,59 +136,39 @@ export default function Dashboard() {
         eyebrow="YOUR EXPEDITION LOG"
         title="모험을 숫자로."
         description={
-          demo
-            ? "작은 발걸음도, 멋진 기록이 됩니다. 예시 대시보드를 둘러보세요."
-            : `${user?.nickname}님의 탐험 기록. 지난 모험을 돌아보고 다음 발걸음을 준비해요.`
+          user
+            ? user.nickname + "님의 실제 탐험 기록입니다. 게임을 마치면 점수가 자동으로 갱신됩니다."
+            : "로그인하면 게임에서 달성한 실제 점수와 순위를 확인할 수 있습니다."
         }
       >
-        <button className="button button-dark" onClick={startImport}>
-          <Upload size={17} /> 게임 기록 가져오기
-        </button>
+        <Link className="button button-dark" to={user ? "/play" : "/login"}>
+          {user ? "게임 시작하기" : "로그인하기"} <ArrowUpRight size={17} />
+        </Link>
       </PageHeading>
-      <div className={`dashboard-banner ${demo ? "is-demo" : ""}`}>
+      <div className="dashboard-banner">
         <span>
           <Info size={17} />
-          {demo ? (
-            <>
-              <strong>미리보기 · 예시 데이터</strong>
-              <span> 실제 유저 기록이 아닌 대시보드 체험용 기록입니다.</span>
-            </>
-          ) : (
-            <>
-              <strong>나의 실제 기록</strong>
-              <span> 게임에서 업로드한 탐험 기록을 계정에 보관합니다.</span>
-            </>
-          )}
+          <strong>{user ? "나의 실제 기록" : "기록이 비어 있습니다"}</strong>
+          <span>
+            {user
+              ? "게임에서 완료한 기록만 계정에 자동 저장됩니다."
+              : "예시 데이터는 표시하지 않습니다. 로그인 후 게임을 시작해 주세요."}
+          </span>
         </span>
-        {user ? (
-          <button
-            className="text-link"
-            onClick={() => {
-              setDemo(!demo);
-              setPage(0);
-            }}
-          >
-            {demo ? "내 기록으로 돌아가기" : "예시 데이터 보기"}
-            <ArrowUpRight size={15} />
-          </button>
-        ) : (
+        {!user && (
           <Link className="text-link" to="/login">
-            로그인하고 기록 시작 <ArrowUpRight size={15} />
+            로그인하기 <ArrowUpRight size={15} />
           </Link>
         )}
       </div>
       <div className="dashboard-toolbar">
         <div className="dashboard-owner">
           <span className="avatar avatar-large">
-            {demo ? "❄" : user?.nickname.slice(0, 1)}
+            {user ? user.nickname.slice(0, 1) : "—"}
           </span>
           <div>
-            <strong>
-              {demo
-                ? "빙하 탐험가의 대시보드"
-                : `${user?.nickname}님의 대시보드`}
-            </strong>
-            <span>{demo ? "DEMO EXPLORER" : "MY EXPEDITION RECORDS"}</span>
+            <strong>{user ? user.nickname + "님의 대시보드" : "저장된 기록 없음"}</strong>
+            <span>{user ? "MY EXPEDITION RECORDS" : "SIGN IN TO START"}</span>
           </div>
         </div>
         <div className="segmented compact" role="group" aria-label="조회 기간">
@@ -232,54 +203,60 @@ export default function Dashboard() {
       )}
       {!loading && !authLoading && !error && data && (
         <>
-          <div className="stat-grid">
-            <div className="stat-card stat-featured">
-              <span>
-                나의 최고 점수
-                <Trophy size={19} />
+          <section className="score-overview" aria-label="점수 요약" aria-live="polite">
+            <div className="score-overview-heading">
+              <div>
+                <span className="eyebrow">SCORE SNAPSHOT</span>
+                <h2>내 탐험 점수</h2>
+              </div>
+              <span className="score-sync-state">
+                <span className="status-dot" />
+                {user ? "게임 종료 후 자동 저장" : "로그인 후 기록 표시"}
               </span>
-              <strong>
-                {formatNumber(data.summary.best)}
-                <small>점</small>
-              </strong>
-              <p>
-                <Flag size={13} /> 선택한 기간의 가장 빛나는 기록
-              </p>
             </div>
-            <div className="stat-card">
-              <span>
-                탐험가 순위
-                <Flag size={19} />
-              </span>
-              <strong>
-                {data.summary.rank ? `${data.summary.rank}` : "—"}
-                <small>{data.summary.rank ? "위" : ""}</small>
-              </strong>
-              <p>탐험가별 최고 점수 기준</p>
+            <div className="score-overview-grid">
+              <article className="latest-score-card">
+                <span className="score-card-label">
+                  <Trophy size={18} />
+                  최근 플레이 점수
+                </span>
+                <strong>
+                  {latest ? formatNumber(latest.score) : "0"}
+                  <small>점</small>
+                </strong>
+                {latest ? (
+                  <>
+                    <div className="latest-score-meta">
+                      <span><Fish size={14} /> 물고기 {latest.fish}/30</span>
+                      <span><Heart size={14} /> 동료 {latest.rescued}/3</span>
+                      <span><Flag size={14} /> {formatDuration(latest.seconds)}</span>
+                    </div>
+                    <span className={"latest-result " + (latest.cleared ? "is-cleared" : "")}>
+                      {latest.cleared ? "탐험 완료" : "게임오버"}
+                      <small>{formatDate(latest.date)} 자동 저장</small>
+                    </span>
+                  </>
+                ) : (
+                  <p>게임을 완료하면 점수가 자동으로 표시됩니다.</p>
+                )}
+              </article>
+              <article className="score-metric-card">
+                <span>최고 점수 <Trophy size={17} /></span>
+                <strong>{formatNumber(data.summary.best)}<small>점</small></strong>
+                <p>선택한 기간의 가장 높은 기록</p>
+              </article>
+              <article className="score-metric-card">
+                <span>전체 순위 <Flag size={17} /></span>
+                <strong>{data.summary.rank ? data.summary.rank : "-"}<small>{data.summary.rank ? "위" : ""}</small></strong>
+                <p>탐험가별 최고 점수 기준</p>
+              </article>
+              <article className="score-metric-card">
+                <span>완주 기록 <Check size={18} /></span>
+                <strong>{data.summary.clears}<small>/ {data.summary.games}회</small></strong>
+                <p>평균 {formatNumber(data.summary.average)}점</p>
+              </article>
             </div>
-            <div className="stat-card">
-              <span>
-                완주한 모험
-                <Check size={20} />
-              </span>
-              <strong>
-                {data.summary.clears}
-                <small>/ {data.summary.games}회</small>
-              </strong>
-              <p>물고기와 친구들을 데리고 귀환</p>
-            </div>
-            <div className="stat-card">
-              <span>
-                평균 탐험 점수
-                <Fish size={20} />
-              </span>
-              <strong>
-                {formatNumber(data.summary.average)}
-                <small>점</small>
-              </strong>
-              <p>총 {data.summary.games}번의 탐험이 쌓였어요</p>
-            </div>
-          </div>
+          </section>
           <div className="dashboard-chart-grid">
             <section className="dashboard-panel chart-panel">
               <div className="panel-heading">
@@ -374,9 +351,9 @@ export default function Dashboard() {
               ) : (
                 <EmptyState title="첫 발걸음을 기다리고 있어요.">
                   <p>게임 기록을 가져오면 점수의 변화가 여기에 나타나요.</p>
-                  <button onClick={startImport} className="text-link">
-                    첫 기록 가져오기 <Upload size={15} />
-                  </button>
+                  <Link to={user ? "/play" : "/login"} className="text-link">
+                    첫 모험 시작하기 <ArrowUpRight size={15} />
+                  </Link>
                 </EmptyState>
               )}
             </section>
@@ -488,11 +465,7 @@ export default function Dashboard() {
                               {String(page * 8 + index + 1).padStart(2, "0")}
                             </span>
                             {new Date(record.date).toLocaleDateString("ko-KR")}
-                            <small className="source-label">
-                              {record.source === "demo"
-                                ? "예시 기록"
-                                : "게임 업로드"}
-                            </small>
+                            <small className="source-label">웹 게임 자동 저장</small>
                           </td>
                           <td className="table-score">
                             {formatNumber(record.score)}
@@ -593,18 +566,14 @@ export default function Dashboard() {
                     : "첫 번째 탐험가가 되어보세요."
                 }
               >
-                <p>게임을 플레이한 뒤 기록 파일을 가져와 주세요.</p>
-                <button className="button button-outline" onClick={startImport}>
-                  <Upload size={16} /> 게임 기록 가져오기
-                </button>
+                <p>게임에서 엔딩을 달성하면 점수가 여기에 자동 저장됩니다.</p>
+                <Link className="button button-outline" to={user ? "/play" : "/login"}>
+                  게임 시작하기 <ArrowUpRight size={16} />
+                </Link>
               </EmptyState>
             )}
             <div className="table-footer">
-              <span>
-                {demo
-                  ? "예시 데이터입니다."
-                  : "유저가 업로드한 게임 기록이며 서버에서 플레이를 검증한 경쟁 순위는 아닙니다."}
-              </span>
+              <span>실제 게임에서 저장된 기록만 표시됩니다.</span>
               <div className="pagination">
                 <button
                   className="icon-button"
@@ -647,176 +616,6 @@ export default function Dashboard() {
           </p>
         </>
       )}
-      {notice && (
-        <div className="toast" role="status">
-          <Check size={17} />
-          {notice}
-          <button
-            className="icon-button"
-            onClick={() => setNotice("")}
-            aria-label="알림 닫기"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
-      {upload && (
-        <ImportModal
-          onClose={() => setUpload(false)}
-          onImported={(count) => {
-            setUpload(false);
-            setDemo(false);
-            setRevision((value) => value + 1);
-            setNotice(
-              `${count}개 기록을 가져왔어요. 같은 모험의 기록은 갱신됩니다.`,
-            );
-          }}
-        />
-      )}
     </main>
-  );
-}
-
-function ImportModal({
-  onClose,
-  onImported,
-}: {
-  onClose: () => void;
-  onImported: (count: number) => void;
-}) {
-  const [records, setRecords] = useState<DesktopRecord[]>([]);
-  const [name, setName] = useState("");
-  const [filename, setFilename] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const names = useMemo(
-    () => [...new Set(records.map((row) => row.name))],
-    [records],
-  );
-  const selected = records.filter((row) => row.name === name && row.score > 0);
-  const choose = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setError("");
-    setRecords([]);
-    setFilename(file.name);
-    try {
-      if (file.size > 512 * 1024)
-        throw new Error("512KB 이하의 기록 파일을 선택해 주세요.");
-      const json = JSON.parse(await file.text()) as {
-        version?: number;
-        history?: DesktopRecord[];
-      };
-      if (
-        json.version !== 1 ||
-        !Array.isArray(json.history) ||
-        !json.history.length ||
-        json.history.length > 100 ||
-        json.history.some(
-          (row) =>
-            !row || typeof row.name !== "string" || typeof row.run !== "string",
-        )
-      )
-        throw new Error("게임에서 생성한 scores.json 파일을 선택해 주세요.");
-      setRecords(json.history);
-      setName(json.history[0].name);
-    } catch (err) {
-      setError(
-        err instanceof SyntaxError
-          ? "JSON 형식의 점수 파일이 아닙니다."
-          : errorMessage(err),
-      );
-    }
-  };
-  const save = async () => {
-    if (!selected.length || busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      const result = await api<{ imported: number }>("/scores/import", {
-        method: "POST",
-        body: JSON.stringify({ records: selected }),
-      });
-      onImported(result.imported);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal
-      title="게임 기록 가져오기"
-      onClose={() => {
-        if (!busy) onClose();
-      }}
-      className="import-modal"
-    >
-      <p className="modal-intro">
-        데스크톱 게임에서 남긴 발자국을 웹 계정으로 가져옵니다.
-      </p>
-      <div className="import-help">
-        <span>1. 게임에서 F4로 이름을 설정하고 모험해요.</span>
-        <span>2. 게임을 종료해 점수 기록을 저장해요.</span>
-        <span>3. 아래 위치의 파일을 선택해 주세요.</span>
-        <code>%LOCALAPPDATA%\AntarcticPenguin\scores.json</code>
-      </div>
-      <label className="upload-zone">
-        <Upload size={26} />
-        <strong>{filename || "scores.json 파일 선택"}</strong>
-        <span>JSON 파일 · 최대 512KB</span>
-        <input
-          type="file"
-          accept=".json,application/json"
-          onChange={(event) => void choose(event)}
-          disabled={busy}
-          aria-label="점수 기록 파일 선택"
-        />
-      </label>
-      {records.length > 0 && (
-        <div className="import-selection">
-          <label className="form-field">
-            가져올 게임 닉네임
-            <select
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              disabled={busy}
-            >
-              {names.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p>
-            <Fish size={16} />
-            {selected.length}개 탐험 기록 · 최고{" "}
-            {formatNumber(
-              selected.length
-                ? Math.max(...selected.map((row) => row.score))
-                : 0,
-            )}
-            점
-          </p>
-          <small>
-            선택한 닉네임의 기록을 현재 로그인한 웹 계정에 등록합니다.
-          </small>
-        </div>
-      )}
-      {error && (
-        <div className="form-error" role="alert">
-          {error}
-        </div>
-      )}
-      <button
-        className="button button-dark import-submit"
-        disabled={!selected.length || busy}
-        onClick={() => void save()}
-      >
-        {busy ? "기록을 저장하고 있어요…" : "내 계정에 기록 저장"}
-        <ArrowUpRight size={17} />
-      </button>
-    </Modal>
   );
 }

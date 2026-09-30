@@ -6,6 +6,7 @@ from art import atlas_cells, fit_cycle
 
 class PenguinAnimation:
     def __init__(self, data):
+        self.puff_layer = pg.Surface((800, 600), pg.SRCALPHA)
         cells = atlas_cells(data/'adult-motion-atlas-v2.png',6,5)
         upright = fit_cycle(cells[:18],(64,56),padding=2)
         self.cycles = {'walk':upright[:8], 'idle':upright[8:10], 'jump':upright[10:12],
@@ -14,9 +15,16 @@ class PenguinAnimation:
                        'swim':fit_cycle(cells[24:30],(80,42),padding=2,anchor='center')}
         self.right_cycles = {name:[pg.transform.flip(f,True,False) for f in frames]
                              for name,frames in self.cycles.items()}
+        self.grown_cycles = {
+            False: {name: [pg.transform.scale(frame, (96, 84)) for frame in frames]
+                    for name, frames in self.cycles.items()},
+            True: {name: [pg.transform.scale(frame, (96, 84)) for frame in frames]
+                   for name, frames in self.right_cycles.items()},
+        }
         self.frames = {f'walk-{i+1}':frame for i,frame in enumerate(self.cycles['walk'])}
         self.frames.update({name:self.cycles[name][0] for name in ('idle','jump','fall','land')})
         self.cache = {}
+        self.swim_rotation_cache = {}
         for name, image in self.frames.items():
             for grown in (False, True):
                 sized = pg.transform.scale(image, (96,84)) if grown else image
@@ -46,8 +54,12 @@ class PenguinAnimation:
 
     def swim_image(self, right):
         frames = (self.right_cycles if right else self.cycles)['swim']
-        image = frames[int(self.swim_clock/0.18)%len(frames)]
-        return pg.transform.rotate(image,self.swim_angle)
+        index = int(self.swim_clock/0.18)%len(frames)
+        angle = round(self.swim_angle/3)*3
+        key = (right, index, angle)
+        if key not in self.swim_rotation_cache:
+            self.swim_rotation_cache[key] = pg.transform.rotate(frames[index], angle)
+        return self.swim_rotation_cache[key]
 
     def swim_bob(self):
         return math.sin(self.clock*2.5)*(1.5 if self.swim_movement.length_squared() else 3)
@@ -81,8 +93,7 @@ class PenguinAnimation:
         interval = 0.12 if self.state=='walk' else 0.6 if self.state=='idle' else 0.07 if self.state=='land' else 0.18
         clock = self.walk_clock if self.state=='walk' else self.clock if self.state=='idle' else self.state_clock
         index = int(clock/interval)%len(frames) if self.state in ('walk','idle') else min(len(frames)-1,int(clock/interval))
-        image = frames[index]
-        return pg.transform.scale(image,(96,84)) if grown else image
+        return self.grown_cycles[right][self.state][index] if grown else frames[index]
 
     def action_image(self, action, right):
         frames = (self.right_cycles if right else self.cycles)[action]
@@ -94,7 +105,10 @@ class PenguinAnimation:
         return frames[min(1,int(age/0.16))]
 
     def draw_puffs(self, screen, camera_x):
-        layer = pg.Surface(screen.get_size(), pg.SRCALPHA)
+        if not self.puffs:
+            return
+        layer = self.puff_layer
+        layer.fill((0, 0, 0, 0))
         for x,y,life in self.puffs:
             elapsed = 0.3-life
             drift = -1 if int(x)%2 else 1

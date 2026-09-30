@@ -1,4 +1,5 @@
 """Resizable presentation; game coordinates always remain 800 x 600."""
+import sys
 import pygame as pg
 
 
@@ -7,7 +8,8 @@ class GameWindow:
     button = pg.Rect(704,535,84,25)
 
     def __init__(self):
-        self.screen = pg.display.set_mode((800,600),pg.RESIZABLE)
+        self.web = sys.platform == 'emscripten'
+        self.screen = pg.display.set_mode((800,600), 0 if self.web else pg.RESIZABLE)
         self.canvas = pg.Surface((800,600))
         self.open = False
         self.choice = 1
@@ -28,6 +30,9 @@ class GameWindow:
         return [pg.Rect(240,240+i*43,320,36) for i in range(len(self.sizes))]
 
     def apply(self):
+        if self.web:
+            self.open = False
+            return
         self.screen = pg.display.set_mode(self.sizes[self.choice],pg.RESIZABLE)
         self.open = False
 
@@ -39,7 +44,7 @@ class GameWindow:
             self.open = False
             return False
         if event.type == pg.KEYDOWN:
-            if event.key == pg.K_F2 and not game.exit_open and not game.score_ui.open:
+            if event.key == pg.K_F2 and not self.web and not game.exit_open and not game.score_ui.open:
                 self.open = not self.open
                 return True
             if self.open:
@@ -60,7 +65,7 @@ class GameWindow:
                             self.apply()
                             break
                 return True
-            if pos is not None and self.button.collidepoint(pos) and not game.exit_open and not game.score_ui.open:
+            if not self.web and pos is not None and self.button.collidepoint(pos) and not game.exit_open and not game.score_ui.open:
                 self.open = True
                 return True
         return False
@@ -68,7 +73,7 @@ class GameWindow:
     def present(self,game):
         game.draw(self.canvas)
         ui = game.ui
-        if not game.exit_open and not game.score_ui.open:
+        if not self.web and not game.exit_open and not game.score_ui.open:
             ui.panel(self.canvas,self.button,dark=True)
             ui.text(self.canvas,'F2 창 크기',self.button.center,ui.small,'white',center=True)
         if self.open:
@@ -89,5 +94,14 @@ class GameWindow:
             pg.key.set_text_input_rect(pg.Rect(rect.x+round(field.x*rect.w/800),
                                                rect.y+round(field.y*rect.h/600),
                                                round(field.w*rect.w/800),round(field.h*rect.h/600)))
-        pg.transform.smoothscale(self.canvas,rect.size,self.screen.subsurface(rect))
+        # Avoid a full-frame resample when the browser canvas already matches
+        # the game's native resolution.  Resampling 480,000 pixels every frame
+        # is particularly expensive in WebAssembly.
+        target = self.screen.subsurface(rect)
+        if rect.size == self.canvas.get_size():
+            target.blit(self.canvas, (0, 0))
+        else:
+            # Preserve the illustrated edges and font shapes when the user
+            # explicitly chooses a larger window.
+            pg.transform.smoothscale(self.canvas, rect.size, target)
         pg.display.flip()

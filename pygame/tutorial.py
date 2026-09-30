@@ -51,6 +51,7 @@ class TutorialStage:
         self.player = pg.Rect(55,498,40,52)
         self.x,self.y = float(self.player.x),float(self.player.y)
         self.vy = 0.0
+        self.jump_hold = 0.0
         self.grounded = True
         self.right = True
         self.time = 0.0
@@ -97,7 +98,7 @@ class TutorialStage:
                     self.finished = True
                     game.coach.modal = ('튜토리얼 완료!', ['기본 조작을 모두 연습했어요. 이제 실제 모험을 시작합니다.', '처음 만나는 도전과 집 꾸미기도 설명창으로 안내합니다.'])
 
-    def update(self, game, dt, direction, jump, slide, vertical):
+    def update(self, game, dt, direction, jump, slide, vertical, jump_held=None):
         if game.content.book_open:
             return
         self.time += dt
@@ -132,6 +133,15 @@ class TutorialStage:
         previous_bottom = self.player.bottom
         if jump and self.grounded:
             self.vy = -650
+            self.grounded = False
+            self.jump_hold = 0.22
+        if self.vy < 0 and self.jump_hold > 0:
+            if jump_held is True:
+                self.vy -= 1050*dt
+                self.jump_hold = max(0.0,self.jump_hold-dt)
+            elif jump_held is False:
+                self.vy = max(self.vy,-390)
+                self.jump_hold = 0.0
         self.x += direction*(365 if self.sliding else 270)*dt
         self.player.x = round(max(0,min(1650,self.x)))
         if self.player.colliderect(self.arch):
@@ -180,7 +190,9 @@ class TutorialStage:
             game.ui.text(screen,'연습 바다 · 산소 제한 없음',(400,520),game.ui.body,'white',center=True)
         else:
             for platform in self.platforms:
-                screen.blit(game.platform_texture('snow',platform.size),platform.move(-self.camera,0))
+                ground = platform.height > 30
+                screen.blit(game.platform_texture('snow',platform.size,ground),
+                            platform.move(-self.camera,0))
             arch = self.arch.move(-self.camera,0)
             image = game.art.objects['practice-arch']
             game.art.grounded(screen,image,(arch.centerx,550))

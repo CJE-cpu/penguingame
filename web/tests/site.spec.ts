@@ -38,8 +38,8 @@ test("home, map, collection and preview work on desktop and mobile", async ({
   await page.getByRole("textbox", { name: "도감 검색" }).fill("황금");
   await expect(page.locator(".collection-card")).toHaveCount(1);
   await page.goto("/dashboard");
-  await expect(page.getByText("미리보기 · 예시 데이터")).toBeVisible();
-  await expect(page.locator(".stat-featured strong")).toContainText("1,680");
+  await expect(page.getByText("기록이 비어 있습니다")).toBeVisible();
+  await expect(page.locator(".latest-score-card > strong")).toContainText("0");
   await page.screenshot({
     path: "../build/web-dashboard-desktop.png",
     fullPage: true,
@@ -72,13 +72,15 @@ test("home, map, collection and preview work on desktop and mobile", async ({
   expect(errors).toEqual([]);
 });
 
-test("register, upload, deduplicate, persist a session, logout and login again", async ({
+test("register, auto-save, deduplicate, persist a session, logout and login again", async ({
   page,
 }) => {
-  const email = `browser-${Date.now()}@example.test`;
+  const unique = Date.now();
+  const email = `browser-${unique}@example.test`;
+  const nickname = `탐험가${String(unique).slice(-7)}`;
   const password = "Penguin-web-test-123";
   await page.goto("/login?mode=register");
-  await page.getByRole("textbox", { name: "닉네임" }).fill("브라우저 탐험가");
+  await page.locator("input[name=nickname]").fill(nickname);
   await page.getByRole("textbox", { name: "이메일" }).fill(email);
   await page.locator("input[name=password]").fill(password);
   await page.getByRole("button", { name: "탐험 클럽 가입하기" }).click();
@@ -90,7 +92,7 @@ test("register, upload, deduplicate, persist a session, logout and login again",
       {
         name: "게임 펭귄",
         run: "web-test-one",
-        score: 1700,
+        score: 17000,
         fish: 30,
         rescued: 3,
         seconds: 420,
@@ -109,26 +111,23 @@ test("register, upload, deduplicate, persist a session, logout and login again",
       },
     ],
   };
-  for (let i = 0; i < 2; i++) {
-    await page
-      .getByRole("button", { name: "게임 기록 가져오기", exact: true })
-      .first()
-      .click();
-    await page
-      .getByLabel("점수 기록 파일 선택")
-      .setInputFiles({
-        name: "scores.json",
-        mimeType: "application/json",
-        buffer: Buffer.from(JSON.stringify(fixture)),
-      });
-    await expect(
-      page.getByRole("dialog").getByText(/2개 탐험 기록/),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "내 계정에 기록 저장" }).click();
-    await expect(page.getByRole("dialog")).not.toBeVisible();
-    await expect(page.locator(".stat-featured strong")).toContainText("1,700");
-    await expect(page.locator("tbody tr")).toHaveCount(2);
+  await page.goto("/play");
+  const game = page.frameLocator(".game-frame");
+  await expect(game.locator("body")).toBeAttached();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const record of fixture.history) {
+      await game.locator("body").evaluate((_, completedRun) => {
+        window.parent.postMessage(
+          { type: "penguin-score", record: completedRun },
+          window.location.origin,
+        );
+      }, record);
+    }
   }
+  await expect(page.locator(".game-save-status")).toContainText("\uC800\uC7A5");
+  await page.goto("/dashboard");
+  await expect(page.locator(".latest-score-card > strong")).toContainText("17,000");
+  await expect(page.locator("tbody tr")).toHaveCount(2);
   await page.reload();
   await expect(page.getByText("나의 실제 기록")).toBeVisible();
   await expect(page.locator("tbody tr")).toHaveCount(2);
@@ -147,4 +146,73 @@ test("register, upload, deduplicate, persist a session, logout and login again",
   await page.locator("form").getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page).toHaveURL(/dashboard/);
   await expect(page.locator("tbody tr")).toHaveCount(2);
+});
+
+test("browser game package loads from the play page", async ({ page }) => {
+  test.setTimeout(120_000);
+  const failed: string[] = [];
+  const errors: string[] = [];
+  const logs: string[] = [];
+  page.on("response", (response) => {
+    if (response.status() >= 400)
+      failed.push(`${response.status()} ${response.url()}`);
+  });
+  page.on("requestfailed", (request) =>
+    failed.push(`${request.failure()?.errorText} ${request.url()}`),
+  );
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    logs.push(`${message.type()}: ${message.text()}`);
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.goto("/play");
+  await expect(page.getByRole("heading", { name: "지금 바로 남극으로" })).toBeVisible();
+  const game = page.frameLocator(".game-frame");
+  await expect(game.locator("#canvas")).toBeAttached({ timeout: 30_000 });
+  await expect(game.locator("#progress")).toBeAttached();
+  await expect(game.locator("#canvas")).toBeVisible({ timeout: 90_000 });
+  try {
+    await game.locator("#infobox").waitFor({ state: "hidden", timeout: 90_000 });
+  } catch {
+    const state = await game.locator("body").evaluate(() => ({
+      infobox: document.querySelector("#infobox")?.textContent,
+      status: document.querySelector("#status")?.textContent,
+      progress: (document.querySelector("#progress") as HTMLProgressElement)?.value,
+      busy: (window as unknown as { busy?: number }).busy,
+      python: "python" in window,
+      module: "Module" in window,
+    }));
+    throw new Error(
+      JSON.stringify({ state, failed, errors, logs: logs.slice(-80) }, null, 2),
+    );
+  }
+  await expect.poll(async () => game.locator("#canvas").evaluate((node) => {
+    const canvas = node as HTMLCanvasElement;
+    const bounds = canvas.getBoundingClientRect();
+    return Math.max(Math.abs(canvas.width - bounds.width), Math.abs(canvas.height - bounds.height));
+  })).toBeLessThanOrEqual(8);
+  expect(failed).toEqual([]);
+  expect(errors).toEqual([]);
+  await game.locator("body").evaluate(() => {
+    window.parent.postMessage(
+      JSON.stringify({
+        type: "penguin-score",
+        record: {
+          run: "browser-bridge-test",
+          name: "탐험가",
+          score: 900,
+          fish: 8,
+          rescued: 0,
+          seconds: 240,
+          cleared: true,
+          ending: 1,
+          date: new Date().toISOString(),
+        },
+      }),
+      window.location.origin,
+    );
+  });
+  await expect(
+    page.getByText("로그인하면 방금 달성한 엔딩 점수가 자동 저장됩니다."),
+  ).toBeVisible();
 });
