@@ -178,6 +178,7 @@ class Game:
         self.weather_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
         self.marker_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
         self.atmosphere_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
+        self.collectible_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
         self.quality_levels = ('performance', 'balanced', 'high')
         # WebAssembly alpha drawing is much slower than native rendering.
         # Performance mode keeps native resolution and sprites intact; it only
@@ -738,8 +739,9 @@ class Game:
             shelf = pg.transform.smoothscale(self.shelf_images[kind],
                                               (360, visual_height))
             offset = {'thin': -42, 'normal': 0, 'ground': 0}.get(variant, 0)
-            for x in range(offset, width, shelf.get_width()):
-                surface.blit(shelf, (x, 0))
+            for tile_index, x in enumerate(range(offset, width, shelf.get_width())):
+                tile = pg.transform.flip(shelf, True, False) if tile_index % 2 else shelf
+                surface.blit(tile, (x, 0))
             pg.draw.line(surface, (231, 250, 253, 210),
                          (4, 2), (max(4, width-5), 2), 2)
             self.platform_textures[key] = surface
@@ -1255,6 +1257,22 @@ class Game:
         # belong behind hazards. Drawing them first prevents enemies from being
         # hidden while their collision box can still damage the player.
         self.content.draw_world(self,screen)
+        glow = self.collectible_layer
+        glow.fill((0, 0, 0, 0))
+        for kind, fish in self.fish:
+            if self.visible(fish):
+                rect = fish.move(-self.camera_x, 0)
+                color = {'orange': (255, 174, 82), 'blue': (95, 205, 255),
+                         'gold': (255, 224, 105)}[kind]
+                pg.draw.ellipse(glow, (*color, 38), rect.inflate(14, 10))
+                pg.draw.ellipse(glow, (*color, 95), rect.inflate(6, 3), 1)
+        for kind, rect in self.items:
+            if self.visible(rect):
+                draw_rect = rect.move(-self.camera_x, 0)
+                color = ITEM_STYLE[kind][0]
+                pg.draw.ellipse(glow, (*color, 45), draw_rect.inflate(16, 12))
+                pg.draw.ellipse(glow, (*color, 125), draw_rect.inflate(7, 5), 1)
+        screen.blit(glow, (0, 0))
         for index, (kind, fish) in enumerate(self.fish):
             if not self.visible(fish):
                 continue

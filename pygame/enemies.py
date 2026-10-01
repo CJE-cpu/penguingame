@@ -94,6 +94,10 @@ class Enemy:
         contact_shadow(screen, rect.midbottom, rect.width,
                        self.kind == 'skua' or
                        (self.kind == 'spirit' and self.rect.y < self.base_y))
+        if self.kind != 'skua' and not (self.kind == 'spirit' and self.rect.y < self.base_y):
+            pg.draw.ellipse(screen, (142, 72, 72),
+                            (rect.centerx-rect.width//3, rect.bottom-2,
+                             rect.width*2//3, 4), 1)
         screen.blit(image,rect)
         if self.warning:
             pg.draw.polygon(screen,(255,209,90), [(rect.centerx,rect.y-19),(rect.centerx-7,rect.y-5),(rect.centerx+7,rect.y-5)])
