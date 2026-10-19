@@ -170,6 +170,12 @@ class Game:
         self.marker_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
         self.atmosphere_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
         self.collectible_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
+        # Reusable pre-rendered shadow and alpha caches reduce browser-side churn.
+        self._shadow_template = pg.Surface((36, 12), pg.SRCALPHA)
+        pg.draw.ellipse(self._shadow_template, (18, 55, 78, 35), self._shadow_template.get_rect())
+        self._shadow_cache = {}
+        self._background_alpha_cache = {}
+        self.current_fps = 0.0
         self.quality_levels = ('performance', 'balanced', 'high')
         # WebAssembly alpha drawing is much slower than native rendering.
         # Performance mode keeps native resolution and sprites intact; it only
@@ -828,6 +834,7 @@ class Game:
                                (seam_x+2, seam_bottom)], 1)
             self.platform_textures[key] = surface
         return self.platform_textures[key]
+
     def draw_background(self, screen):
         drift = round(400 * max(0, min(1, self.camera_x / (WORLD_WIDTH-WIDTH))))
         weights = self.scene_weights()
@@ -848,26 +855,36 @@ class Game:
                     screen.blit(self.scene_backgrounds[right_region], (-drift, 0))
                 transition_left = max(0, edge-feather//2)
                 transition_right = min(WIDTH, edge+feather//2)
-                strips = 6
+                strips = 3 if sys.platform == 'emscripten' else 6
                 for band in range(strips):
                     x0 = round(transition_left+(transition_right-transition_left)*band/strips)
                     x1 = round(transition_left+(transition_right-transition_left)*(band+1)/strips)
                     if x1 <= x0:
                         continue
-                    background = self.scene_backgrounds[right_region]
-                    background.set_alpha(round(255*(band+1)/(strips+1)))
+                    alpha = round(255*(band+1)/(strips+1))
+                    key = (right_region, alpha)
+                    bg = self._background_alpha_cache.get(key)
+                    if bg is None:
+                        bg = self.scene_backgrounds[right_region].copy()
+                        bg.set_alpha(alpha)
+                        self._background_alpha_cache[key] = bg
                     screen.set_clip(pg.Rect(x0, 0, x1-x0, HEIGHT))
-                    screen.blit(background, (-drift, 0))
-                    background.set_alpha(None)
+                    screen.blit(bg, (-drift, 0))
                 screen.set_clip(old_clip)
             return
         for index, (region, weight) in enumerate(weights):
             background = self.scene_backgrounds[region]
             if index:
-                background.set_alpha(round(255*weight))
-            screen.blit(background, (-drift, 0))
-            if index:
-                background.set_alpha(None)
+                alpha = round(255 * weight)
+                key = (region, alpha)
+                bg = self._background_alpha_cache.get(key)
+                if bg is None:
+                    bg = background.copy()
+                    bg.set_alpha(alpha)
+                    self._background_alpha_cache[key] = bg
+                screen.blit(bg, (-drift, 0))
+            else:
+                screen.blit(background, (-drift, 0))
 
     def active_platforms(self):
         return [p for p in self.platforms if self.crumbles.get(tuple(p), (0, 0))[1] <= 0]
@@ -1458,8 +1475,11 @@ class Game:
             joins = self.ground_join_sides(platform) if ground else (False, False)
             variant = self.platform_variants[tuple(platform)]
             if not ground:
-                shadow = pg.Surface((rect.width, 12), pg.SRCALPHA)
-                pg.draw.ellipse(shadow, (18, 55, 78, 35), shadow.get_rect())
+                shadow_key = (rect.width, 12)
+                shadow = self._shadow_cache.get(shadow_key)
+                if shadow is None:
+                    shadow = pg.transform.smoothscale(self._shadow_template, shadow_key)
+                    self._shadow_cache[shadow_key] = shadow
                 screen.blit(shadow, (rect.x, rect.bottom-3))
             screen.blit(self.platform_texture(kind, platform.size, ground, joins,
                                               variant), rect)
@@ -1550,6 +1570,9 @@ class Game:
         if self.boss_intro:
             self.ui.boss_intro(self, screen)
         self.ui.hud(self, screen, REGIONS)
+        if self.current_fps:
+            self.ui.text(screen, f'FPS {self.current_fps:.0f}', (738, 82), self.ui.small,
+                        (153, 240, 181), center=False)
         if self.skua_boss.active and not self.skua_boss.defeated:
             self.skua_boss.draw_hud(self, screen)
         elif self.boss.active and not self.boss.defeated:
@@ -1604,7 +1627,7 @@ class Game:
                 screen.blit(image,image.get_rect(midbottom=rect.midbottom))
         snow_weight = dict(self.scene_weights()).get(3, 0)
         if snow_weight > 0:
-            snow_count = {'performance':24, 'balanced':40, 'high':65}[self.quality]
+            snow_count = {'performance':12, 'balanced':24, 'high':40}[self.quality] if sys.platform == 'emscripten' else {'performance':24, 'balanced':40, 'high':65}[self.quality]
             if self.quality == 'performance':
                 color = tuple(round(170+(channel-170)*snow_weight)
                               for channel in (238, 249, 255))
@@ -1671,6 +1694,8 @@ class Game:
             cx = rect.centerx
             pulse = (math.sin(self.time*3+index)+1)/2
             marker_rows = 40 if self.quality == 'performance' else 60 if self.quality == 'balanced' else 80
+            if sys.platform == 'emscripten' and self.render_ms_average > 10:
+                marker_rows = max(12, marker_rows // 2)
             for row in range(marker_rows):
                 pg.draw.line(layer,(255,225,114,round((1-row/marker_rows)*45)),
                              (cx-17,rect.bottom-row),(cx+17,rect.bottom-row),1)
@@ -1726,6 +1751,7 @@ class Game:
                 x = round((i*79+self.time*20)%WIDTH)
                 y = 557+round(math.sin(self.time*2+i)*3)
                 pg.draw.line(screen,(166,227,245),(x,y),(x+22,y),2)
+
     def draw_intro(self, screen):
         self.ui.intro(self, screen)
 
@@ -1744,6 +1770,7 @@ async def main():
             # frame pacing on a 60 Hz canvas even when rendering is fast enough.
             target_fps = 60
             dt = min(clock.tick(target_fps) / 1000, 1 / 30)
+            game.current_fps = clock.get_fps()
             jump = False
             for event in pg.event.get():
                 if window.handle(event,game):
