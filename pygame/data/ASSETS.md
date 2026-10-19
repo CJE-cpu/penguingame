@@ -38,3 +38,9 @@ arcade platformers informed readability and color contrast only; no external
 character, stage, UI, or sprite was copied.
 
 Built-in image_gen update: eight-phase left-facing walk cycle, alternating feet/flipper sway, consistent adult-penguin identity, transparent 4x2 atlas. Enemy atlas prompt: transparent 3x2 pixel-art poses for leopard seal patrol/charge, Antarctic skua wings up/down, ice spirit standing/jumping. Outputs are named by contents and preserved in this directory.
+
+Skua boss update, built-in image_gen. Prompt summary: an original transparent
+4x2 pixel-art Antarctic skua boss atlas with hover-up, hover-down, warning,
+dive, snowball-carry, stunned, hit and defeated poses; bold navy outlines,
+warm brown feathers, readable arcade silhouettes and no text or UI. Output:
+`skua-boss-atlas.png`.

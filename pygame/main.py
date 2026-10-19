@@ -14,14 +14,14 @@ from feedback import InteractionEffects
 from motion import CombatMotion, BabyCompanion
 from adventure import AdventureContent
 from tutorial import Coach, TutorialStage
-from art import WorldArt, contact_shadow
+from art import WorldArt, contact_shadow, atlas_cells, fit_cycle
 from window import GameWindow
 from cave import CaveExpedition
 from records import ScoreRecords, ScoreUI
 from progress import AdventureSave
 from ending import EndingSequence, ENDING_NAMES
 from sound import GameAudio
-from boss import SealBoss
+from boss import SealBoss, SkuaBoss
 
 WIDTH, HEIGHT = 800, 600
 NORMAL_PLAYER_SIZE = (40, 52)
@@ -52,9 +52,9 @@ MAP_LAYOUTS = [
     ([(0,550,310), (370,520,250), (690,490,230), (995,550,205)],
      [(60,370,80), (160,450,180), (350,365,200), (575,280,180),
       (780,205,190), (1040,390,90)]),
-    ([(0,550,250), (315,550,230), (610,550,240), (925,550,275)],
-     [(65,390,80), (180,460,150), (345,390,150), (510,320,160),
-      (700,390,150), (865,460,160), (1060,370,90)]),
+    ([(0,550,250), (315,550,230), (610,550,590)],
+     [(65,390,100), (180,460,140), (345,390,150),
+      (1025,460,75), (1110,390,65)]),
     ([(0,550,350), (420,550,780)],
      [(70,375,90), (190,450,200), (395,365,160), (575,280,180),
       (785,365,160), (975,450,180), (1100,360,70)])]
@@ -135,6 +135,11 @@ class Game:
             name: load_image(f'seal-boss-{name}.png', (180, 110))
             for name in ('idle', 'roar', 'warning', 'charge', 'stunned', 'defeated')
         }
+        skua_cells = fit_cycle(atlas_cells(DATA/'skua-boss-atlas.png', 4, 2),
+                               (180, 115), padding=3, anchor='center')
+        self.skua_boss_images = dict(zip(
+            ('hover-up', 'hover-down', 'warning', 'dive', 'carry',
+             'stunned', 'hit', 'defeated'), skua_cells))
         self.crab_image = self.enemy_images['crab'][0]
         self.igloo_image = load_image('igloo-checkpoint.png', (112, 85), keep_aspect=True)
         self.cave_image = load_image('ice-cave-entrance.png', (180, 135), keep_aspect=True)
@@ -261,6 +266,8 @@ class Game:
                             else self.region_grounds[region][0 if index else -1])
                 if region == 2 and kind == 'spirit':
                     platform = self.region_ledges[region][index]
+                if region == 4 and kind == 'spirit':
+                    platform = self.region_grounds[region][0]
                 if index and kind == 'seal':
                     platform = self.region_grounds[region][min(1,len(self.region_grounds[region])-1)]
                 enemy = Enemy(platform, 55+region*7, kind)
@@ -325,6 +332,17 @@ class Game:
                 rect.centerx = 2*REGION_WIDTH+230+moved*125
                 moved += 1
         self.max_score += self.boss.SCORE
+        skua_ground = self.region_grounds[4][-1]
+        skua_arena = pg.Rect(skua_ground.left+30, 330,
+                             skua_ground.width-300, skua_ground.top-330)
+        self.skua_boss = SkuaBoss(skua_arena, skua_ground.top,
+                                  self.skua_boss_images)
+        moved = 0
+        for _kind, rect in self.fish:
+            if rect.colliderect(self.skua_boss.arena):
+                rect.centerx = self.region_grounds[4][0].left+80+moved*115
+                moved += 1
+        self.max_score += self.skua_boss.SCORE
         self.max_score += 6*60 + 170 + 200 + 6*40 + 500 + 225
         self.max_score += 300 + 2*(30+50) + TIME_BONUS_MAX # Caverns, guardians and time bonus.
         self.arrange_potions(placements)
@@ -554,8 +572,12 @@ class Game:
             self.ending = EndingSequence(self.ending_type)
         elif self.content.book_open and key in (pg.K_LEFT,pg.K_RIGHT,pg.K_a,pg.K_d):
             self.content.book_page = (self.content.book_page+(1 if key in (pg.K_RIGHT,pg.K_d) else -1))%7
-        elif key == pg.K_x and self.boss.active:
-            if self.boss.launch_ice(self.player, self.facing_right):
+        elif key == pg.K_x and (self.boss.active or self.skua_boss.active):
+            if self.skua_boss.active and self.skua_boss.kick(self.player, self.facing_right):
+                self.audio.play('item')
+                self.feedback.emit(self.player.midtop, '눈덩이 반격!',
+                                   (255, 224, 112))
+            elif self.boss.active and self.boss.launch_ice(self.player, self.facing_right):
                 self.audio.play('item')
                 self.feedback.emit(self.player.midtop, '얼음 조각 투척!',
                                    (174, 235, 249))
@@ -728,16 +750,23 @@ class Game:
             visual_height = max(height, profile_heights.get(variant, 64))
             surface = pg.Surface((width, visual_height), pg.SRCALPHA)
             cap, body, shadow = self.platform_palettes[kind]
-            if ground:
-                pg.draw.rect(surface, body, (0, 5, width, visual_height-5))
-            else:
-                pg.draw.polygon(surface, body,
-                                [(0, 5), (width, 5),
-                                 (max(0, width-9), visual_height-1),
-                                 (min(width, 9), visual_height-1)])
-            pg.draw.rect(surface, cap, (0, 0, width, 9))
-            pg.draw.line(surface, (255, 255, 255, 190), (2, 1), (width-3, 1), 2)
-            pg.draw.line(surface, shadow, (0, 9), (width-1, 9), 2)
+            inset = 0 if ground else (7 if variant == 'normal' else 11)
+            pg.draw.polygon(surface, body,
+                            [(0, 6), (width, 6),
+                             (max(0, width-inset), visual_height-1),
+                             (min(width, inset), visual_height-1)])
+            # A wide, gently uneven snow lip gives the shelves a natural
+            # platform-game silhouette without filling them with busy detail.
+            dip = 7 if width < 130 else 9
+            cap_points = [(0, 0), (width, 0), (width, dip-2),
+                          (width*3//4, dip), (width//2, dip-1),
+                          (width//4, dip+1), (0, dip-2)]
+            pg.draw.polygon(surface, cap, cap_points)
+            pg.draw.lines(surface, (255, 255, 255, 190), False,
+                          [(2, 1), (width//2, 2), (width-3, 1)], 2)
+            pg.draw.lines(surface, shadow, False,
+                          [(0, dip-2), (width//4, dip+1),
+                           (width//2, dip-1), (width, dip-2)], 2)
             # One broad seam per long shelf adds depth without a noisy pattern.
             if width >= 145:
                 seam_x = width // 2 + (17 if width % 3 else -19)
@@ -889,6 +918,7 @@ class Game:
         if not self.consume_life(hit):
             return
         self.boss.reset_encounter()
+        self.skua_boss.reset_encounter()
         self.animation.reset()
         self.feedback.reset()
         self.combat.reset()
@@ -1071,6 +1101,9 @@ class Game:
         if self.boss.confine(self.player):
             self.x = float(self.player.x)
             self.velocity_x = 0.0
+        if self.skua_boss.confine(self.player):
+            self.x = float(self.player.x)
+            self.velocity_x = 0.0
         if self.player.x != round(self.x):
             self.x = float(self.player.x)
         self.velocity_y += GRAVITY * dt
@@ -1148,6 +1181,35 @@ class Game:
                 self.combat.hit(self.player, self.boss)
                 self.feedback.emit(self.player.midtop, '보스에게 피격!', (255, 133, 125))
                 return
+        skua_event = self.skua_boss.update(dt, self.player)
+        if skua_event == 'start':
+            self.audio.play('checkpoint')
+            self.feedback.emit(self.skua_boss.rect.midtop,
+                               '갈매기 대장이 길을 막았습니다!', (255, 210, 107))
+        elif skua_event == 'impact':
+            self.audio.play('hit')
+            self.feedback.emit(self.skua_boss.rect.midtop,
+                               '급강하 충돌! 지금 반격하세요!', (174, 235, 249))
+        elif skua_event in ('hit', 'defeat'):
+            self.audio.play('defeat')
+            self.invincible = max(self.invincible, 0.6)
+            if skua_event == 'defeat':
+                self.score += self.skua_boss.SCORE
+                self.feedback.emit(self.skua_boss.rect.midtop,
+                                   f'갈매기 보스 격파! +{self.skua_boss.SCORE}',
+                                   (255, 224, 112))
+                self.progress.save(self)
+            else:
+                self.feedback.emit(self.skua_boss.rect.midtop,
+                                   f'눈덩이 명중 {self.skua_boss.hits}/{self.skua_boss.MAX_HITS}',
+                                   (174, 235, 249))
+        if (self.skua_boss.active and not self.invincible
+                and (self.skua_boss.snowball_hits(self.player)
+                     or (self.skua_boss.state not in ('stunned', 'hit')
+                         and self.player.colliderect(self.skua_boss.rect)))):
+            self.combat.hit(self.player, self.skua_boss)
+            self.feedback.emit(self.player.midtop, '갈매기에게 피격!', (255, 133, 125))
+            return
         # Descending from above is a stomp; side and upward contact cause damage.
         for enemy in list(self.enemies):
             if not self.player.colliderect(enemy.rect):
@@ -1353,6 +1415,8 @@ class Game:
                 enemy.draw(screen, self.camera_x, self.enemy_images)
         self.boss.draw_terrain(screen, self.camera_x, self.time)
         self.boss.draw(screen, self.camera_x, self.time)
+        self.skua_boss.draw_terrain(screen, self.camera_x, self.time)
+        self.skua_boss.draw(screen, self.camera_x, self.time)
         image = self.feedback.player_image(self)
         if self.combat.hurt:
             image = self.animation.hurt_image(0.45-self.combat.hurt,self.facing_right)
@@ -1383,13 +1447,15 @@ class Game:
         self.draw_baby_markers(screen)
         self.feedback.draw(self, screen)
         self.ui.hud(self, screen, REGIONS)
-        if self.boss.active and not self.boss.defeated:
+        if self.skua_boss.active and not self.skua_boss.defeated:
+            self.skua_boss.draw_hud(self, screen)
+        elif self.boss.active and not self.boss.defeated:
             self.boss.draw_hud(self, screen)
         else:
             self.ui.rescue_guide(self,screen)
             self.ui.transition(self, screen, REGIONS)
             self.content.draw_hud(self,screen)
-        if self.region_banner > 0 and not self.boss.active:
+        if self.region_banner > 0 and not (self.boss.active or self.skua_boss.active):
             label = self.region_hint_labels[self.display_region]
             self.ui.panel(screen,(490,149,298,31))
             screen.blit(label,(499,154))

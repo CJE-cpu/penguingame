@@ -266,3 +266,236 @@ class SealBoss:
             color = (255, 211, 91) if index < self.hits else (87, 135, 154)
             pg.draw.circle(screen, color, (545+index*21, 134), 6)
 
+
+class SkuaBoss:
+    """Late-game aerial boss built around readable dives and snowball returns."""
+    MAX_HITS = 3
+    SCORE = 700
+
+    def __init__(self, arena, floor_y, images):
+        self.arena = pg.Rect(arena)
+        self.floor_y = floor_y
+        self.images = images
+        self.flipped_images = {name: pg.transform.flip(image, True, False)
+                               for name, image in images.items()}
+        self.rect = pg.Rect(0, 0, 142, 82)
+        self.rect.center = (self.arena.centerx, floor_y-180)
+        self.position = pg.Vector2(self.rect.center)
+        self.velocity = pg.Vector2()
+        self.active = False
+        self.defeated = False
+        self.state = 'hover'
+        self.timer = 0.0
+        self.hits = 0
+        self.attack_count = 0
+        self.direction = -1
+        self.flash = 0.0
+        self.snowballs = []
+
+    def start(self):
+        if self.active or self.defeated:
+            return False
+        self.active = True
+        self.state = 'hover'
+        self.timer = 1.0
+        return True
+
+    def reset_encounter(self):
+        if self.defeated:
+            return
+        self.active = False
+        self.state = 'hover'
+        self.timer = 0.0
+        self.hits = 0
+        self.attack_count = 0
+        self.snowballs.clear()
+        self.rect.center = (self.arena.centerx, self.floor_y-180)
+        self.position.update(self.rect.center)
+
+    def restore_defeated(self, defeated):
+        self.defeated = bool(defeated)
+        if self.defeated:
+            self.active = False
+            self.state = 'defeated'
+
+    def confine(self, player):
+        if not self.active or self.defeated:
+            return False
+        original = player.x
+        player.left = max(player.left, self.arena.left+10)
+        player.right = min(player.right, self.arena.right-10)
+        return player.x != original
+
+    def kick(self, player, facing_right):
+        candidates = [ball for ball in self.snowballs
+                      if ball['resting'] and ball['rect'].inflate(95, 65).colliderect(player)]
+        if not candidates:
+            return False
+        ball = min(candidates, key=lambda item: abs(item['rect'].centerx-player.centerx))
+        direction = 1 if facing_right else -1
+        ball['resting'] = False
+        ball['kicked'] = True
+        ball['velocity'].update(direction*470, -560)
+        ball['life'] = 2.2
+        return True
+
+    def snowball_hits(self, player):
+        """Consume a falling hostile snowball that touches the player."""
+        for ball in self.snowballs:
+            if (not ball['resting'] and not ball['kicked']
+                    and ball['rect'].colliderect(player)):
+                self.snowballs.remove(ball)
+                return True
+        return False
+
+    def take_hit(self):
+        self.hits += 1
+        self.flash = 0.35
+        if self.hits >= self.MAX_HITS:
+            self.defeated = True
+            self.active = False
+            self.state = 'defeated'
+            return 'defeat'
+        self.state = 'hit'
+        self.timer = 0.75
+        return 'hit'
+
+    def _update_snowballs(self, dt):
+        event = None
+        remaining = []
+        for ball in self.snowballs:
+            ball['life'] -= dt
+            if not ball['resting']:
+                ball['velocity'].y += 920*dt
+                ball['position'] += ball['velocity']*dt
+                ball['rect'].center = (round(ball['position'].x),
+                                       round(ball['position'].y))
+                if (ball['kicked'] and self.active and not self.defeated
+                        and ball['rect'].colliderect(self.rect)):
+                    event = self.take_hit()
+                    continue
+                if ball['rect'].bottom >= self.floor_y:
+                    ball['rect'].bottom = self.floor_y
+                    ball['position'].update(ball['rect'].center)
+                    if ball['kicked']:
+                        continue
+                    ball['resting'] = True
+                    ball['velocity'].update(0, 0)
+                    ball['life'] = max(ball['life'], 3.2)
+            if ball['life'] > 0:
+                remaining.append(ball)
+        self.snowballs = remaining
+        return event
+
+    def update(self, dt, player):
+        self.flash = max(0.0, self.flash-dt)
+        projectile_event = self._update_snowballs(dt)
+        if projectile_event:
+            return projectile_event
+        if self.defeated:
+            return None
+        if not self.active:
+            if self.arena.left+35 <= player.centerx <= self.arena.right-35:
+                return 'start' if self.start() else None
+            return None
+        self.timer = max(0.0, self.timer-dt)
+        self.direction = -1 if player.centerx < self.rect.centerx else 1
+        if self.state == 'hover':
+            target_x = max(self.arena.left+90,
+                           min(self.arena.right-90, player.centerx+self.direction*-145))
+            target_y = self.floor_y-185+math.sin(pg.time.get_ticks()*0.004)*18
+            self.position.x += (target_x-self.position.x)*(1-math.exp(-2.8*dt))
+            self.position.y += (target_y-self.position.y)*(1-math.exp(-4.0*dt))
+            self.rect.center = (round(self.position.x), round(self.position.y))
+            if not self.timer:
+                self.attack_count += 1
+                self.state = 'warning' if self.attack_count % 2 == 0 else 'carry'
+                self.timer = 0.7
+        elif self.state == 'carry' and not self.timer:
+            rect = pg.Rect(0, 0, 32, 32)
+            rect.center = self.rect.midbottom
+            self.snowballs.append({'rect': rect, 'position': pg.Vector2(rect.center),
+                                   'velocity': pg.Vector2(self.direction*35, 40),
+                                   'resting': False, 'kicked': False, 'life': 5.0})
+            self.state = 'hover'
+            self.timer = max(0.75, 1.15-self.hits*0.12)
+        elif self.state == 'warning' and not self.timer:
+            target = pg.Vector2(player.centerx, self.floor_y-22)
+            delta = target-self.position
+            self.velocity = delta.normalize()*620 if delta.length_squared() else pg.Vector2(0,620)
+            self.state = 'dive'
+            self.timer = 1.2
+        elif self.state == 'dive':
+            self.position += self.velocity*dt
+            self.rect.center = (round(self.position.x), round(self.position.y))
+            if self.rect.bottom >= self.floor_y or not self.timer:
+                self.rect.bottom = self.floor_y
+                self.position.update(self.rect.center)
+                self.state = 'stunned'
+                self.timer = 1.35
+                return 'impact'
+        elif self.state == 'stunned' and not self.timer:
+            self.state = 'hover'
+            self.timer = 0.85
+            self.position.update(self.rect.centerx, self.floor_y-180)
+        elif self.state == 'hit' and not self.timer:
+            self.state = 'hover'
+            self.timer = 0.9
+            self.position.update(self.rect.centerx, self.floor_y-180)
+        return None
+
+    def image(self):
+        names = {'hover':'hover-up' if int(pg.time.get_ticks()/160)%2 == 0 else 'hover-down',
+                 'carry':'carry', 'warning':'warning', 'dive':'dive',
+                 'stunned':'stunned', 'hit':'hit', 'defeated':'defeated'}
+        name = names.get(self.state, 'hover-up')
+        return self.flipped_images[name] if self.direction > 0 else self.images[name]
+
+    def draw_terrain(self, screen, camera_x, time):
+        if not self.active:
+            return
+        left, right = self.arena.left-camera_x, self.arena.right-camera_x
+        pg.draw.line(screen, (170, 207, 232), (left, self.floor_y-2),
+                     (right, self.floor_y-2), 3)
+        for index in range(6):
+            x = round(left+55+index*(self.arena.width-110)/5)
+            sway = round(math.sin(time*3+index)*7)
+            pg.draw.line(screen, (213, 240, 248), (x-18-sway, 190+index%2*36),
+                         (x+18+sway, 190+index%2*36), 2)
+
+    def draw(self, screen, camera_x, time):
+        if not self.active and not self.defeated:
+            return
+        for ball in self.snowballs:
+            rect = ball['rect'].move(-camera_x, 0)
+            color = (225, 247, 252) if not ball['kicked'] else (255, 230, 126)
+            pg.draw.circle(screen, (84, 155, 190), rect.center, 18)
+            pg.draw.circle(screen, color, rect.center, 15)
+            pg.draw.arc(screen, (255,255,255), rect.inflate(-9,-9), math.pi, math.tau, 2)
+        rect = self.rect.move(-camera_x, 0)
+        image = self.image()
+        if self.flash and int(self.flash*30)%2:
+            image = pg.mask.from_surface(image, 40).to_surface(
+                setcolor=(255,255,255,235), unsetcolor=(0,0,0,0))
+        screen.blit(image, image.get_rect(center=rect.center))
+        if self.state == 'warning':
+            pg.draw.polygon(screen, (255, 218, 92),
+                            [(rect.centerx, rect.bottom+9),
+                             (rect.centerx-12, rect.bottom+30),
+                             (rect.centerx+12, rect.bottom+30)])
+
+    def draw_hud(self, game, screen):
+        if not self.active or self.defeated:
+            return
+        ui = game.ui
+        ui.panel(screen, (188, 88, 424, 58), dark=True)
+        ui.text(screen, '갈매기 대장 · 빙붕의 폭풍', (400, 99), ui.body,
+                'white', center=True)
+        objective = ('떨어진 눈덩이 옆에서 X로 되받아치세요'
+                     if self.state != 'warning' else '표시를 보고 급강하를 피하세요!')
+        ui.text(screen, objective, (400, 123), ui.small,
+                (224,247,251), center=True, max_width=390)
+        for index in range(self.MAX_HITS):
+            color = (255,211,91) if index < self.hits else (87,135,154)
+            pg.draw.circle(screen, color, (545+index*21,134), 6)
+

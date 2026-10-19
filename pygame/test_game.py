@@ -1597,6 +1597,35 @@ class AdventureChecks(unittest.TestCase):
         held = apex(13)
         self.assertLess(held, tapped-60)
 
+    def test_skua_boss_uses_kickable_snowballs_and_three_hits(self):
+        boss = self.game.skua_boss
+        self.assertTrue(boss.start())
+        ball_rect = pg.Rect(0, 0, 32, 32)
+        ball_rect.midbottom = self.game.player.midbottom
+        boss.snowballs.append({
+            'rect': ball_rect,
+            'position': pg.Vector2(ball_rect.center),
+            'velocity': pg.Vector2(),
+            'resting': True,
+            'kicked': False,
+            'life': 3.0,
+        })
+        self.assertTrue(boss.kick(self.game.player, True))
+        self.assertTrue(boss.snowballs[0]['kicked'])
+        self.assertEqual(boss.take_hit(), 'hit')
+        self.assertEqual(boss.take_hit(), 'hit')
+        self.assertEqual(boss.take_hit(), 'defeat')
+        self.assertTrue(boss.defeated)
+
+    def test_skua_arena_has_a_clear_floor_and_approach_step(self):
+        boss = self.game.skua_boss
+        raised = [platform for platform in self.game.region_ledges[4]
+                  if platform.colliderect(boss.arena)]
+        self.assertEqual(raised, [])
+        self.assertTrue(any(platform.top > boss.arena.top
+                            and platform.right <= boss.arena.left+120
+                            for platform in self.game.region_ledges[4]))
+
 
 if __name__ == '__main__':
     unittest.main()

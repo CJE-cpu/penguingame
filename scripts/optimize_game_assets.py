@@ -16,6 +16,7 @@ TARGETS = {
     "fish-motion-atlas-v2.png": (724, 543),
     "adventure-objects-atlas-v2.png": (724, 543),
     "shield-potion.png": (256, 256),
+    "skua-boss-atlas.png": (1024, 512),
 }
 
 

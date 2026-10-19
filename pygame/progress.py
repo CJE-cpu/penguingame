@@ -59,7 +59,11 @@ class AdventureSave:
                     'defeated': sorted(cave.get('expedition', {}).get('defeated', set())),
                 },
             } for cave in game.caves],
-            'boss': {'defeated': game.boss.defeated},
+            'boss': {
+                'defeated': game.boss.defeated,
+                'seal_defeated': game.boss.defeated,
+                'skua_defeated': game.skua_boss.defeated,
+            },
             'content': {
                 'wallet': game.content.wallet,
                 'upgrades': game.content.upgrades,
@@ -166,7 +170,9 @@ class AdventureSave:
                     'defeated': {i for i in expedition.get('defeated', []) if i in (0, 1)},
                 }
             boss_state = data.get('boss', {})
-            game.boss.restore_defeated(bool(boss_state.get('defeated', False)))
+            game.boss.restore_defeated(bool(
+                boss_state.get('seal_defeated', boss_state.get('defeated', False))))
+            game.skua_boss.restore_defeated(bool(boss_state.get('skua_defeated', False)))
             game.content.wallet = max(0, min(1000, int(content.get('wallet', 0))))
             game.content.upgrades = max(0, min(3, int(content.get('upgrades', 0))))
             for name, target in [('quests', game.content.quests),
