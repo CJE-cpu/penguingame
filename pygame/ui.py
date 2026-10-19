@@ -256,6 +256,34 @@ class IceUI:
     def ending_prompt_buttons(self):
         return pg.Rect(160, 354, 224, 56), pg.Rect(416, 354, 224, 56)
 
+
+    def pause_buttons(self):
+        # Three equal buttons with a clear 16 px gap inside the pause panel.
+        return (pg.Rect(156, 360, 152, 56),
+                pg.Rect(324, 360, 152, 56),
+                pg.Rect(492, 360, 152, 56))
+
+    def pause_menu(self, game, screen):
+        # Full-screen veil and centered panel
+        self.veil(screen)
+        self.panel(screen, (120, 120, 560, 360))
+        # Icon + title
+        self.icon(screen, game.penguin_right, (400, 190), (64, 86))
+        self.text(screen, '일시정지', (400, 250), self.title, center=True)
+        # Hints
+        hints = [
+            'P 또는 ESC: 계속',
+            'R: 체크포인트에서 다시 시작',
+            'Q: 종료 (확인 창)'
+        ]
+        for i, txt in enumerate(hints):
+            self.text(screen, txt, (400, 290 + i*26), self.body, MUTED, center=True)
+        # Buttons
+        labels = ('계속', '재시작', '종료')
+        for rect, label in zip(self.pause_buttons(), labels):
+            self.panel(screen, rect, dark=False)
+            self.text(screen, label, rect.center, self.body, INK, center=True)
+
     def ending_prompt(self, game, screen):
         self.veil(screen)
         self.panel(screen, (105, 125, 590, 330))

@@ -62,6 +62,22 @@ class AdventureChecks(unittest.TestCase):
         self.assertFalse(window.open)
         self.assertFalse(self.game.exit_open)
 
+    def test_pause_buttons_do_not_overlap_and_resume_cleanly(self):
+        buttons = self.game.ui.pause_buttons()
+        self.assertEqual(len(buttons), 3)
+        for index, button in enumerate(buttons):
+            for other in buttons[index+1:]:
+                self.assertFalse(button.colliderect(other))
+        self.game.handle_key(pg.K_p)
+        self.assertTrue(self.game.paused)
+        self.game.handle_click(buttons[0].center)
+        self.assertFalse(self.game.paused)
+
+    def test_normal_click_does_not_read_pause_buttons(self):
+        self.game.paused = False
+        self.game.handle_click((0, 0))
+        self.assertFalse(self.game.paused)
+
     def place(self, platform, center, velocity=0, grown=False):
         g = self.game
         g.player.size = (40, 52)

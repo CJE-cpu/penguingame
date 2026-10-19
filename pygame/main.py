@@ -356,6 +356,8 @@ class Game:
             self.life_items.append(pg.Rect(platform.left+18,
                                            platform.top-38, 32, 38))
         self.separate_enemy_spawns()
+        # Pause state
+        self.paused = False
 
     def make_life_item_image(self):
         """Create a readable extra-life pickup from the companion artwork."""
@@ -456,6 +458,28 @@ class Game:
         self.ending_prompt_choice = False
 
     def handle_key(self, key):
+        # Keep pause controls isolated from normal gameplay input.
+        if getattr(self, 'paused', False):
+            if key in (pg.K_p, pg.K_ESCAPE):
+                self.paused = False
+                self.content.say('계속')
+                return False
+            if key == pg.K_r:
+                self.paused = False
+                self.ask_restart()
+                return False
+            if key == pg.K_q:
+                self.paused = False
+                self.ask_exit()
+                return False
+            return False
+
+        if (key == pg.K_p and self.started
+                and not (self.exit_open or self.restart_open
+                         or self.ending_prompt_open or self.ending)):
+            self.paused = True
+            self.content.say('일시정지')
+            return False
         if key == pg.K_m:
             enabled = self.audio.toggle()
             self.content.say('소리 켜짐' if enabled else '소리 꺼짐')
@@ -622,6 +646,21 @@ class Game:
         self.reset()
 
     def handle_click(self, pos):
+        if getattr(self, 'paused', False):
+            resume, restart, quitb = self.ui.pause_buttons()
+            if resume.collidepoint(pos):
+                self.paused = False
+                self.content.say('계속')
+                return
+            if restart.collidepoint(pos):
+                self.paused = False
+                self.ask_restart()
+                return
+            if quitb.collidepoint(pos):
+                self.paused = False
+                self.ask_exit()
+                return
+            return
         if self.exit_open:
             cancel,confirm = self.ui.exit_buttons()
             if cancel.collidepoint(pos):
@@ -1067,7 +1106,8 @@ class Game:
     def update(self, dt, direction=0, jump=False, slide=False, swim_vertical=0,
                jump_held=None):
         if (self.exit_open or self.restart_open or self.ending_prompt_open or
-                self.quit_requested or self.score_ui.open or self.game_over):
+                self.quit_requested or self.score_ui.open or self.game_over or
+                getattr(self, 'paused', False)):
             return
         if not self.started:
             return
@@ -1391,6 +1431,8 @@ class Game:
             self.ui.ending_prompt(self,screen)
         if self.exit_open:
             self.ui.exit_dialog(self,screen)
+        if getattr(self, 'paused', False):
+            self.ui.pause_menu(self, screen)
 
     @property
     def quality(self):
