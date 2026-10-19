@@ -1672,6 +1672,37 @@ class AdventureChecks(unittest.TestCase):
         ]
         self.assertEqual(records.ending_best_times(), {2: 190, 4: 360})
 
+    def test_enemy_hitboxes_exclude_transparent_edges_and_clear_platform(self):
+        for enemy in self.game.enemies:
+            hitbox = enemy.hitbox()
+            self.assertLess(hitbox.width, enemy.rect.width)
+            self.assertLess(hitbox.height, enemy.rect.height)
+            self.assertEqual(hitbox.bottom, enemy.rect.bottom)
+            if enemy.kind != 'skua':
+                support = min(self.game.platforms,
+                              key=lambda platform: abs(platform.top-enemy.rect.bottom))
+                self.assertLessEqual(enemy.rect.bottom, support.top-2)
+
+    def test_skua_boss_contact_is_tighter_than_return_projectile_target(self):
+        boss = self.game.skua_boss
+        body = boss.body_hitbox()
+        projectile = boss.projectile_hitbox()
+        self.assertTrue(boss.rect.contains(body))
+        self.assertTrue(boss.rect.contains(projectile))
+        self.assertLess(body.width, projectile.width)
+        self.assertLess(body.height, projectile.height)
+
+    def test_backgrounds_blend_well_before_region_boundary(self):
+        game = self.game
+        game.player.centerx = game.region_width-250
+        weights = game.scene_weights()
+        self.assertEqual(len(weights), 2)
+        self.assertGreater(weights[0][1], weights[1][1])
+        game.player.centerx = game.region_width+250
+        weights = game.scene_weights()
+        self.assertEqual(len(weights), 2)
+        self.assertLess(weights[0][1], weights[1][1])
+
 
 if __name__ == '__main__':
     unittest.main()

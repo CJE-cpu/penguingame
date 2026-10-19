@@ -12,7 +12,9 @@ class Enemy:
         self.kind = kind
         _, size, self.points = ENEMY_INFO[kind]
         self.rect = pg.Rect((0,0), size)
-        self.rect.midbottom = (platform.centerx, platform.top)
+        # Keep feet and shadows visibly above the snow lip. The artwork has a
+        # soft bottom row that otherwise looks buried in the shelf.
+        self.rect.midbottom = (platform.centerx, platform.top-2)
         self.x = float(self.rect.x)
         self.left, self.right = platform.left+8, platform.right-8
         self.speed = speed
@@ -28,6 +30,14 @@ class Enemy:
         self.charge = 0.0
         self.respawn_safe = 0.0
         self.flipped_frames = {}
+
+    def hitbox(self):
+        """Collision follows the opaque body instead of transparent corners."""
+        inset = {'crab': (4, 3), 'seal': (7, 3),
+                 'skua': (6, 6), 'spirit': (4, 3)}[self.kind]
+        box = self.rect.inflate(-inset[0]*2, -inset[1]*2)
+        box.bottom = self.rect.bottom
+        return box
 
     def update(self, dt, player=None):
         self.previous_top = self.rect.top

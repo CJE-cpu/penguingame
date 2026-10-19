@@ -31,7 +31,7 @@ REGIONS = [('눈 덮인 해안', (109, 192, 226)), ('미끄러운 빙하', (80, 
            ('얼음 동굴', (106, 129, 179)), ('눈보라 고원', (159, 183, 202)),
            ('갈라진 빙붕', (148, 183, 230)), ('펭귄의 보금자리', (132, 206, 183))]
 WORLD_WIDTH = REGION_WIDTH * len(REGIONS)
-BLEND_DISTANCE = 180
+BLEND_DISTANCE = 300
 SCENES = ['snow-coast', 'glacier-canyon', 'ice-cave', 'blizzard-plateau', 'fractured-shelf', 'sunset-home']
 SCENE_GRADES = (
     ((201, 236, 246), 10), ((178, 224, 242), 13),
@@ -793,6 +793,24 @@ class Game:
             pg.draw.lines(surface, shadow, False,
                           [(0, dip-2), (width//4, dip+1),
                            (width//2, dip-1), (width, dip-2)], 2)
+            # A restrained inner ice band and broad facets add material detail
+            # while keeping the walkable edge easy to read.
+            band_y = min(visual_height-4, dip+7)
+            pg.draw.line(surface, (*cap[:3], 105),
+                         (inset+3, band_y), (width-inset-4, band_y), 2)
+            facet_count = min(3, max(1, width//150))
+            for facet in range(facet_count):
+                center = (facet+1)*width//(facet_count+1)
+                span = 13+(center+width)%17
+                bottom = min(visual_height-4, band_y+10+(facet%2)*7)
+                pg.draw.polygon(surface, (*cap[:3], 42),
+                                [(center-span, band_y+2),
+                                 (center+span, band_y+1),
+                                 (center+span//2, bottom),
+                                 (center-span//2, bottom+3)])
+                pg.draw.line(surface, (*shadow, 92),
+                             (center-span//2, bottom+3),
+                             (center+span//2, bottom), 1)
             # One broad seam per long shelf adds depth without a noisy pattern.
             if width >= 145:
                 seam_x = width // 2 + (17 if width % 3 else -19)
@@ -806,23 +824,34 @@ class Game:
         drift = round(400 * max(0, min(1, self.camera_x / (WORLD_WIDTH-WIDTH))))
         weights = self.scene_weights()
         if self.quality == 'performance' and len(weights) == 2:
-            # Per-pixel alpha across two 1200x600 panoramas is one of the most
-            # expensive operations in WebAssembly. An opaque snow-wipe keeps
-            # the transition readable while touching each destination pixel
-            # only once.
+            # Feather the low-cost wipe in narrow strips. This avoids a full
+            # screen alpha blend in WebAssembly without exposing a hard seam.
             left_region = weights[0][0]
             right_region, progress = weights[1]
             screen.blit(self.scene_backgrounds[left_region], (-drift, 0))
-            reveal = round(WIDTH*progress)
+            reveal = round((WIDTH+180)*progress)
             if reveal:
                 old_clip = screen.get_clip()
-                edge = WIDTH-reveal
-                screen.set_clip(pg.Rect(edge, 0, reveal, HEIGHT))
-                screen.blit(self.scene_backgrounds[right_region], (-drift, 0))
+                edge = WIDTH+90-reveal
+                feather = 150
+                solid_left = max(0, min(WIDTH, edge+feather//2))
+                if solid_left < WIDTH:
+                    screen.set_clip(pg.Rect(solid_left, 0, WIDTH-solid_left, HEIGHT))
+                    screen.blit(self.scene_backgrounds[right_region], (-drift, 0))
+                transition_left = max(0, edge-feather//2)
+                transition_right = min(WIDTH, edge+feather//2)
+                strips = 6
+                for band in range(strips):
+                    x0 = round(transition_left+(transition_right-transition_left)*band/strips)
+                    x1 = round(transition_left+(transition_right-transition_left)*(band+1)/strips)
+                    if x1 <= x0:
+                        continue
+                    background = self.scene_backgrounds[right_region]
+                    background.set_alpha(round(255*(band+1)/(strips+1)))
+                    screen.set_clip(pg.Rect(x0, 0, x1-x0, HEIGHT))
+                    screen.blit(background, (-drift, 0))
+                    background.set_alpha(None)
                 screen.set_clip(old_clip)
-                if 0 < edge < WIDTH:
-                    pg.draw.line(screen, (222, 245, 250), (edge, 0),
-                                 (edge, HEIGHT), 2)
             return
         for index, (region, weight) in enumerate(weights):
             background = self.scene_backgrounds[region]
@@ -1239,17 +1268,18 @@ class Game:
         if (self.skua_boss.active and not self.invincible
                 and (self.skua_boss.snowball_hits(self.player)
                      or (self.skua_boss.state not in ('stunned', 'hit')
-                         and self.player.colliderect(self.skua_boss.rect)))):
+                         and self.player.colliderect(self.skua_boss.body_hitbox())))):
             self.combat.hit(self.player, self.skua_boss)
             self.feedback.emit(self.player.midtop, '갈매기에게 피격!', (255, 133, 125))
             return
         # Descending from above is a stomp; side and upward contact cause damage.
         for enemy in list(self.enemies):
-            if not self.player.colliderect(enemy.rect):
+            enemy_hitbox = enemy.hitbox()
+            if not self.player.colliderect(enemy_hitbox):
                 continue
             if enemy.respawn_safe:
                 continue
-            if self.effects['grow'] or (self.velocity_y > 0 and previous_bottom <= enemy.previous_top + 3):
+            if self.effects['grow'] or (self.velocity_y > 0 and previous_bottom <= enemy_hitbox.top + 5):
                 self.enemies.remove(enemy)
                 self.combat.defeat(enemy, self.enemy_images)
                 self.score += enemy.points

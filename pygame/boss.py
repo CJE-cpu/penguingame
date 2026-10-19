@@ -343,10 +343,22 @@ class SkuaBoss:
         """Consume a falling hostile snowball that touches the player."""
         for ball in self.snowballs:
             if (not ball['resting'] and not ball['kicked']
-                    and ball['rect'].colliderect(player)):
+                    and ball['rect'].inflate(-8, -8).colliderect(player)):
                 self.snowballs.remove(ball)
                 return True
         return False
+
+    def body_hitbox(self):
+        """Smaller contact area matching the bird's torso and inner wings."""
+        box = pg.Rect(0, 0, 104, 54)
+        box.center = (self.rect.centerx, self.rect.centery+5)
+        return box
+
+    def projectile_hitbox(self):
+        """A forgiving target for returned snowballs, separate from contact."""
+        box = pg.Rect(0, 0, 132, 70)
+        box.center = self.rect.center
+        return box
 
     def take_hit(self):
         self.hits += 1
@@ -371,7 +383,7 @@ class SkuaBoss:
                 ball['rect'].center = (round(ball['position'].x),
                                        round(ball['position'].y))
                 if (ball['kicked'] and self.active and not self.defeated
-                        and ball['rect'].colliderect(self.rect)):
+                        and ball['rect'].colliderect(self.projectile_hitbox())):
                     event = self.take_hit()
                     continue
                 if ball['rect'].bottom >= self.floor_y:
