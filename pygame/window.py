@@ -101,7 +101,9 @@ class GameWindow:
         if rect.size == self.canvas.get_size():
             target.blit(self.canvas, (0, 0))
         else:
-            # Preserve the illustrated edges and font shapes when the user
-            # explicitly chooses a larger window.
-            pg.transform.smoothscale(self.canvas, rect.size, target)
+            # Smooth resampling a full frame is expensive on integrated GPUs.
+            # Reserve it for the explicit high-quality setting.
+            scaler = (pg.transform.smoothscale if game.quality == 'high'
+                      else pg.transform.scale)
+            scaler(self.canvas, rect.size, target)
         pg.display.flip()

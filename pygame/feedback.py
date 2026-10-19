@@ -10,6 +10,7 @@ class InteractionEffects:
         self.trail_clock = 0.0
         self.size_scale = 1.0
         self.layer = pg.Surface((800, 600), pg.SRCALPHA)
+        self.player_scale_cache = {}
 
     def reset(self):
         self.bursts.clear()
@@ -37,8 +38,18 @@ class InteractionEffects:
     def player_image(self, game):
         image = (game.animation.action_image('slide',game.facing_right) if game.content.sliding
                  else game.animation.image(False,game.facing_right))
-        return pg.transform.scale(image,(round(image.get_width()*self.size_scale),
-                                         round(image.get_height()*self.size_scale)))
+        size = (round(image.get_width()*self.size_scale),
+                round(image.get_height()*self.size_scale))
+        if size == image.get_size():
+            return image
+        key = (id(image), size)
+        scaled = self.player_scale_cache.get(key)
+        if scaled is None:
+            scaled = pg.transform.scale(image, size)
+            self.player_scale_cache[key] = scaled
+            if len(self.player_scale_cache) > 96:
+                self.player_scale_cache.clear()
+        return scaled
 
     def draw(self, game, screen):
         if not self.bursts:

@@ -31,6 +31,7 @@ class IceUI:
         self.veil_layer = pg.Surface((800, 600), pg.SRCALPHA)
         self.veil_layer.fill((13, 41, 68, 145))
         self.life_cache = {}
+        self.icon_cache = {}
         self.text_cache = OrderedDict()
 
     def panel(self, screen, rect, dark=False):
@@ -78,9 +79,15 @@ class IceUI:
 
     def icon(self, screen, image, center, size=(30, 30)):
         ratio = min(size[0]/image.get_width(), size[1]/image.get_height())
-        image = pg.transform.scale(image, (max(1, round(image.get_width()*ratio)),
-                                          max(1, round(image.get_height()*ratio))))
-        screen.blit(image, image.get_rect(center=center))
+        target_size = (max(1, round(image.get_width()*ratio)),
+                       max(1, round(image.get_height()*ratio)))
+        key = (id(image), target_size)
+        scaled = self.icon_cache.get(key)
+        if scaled is None:
+            scaled = (image if image.get_size() == target_size
+                      else pg.transform.scale(image, target_size))
+            self.icon_cache[key] = scaled
+        screen.blit(scaled, scaled.get_rect(center=center))
 
     def life_icons(self, screen, game, start, size=(20, 25), gap=27):
         """Draw three penguin lives; spent lives become faint silhouettes."""

@@ -15,7 +15,6 @@ TARGETS = {
     "enemy-motion-atlas-v2.png": (724, 543),
     "fish-motion-atlas-v2.png": (724, 543),
     "adventure-objects-atlas-v2.png": (724, 543),
-    "antarctic-ice-shelf-tile-v3.png": (1080, 360),
     "shield-potion.png": (256, 256),
 }
 

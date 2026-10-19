@@ -12,6 +12,8 @@ class SealBoss:
         self.arena = pg.Rect(arena)
         self.floor_y = floor_y
         self.images = images
+        self.flipped_images = {name: pg.transform.flip(image, True, False)
+                               for name, image in images.items()}
         self.rect = pg.Rect(0, 0, 136, 72)
         self.rect.midbottom = (self.arena.right-105, floor_y)
         self.x = float(self.rect.x)
@@ -174,8 +176,7 @@ class SealBoss:
 
     def image(self):
         name = self.state if self.state in self.images else 'idle'
-        image = self.images[name]
-        return pg.transform.flip(image, True, False) if self.direction > 0 else image
+        return self.flipped_images[name] if self.direction > 0 else self.images[name]
 
     def draw_terrain(self, screen, camera_x, time):
         """Draw a grounded arena that makes the charge lane easy to read."""

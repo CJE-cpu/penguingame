@@ -163,7 +163,9 @@ class Game:
         # WebAssembly alpha drawing is much slower than native rendering.
         # Performance mode keeps native resolution and sprites intact; it only
         # reduces decorative particles, light rays and procedural texture work.
-        self.quality_index = 0 if sys.platform == 'emscripten' else 2
+        # Balanced avoids expensive full-detail effects and window resampling
+        # on the first run; high quality remains available from the options key.
+        self.quality_index = 0 if sys.platform == 'emscripten' else 1
         self.platforms = []
         self.platform_kinds = {}
         self.platform_variants = {}

@@ -25,6 +25,9 @@ class CaveExpedition:
         self.pulses = []
         self.crumbles = {}
         self.texture_cache = {}
+        self.entrance_image = pg.transform.smoothscale(game.cave_image, (150, 112))
+        self.entrance_image.set_alpha(178)
+        self.arch_image = None
         self.atmosphere_layer = pg.Surface((800, 600), pg.SRCALPHA)
         self.wall_layer = pg.Surface((800, 600), pg.SRCALPHA)
         self.ceiling_layer = pg.Surface((800, 155), pg.SRCALPHA)
@@ -385,9 +388,7 @@ class CaveExpedition:
         # The entrance belongs to the rear wall. Platforms and their top edge
         # cover its base, so it reads as an opening cut into the ice.
         entrance_x = round(80-self.camera)
-        entrance = pg.transform.smoothscale(game.cave_image, (150, 112))
-        entrance.set_alpha(178)
-        game.art.grounded(screen,entrance,(entrance_x,550),snow=False)
+        game.art.grounded(screen,self.entrance_image,(entrance_x,550),snow=False)
         # Darken the doorway itself so the ice frame belongs to the rear wall;
         # the player is drawn later and remains readable inside the opening.
         pg.draw.ellipse(screen,(7,24,38),(entrance_x-31,474,62,76))
@@ -412,9 +413,10 @@ class CaveExpedition:
             # Use the same painted material as the cave platforms so the low
             # slide tunnel reads as a natural ice shelf, not a UI rectangle.
             arch_kind = 'cave' if self.index == 0 else 'fracture'
-            arch_image = game.platform_texture(arch_kind, arch.size)
-            arch_image = pg.transform.smoothscale(arch_image, arch.size)
-            screen.blit(pg.transform.flip(arch_image, False, True), arch)
+            if self.arch_image is None:
+                arch_image = game.platform_texture(arch_kind, arch.size)
+                self.arch_image = pg.transform.flip(arch_image, False, True)
+            screen.blit(self.arch_image, arch)
             pg.draw.line(screen, (176, 231, 239),
                          (arch.left+8, arch.bottom-2),
                          (arch.right-8, arch.bottom-2), 2)
