@@ -464,6 +464,18 @@ class Game:
                 self.paused = False
                 self.content.say('계속')
                 return False
+            if key == pg.K_m:
+                enabled = self.audio.toggle()
+                self.content.say('소리 켜짐' if enabled else '음소거')
+                return False
+            if key in (pg.K_LEFT, pg.K_DOWN):
+                volume = self.audio.change_master_volume(-0.1)
+                self.content.say(f'음량 {round(volume*100)}%')
+                return False
+            if key in (pg.K_RIGHT, pg.K_UP):
+                volume = self.audio.change_master_volume(0.1)
+                self.content.say(f'음량 {round(volume*100)}%')
+                return False
             if key == pg.K_r:
                 self.paused = False
                 self.ask_restart()
@@ -648,6 +660,19 @@ class Game:
     def handle_click(self, pos):
         if getattr(self, 'paused', False):
             resume, restart, quitb = self.ui.pause_buttons()
+            mute, quieter, louder = self.ui.pause_audio_buttons()
+            if mute.collidepoint(pos):
+                enabled = self.audio.toggle()
+                self.content.say('소리 켜짐' if enabled else '음소거')
+                return
+            if quieter.collidepoint(pos):
+                volume = self.audio.change_master_volume(-0.1)
+                self.content.say(f'음량 {round(volume*100)}%')
+                return
+            if louder.collidepoint(pos):
+                volume = self.audio.change_master_volume(0.1)
+                self.content.say(f'음량 {round(volume*100)}%')
+                return
             if resume.collidepoint(pos):
                 self.paused = False
                 self.content.say('계속')

@@ -17,6 +17,7 @@ class GameAudio:
         self.available = None
         self.current_track = None
         self.ambient_channel = None
+        self.master_volume = 0.9
 
     def _ready(self):
         if self.available is False:
@@ -38,12 +39,21 @@ class GameAudio:
             self._sounds[path] = sound
         return sound
 
+    def set_master_volume(self, value):
+        self.master_volume = max(0.0, min(1.0, float(value)))
+        if self.ambient_channel and self._ready():
+            self.ambient_channel.set_volume(self.AMBIENT_VOLUME * self.master_volume)
+        return self.master_volume
+
+    def change_master_volume(self, amount):
+        return self.set_master_volume(round(self.master_volume + amount, 2))
+
     def play(self, name):
         if not self.enabled or not self._ready():
             return
         try:
             sound = self._sound(name + '.ogg')
-            sound.set_volume(self.EFFECT_VOLUME)
+            sound.set_volume(self.EFFECT_VOLUME * self.master_volume)
             sound.play()
         except (pg.error, OSError):
             self.available = False
@@ -60,7 +70,7 @@ class GameAudio:
             if self.ambient_channel:
                 self.ambient_channel.fadeout(350)
             sound = self._sound('ambient-' + track + '.ogg')
-            sound.set_volume(self.AMBIENT_VOLUME)
+            sound.set_volume(self.AMBIENT_VOLUME * self.master_volume)
             self.ambient_channel = sound.play(loops=-1, fade_ms=350)
         except (pg.error, OSError):
             self.available = False
@@ -80,4 +90,3 @@ class GameAudio:
                 else:
                     self.set_scene(self.REGION_TRACKS.index(previous))
         return self.enabled
-

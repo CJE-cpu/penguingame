@@ -64,14 +64,33 @@ class AdventureChecks(unittest.TestCase):
 
     def test_pause_buttons_do_not_overlap_and_resume_cleanly(self):
         buttons = self.game.ui.pause_buttons()
+        audio_buttons = self.game.ui.pause_audio_buttons()
         self.assertEqual(len(buttons), 3)
-        for index, button in enumerate(buttons):
-            for other in buttons[index+1:]:
+        for index, button in enumerate(buttons+audio_buttons):
+            for other in (buttons+audio_buttons)[index+1:]:
                 self.assertFalse(button.colliderect(other))
         self.game.handle_key(pg.K_p)
         self.assertTrue(self.game.paused)
         self.game.handle_click(buttons[0].center)
         self.assertFalse(self.game.paused)
+
+    def test_pause_menu_controls_volume_and_mute(self):
+        game = self.game
+        game.audio.set_master_volume(0.5)
+        game.handle_key(pg.K_p)
+        game.handle_key(pg.K_RIGHT)
+        self.assertAlmostEqual(game.audio.master_volume, 0.6)
+        game.handle_key(pg.K_LEFT)
+        self.assertAlmostEqual(game.audio.master_volume, 0.5)
+        game.handle_key(pg.K_m)
+        self.assertFalse(game.audio.enabled)
+        mute, quieter, louder = game.ui.pause_audio_buttons()
+        game.handle_click(mute.center)
+        self.assertTrue(game.audio.enabled)
+        game.handle_click(quieter.center)
+        self.assertAlmostEqual(game.audio.master_volume, 0.4)
+        game.handle_click(louder.center)
+        self.assertAlmostEqual(game.audio.master_volume, 0.5)
 
     def test_normal_click_does_not_read_pause_buttons(self):
         self.game.paused = False

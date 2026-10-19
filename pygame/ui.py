@@ -259,25 +259,38 @@ class IceUI:
 
     def pause_buttons(self):
         # Three equal buttons with a clear 16 px gap inside the pause panel.
-        return (pg.Rect(156, 360, 152, 56),
-                pg.Rect(324, 360, 152, 56),
-                pg.Rect(492, 360, 152, 56))
+        return (pg.Rect(156, 414, 152, 56),
+                pg.Rect(324, 414, 152, 56),
+                pg.Rect(492, 414, 152, 56))
+
+    def pause_audio_buttons(self):
+        return (pg.Rect(218, 338, 116, 48),
+                pg.Rect(350, 338, 64, 48),
+                pg.Rect(430, 338, 64, 48))
 
     def pause_menu(self, game, screen):
         # Full-screen veil and centered panel
         self.veil(screen)
-        self.panel(screen, (120, 120, 560, 360))
+        self.panel(screen, (120, 94, 560, 404))
         # Icon + title
-        self.icon(screen, game.penguin_right, (400, 190), (64, 86))
-        self.text(screen, '일시정지', (400, 250), self.title, center=True)
+        self.icon(screen, game.penguin_right, (400, 158), (58, 78))
+        self.text(screen, '일시정지', (400, 218), self.title, center=True)
         # Hints
         hints = [
-            'P 또는 ESC: 계속',
-            'R: 체크포인트에서 다시 시작',
-            'Q: 종료 (확인 창)'
+            'P 또는 ESC: 계속  /  R: 재시작  /  Q: 종료',
+            'M: 음소거  /  방향키 ← →: 음량 조절'
         ]
         for i, txt in enumerate(hints):
-            self.text(screen, txt, (400, 290 + i*26), self.body, MUTED, center=True)
+            self.text(screen, txt, (400, 270 + i*26), self.small, MUTED, center=True)
+        mute, quieter, louder = self.pause_audio_buttons()
+        volume = round(game.audio.master_volume*100)
+        self.text(screen, f'음량 {volume}%', (400, 320), self.body, BLUE, center=True)
+        audio_labels = ('켜기' if not game.audio.enabled else '음소거', '−', '+')
+        for rect, label in zip((mute, quieter, louder), audio_labels):
+            self.panel(screen, rect, dark=rect == mute and not game.audio.enabled)
+            self.text(screen, label, rect.center, self.body,
+                      'white' if rect == mute and not game.audio.enabled else INK,
+                      center=True)
         # Buttons
         labels = ('계속', '재시작', '종료')
         for rect, label in zip(self.pause_buttons(), labels):
