@@ -1,5 +1,6 @@
 """Resizable presentation; game coordinates always remain 800 x 600."""
 import sys
+from time import perf_counter
 import pygame as pg
 
 
@@ -71,6 +72,7 @@ class GameWindow:
         return False
 
     def present(self,game):
+        render_started = perf_counter()
         game.draw(self.canvas)
         ui = game.ui
         if not self.web and not game.exit_open and not game.score_ui.open:
@@ -106,4 +108,5 @@ class GameWindow:
             scaler = (pg.transform.smoothscale if game.quality == 'high'
                       else pg.transform.scale)
             scaler(self.canvas, rect.size, target)
+        game.observe_render_time((perf_counter()-render_started)*1000)
         pg.display.flip()

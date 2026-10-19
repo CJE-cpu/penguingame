@@ -101,14 +101,20 @@ class Game:
         self.region_width = REGION_WIDTH
         self.world_width = WORLD_WIDTH
         # One oversized panorama per region; never join non-seamless image edges.
-        self.scene_backgrounds = [load_image('scene-' + scene + '.png', (WIDTH + 400, HEIGHT)) for scene in SCENES]
+        # Scene panoramas contain no transparency. Converting them to the
+        # display format avoids a per-pixel alpha blend across 720,000 pixels
+        # on every outdoor frame and twice that amount at region boundaries.
+        self.scene_backgrounds = [
+            load_image('scene-' + scene + '.png', (WIDTH + 400, HEIGHT)).convert()
+            for scene in SCENES
+        ]
         self.animation = PenguinAnimation(DATA)
         self.penguin_left = self.animation.cycles['idle'][0]
         self.penguin_right = pg.transform.flip(self.penguin_left,True,False)
         self.big_penguin_left = pg.transform.scale(self.penguin_left,(96,84))
         self.big_penguin_right = pg.transform.flip(self.big_penguin_left,True,False)
         self.art = WorldArt(DATA)
-        self.ocean_background = load_image('ocean-panorama-v2.png',(1800,HEIGHT))
+        self.ocean_background = load_image('ocean-panorama-v2.png',(1800,HEIGHT)).convert()
         self.feedback = InteractionEffects()
         self.combat = CombatMotion()
         self.companion = BabyCompanion()
@@ -166,6 +172,9 @@ class Game:
         # Balanced avoids expensive full-detail effects and window resampling
         # on the first run; high quality remains available from the options key.
         self.quality_index = 0 if sys.platform == 'emscripten' else 1
+        self.adaptive_quality_index = 2
+        self.render_ms_average = 0.0
+        self.fast_render_frames = 0
         self.platforms = []
         self.platform_kinds = {}
         self.platform_variants = {}
@@ -1197,7 +1206,28 @@ class Game:
 
     @property
     def quality(self):
-        return self.quality_levels[self.quality_index]
+        return self.quality_levels[min(self.quality_index,
+                                       self.adaptive_quality_index)]
+
+    def observe_render_time(self, milliseconds):
+        """Keep decorative work inside the frame budget without resizing art."""
+        if self.render_ms_average <= 0:
+            self.render_ms_average = milliseconds
+        else:
+            self.render_ms_average += (milliseconds-self.render_ms_average)*0.06
+        if self.render_ms_average > 14:
+            self.adaptive_quality_index = 0
+            self.fast_render_frames = 0
+        elif self.render_ms_average > 10:
+            self.adaptive_quality_index = min(self.adaptive_quality_index, 1)
+            self.fast_render_frames = 0
+        elif self.render_ms_average < 7:
+            self.fast_render_frames += 1
+            if self.fast_render_frames >= 180:
+                self.adaptive_quality_index = min(2, self.adaptive_quality_index+1)
+                self.fast_render_frames = 0
+        else:
+            self.fast_render_frames = 0
 
     def visible(self, rect, margin=80):
         return rect.right >= self.camera_x-margin and rect.left <= self.camera_x+WIDTH+margin
