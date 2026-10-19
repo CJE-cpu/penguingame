@@ -749,7 +749,27 @@ class Game:
         return self.platform_textures[key]
     def draw_background(self, screen):
         drift = round(400 * max(0, min(1, self.camera_x / (WORLD_WIDTH-WIDTH))))
-        for index, (region, weight) in enumerate(self.scene_weights()):
+        weights = self.scene_weights()
+        if self.quality == 'performance' and len(weights) == 2:
+            # Per-pixel alpha across two 1200x600 panoramas is one of the most
+            # expensive operations in WebAssembly. An opaque snow-wipe keeps
+            # the transition readable while touching each destination pixel
+            # only once.
+            left_region = weights[0][0]
+            right_region, progress = weights[1]
+            screen.blit(self.scene_backgrounds[left_region], (-drift, 0))
+            reveal = round(WIDTH*progress)
+            if reveal:
+                old_clip = screen.get_clip()
+                edge = WIDTH-reveal
+                screen.set_clip(pg.Rect(edge, 0, reveal, HEIGHT))
+                screen.blit(self.scene_backgrounds[right_region], (-drift, 0))
+                screen.set_clip(old_clip)
+                if 0 < edge < WIDTH:
+                    pg.draw.line(screen, (222, 245, 250), (edge, 0),
+                                 (edge, HEIGHT), 2)
+            return
+        for index, (region, weight) in enumerate(weights):
             background = self.scene_backgrounds[region]
             if index:
                 background.set_alpha(round(255*weight))
@@ -1406,14 +1426,23 @@ class Game:
                 screen.blit(image,image.get_rect(midbottom=rect.midbottom))
         snow_weight = dict(self.scene_weights()).get(3, 0)
         if snow_weight > 0:
-            snow = self.weather_layer
-            snow.fill((0, 0, 0, 0))
             snow_count = {'performance':24, 'balanced':40, 'high':65}[self.quality]
-            for i in range(snow_count):
-                x = int((i * 137 - self.time * 180) % WIDTH)
-                y = int((i * 83 + self.time * 45) % HEIGHT)
-                pg.draw.line(snow, (238, 249, 255, round(255*snow_weight)), (x, y), (x - 12, y + 4), 2)
-            screen.blit(snow, (0, 0))
+            if self.quality == 'performance':
+                color = tuple(round(170+(channel-170)*snow_weight)
+                              for channel in (238, 249, 255))
+                for i in range(snow_count):
+                    x = int((i * 137 - self.time * 180) % WIDTH)
+                    y = int((i * 83 + self.time * 45) % HEIGHT)
+                    pg.draw.line(screen, color, (x, y), (x-12, y+4), 2)
+            else:
+                snow = self.weather_layer
+                snow.fill((0, 0, 0, 0))
+                for i in range(snow_count):
+                    x = int((i * 137 - self.time * 180) % WIDTH)
+                    y = int((i * 83 + self.time * 45) % HEIGHT)
+                    pg.draw.line(snow, (238, 249, 255, round(255*snow_weight)),
+                                 (x, y), (x-12, y+4), 2)
+                screen.blit(snow, (0, 0))
 
     def rescue_target(self):
         if self.carried_baby is not None:
@@ -1457,6 +1486,16 @@ class Game:
 
     def draw_region_atmosphere(self, screen):
         weights = dict(self.scene_weights())
+        if self.quality == 'performance':
+            # The panoramas already contain their regional color treatment.
+            # Skipping another full-screen alpha pass saves substantial time
+            # in browsers without reducing texture or sprite resolution.
+            if weights.get(0,0):
+                for i in range(8):
+                    x = round((i*113+self.time*20)%WIDTH)
+                    y = 557+round(math.sin(self.time*2+i)*3)
+                    pg.draw.line(screen,(166,227,245),(x,y),(x+22,y),2)
+            return
         cave = weights.get(2,0)
         if cave:
             shade = self.atmosphere_layer
