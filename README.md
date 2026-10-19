@@ -2,7 +2,7 @@
 
 ## 바로 실행
 
-Windows에서 `pygame/AntarcticPenguin.exe`를 더블 클릭하세요. Python 설치 없이 실행되며 이미지가 포함되어 있습니다.
+Windows에서는 `release/AntarcticPenguin.exe`를 더블 클릭하세요. Python 설치 없이 실행되며 이미지가 포함되어 있습니다.
 
 소스로 실행하려면 저장소의 최상위 폴더에서 다음 명령을 사용하세요.
 
@@ -10,6 +10,33 @@ Windows에서 `pygame/AntarcticPenguin.exe`를 더블 클릭하세요. Python �
 python -m pip install -r requirements.txt
 python pygame/main.py
 ```
+
+소스를 수정한 뒤 Windows 실행 파일을 갱신하려면 다음 명령을 사용하세요.
+
+```powershell
+python -m pip install -r requirements-build.txt
+python scripts/build_desktop_game.py
+```
+
+`pygame/`에는 게임 소스와 리소스만, `release/`에는 배포용 실행 파일만 둡니다.
+
+## 프로젝트 구조
+
+```text
+publish-penguingame/
+├─ pygame/                 # Pygame 소스, 테스트, 게임 리소스
+│  ├─ main.py              # 데스크톱·웹 게임의 공통 진입점
+│  └─ data/                # 이미지, 음원, 글꼴
+├─ release/
+│  └─ AntarcticPenguin.exe # main.py에서 생성한 Windows 배포 파일
+├─ scripts/
+│  ├─ build_desktop_game.py # Windows EXE 생성
+│  └─ build_browser_game.py # 브라우저 게임 생성
+└─ web/                    # React 사이트와 점수 API
+```
+
+게임 로직은 `pygame/main.py` 한 곳에서 관리합니다. `release`의 EXE와
+`web/public/game`의 브라우저 파일은 각각 빌드 스크립트가 같은 소스를 읽어 생성합니다.
 
 ## 목표와 조작
 

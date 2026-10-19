@@ -92,7 +92,7 @@ npm start
 
 프로덕션 모드는 `APP_ORIGIN` 설정을 필수로 요구합니다. 실제 도메인에는 HTTPS를 적용하세요. HTTPS origin에서는 세션 쿠키에 Secure를 적용합니다. 신뢰하는 HTTPS 리버스 프록시 1개 뒤에서 운영할 때만 `TRUST_PROXY=1`을 설정합니다. `.env.example`은 설정 참고용이며 자동 로딩하지 않습니다. 호스팅 환경변수나 셸에서 설정하세요.
 
-`.data`의 DB 및 WAL 파일은 배포 시 유지하고 백업해야 합니다. 다운로드 API는 기본적으로 `../pygame/AntarcticPenguin.exe`를 사용합니다. 실행 파일을 별도로 배포하면 `GAME_EXE_PATH`로 위치를 지정하세요.
+`.data`의 DB 및 WAL 파일은 배포 시 유지하고 백업해야 합니다. 다운로드 API는 기본적으로 `../release/AntarcticPenguin.exe`를 사용합니다. 실행 파일을 별도로 배포하면 `GAME_EXE_PATH`로 위치를 지정하세요.
 
 ## 에셋
 

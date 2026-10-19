@@ -437,7 +437,7 @@ export function createApp({
   app.get("/api/download", (_, res, next) => {
     const exe =
       process.env.GAME_EXE_PATH ||
-      path.resolve(root, "../pygame/AntarcticPenguin.exe");
+      path.resolve(root, "../release/AntarcticPenguin.exe");
     if (!existsSync(exe))
       return next(
         fail(404, "실행 파일이 없습니다. GitHub에서 게임을 내려받아 주세요."),

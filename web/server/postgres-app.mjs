@@ -376,7 +376,7 @@ export function createPostgresApp({
   app.get("/api/download", (_, res) =>
     res.redirect(
       302,
-      "https://github.com/CJE-cpu/penguingame/raw/refs/heads/main/pygame/AntarcticPenguin.exe",
+      "https://github.com/CJE-cpu/penguingame/raw/refs/heads/main/release/AntarcticPenguin.exe",
     ),
   );
   app.use("/api", (_, res) =>
