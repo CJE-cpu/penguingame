@@ -58,9 +58,7 @@ MAP_LAYOUTS = [
     ([(0,550,350), (420,550,780)],
      [(70,375,90), (190,450,200), (395,365,160), (575,280,180),
       (785,365,160), (975,450,180), (1100,360,70)])]
-FISH_TYPES = {'orange': ('orange-fish.png', (255, 255, 255), 10),
-              'blue': ('blue-fish.png', (255, 255, 255), 25),
-              'gold': ('gold-fish.png', (255, 255, 255), 50)}
+FISH_TYPES = {'orange': 10, 'blue': 25, 'gold': 50}
 DATA = Path(__file__).resolve().parent / 'data'
 GRAVITY = 1800
 MOVE_SPEED = 270
@@ -102,7 +100,6 @@ class Game:
     def __init__(self, score_path=None, progress_path=None):
         self.region_width = REGION_WIDTH
         self.world_width = WORLD_WIDTH
-        self.background = load_image('antarctica-background.png', (WIDTH, HEIGHT))
         # One oversized panorama per region; never join non-seamless image edges.
         self.scene_backgrounds = [load_image('scene-' + scene + '.png', (WIDTH + 400, HEIGHT)) for scene in SCENES]
         self.animation = PenguinAnimation(DATA)
@@ -261,7 +258,7 @@ class Game:
                 self.fish.append((kind, pg.Rect(platform.centerx - 18, platform.top - 35, 36, 24)))
         self.total = len(self.fish)
         self.score = 0
-        self.max_score = sum(FISH_TYPES[kind][2] for kind, rect in self.fish)
+        self.max_score = sum(FISH_TYPES[kind] for kind, rect in self.fish)
         self.enemies = []
         for region, kinds in enumerate([('crab','seal'), ('seal','spirit'), ('spirit','spirit'),
                                        ('skua','skua'), ('spirit','seal'), ('crab','skua')]):
@@ -1144,10 +1141,10 @@ class Game:
         remaining_fish = []
         for kind, rect in self.fish:
             if self.player.colliderect(rect):
-                self.score += FISH_TYPES[kind][2]
+                self.score += FISH_TYPES[kind]
                 self.content.wallet += 1
                 self.audio.play('collect')
-                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind][2]}', (255,232,151))
+                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind]}', (255,232,151))
             else:
                 remaining_fish.append((kind, rect))
         self.fish = remaining_fish
