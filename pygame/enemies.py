@@ -31,13 +31,23 @@ class Enemy:
         self.respawn_safe = 0.0
         self.flipped_frames = {}
 
-    def hitbox(self):
-        """Collision follows the opaque body instead of transparent corners."""
-        inset = {'crab': (4, 3), 'seal': (7, 3),
-                 'skua': (6, 6), 'spirit': (4, 3)}[self.kind]
+    def damage_hitbox(self):
+        """Torso-only contact area used when the enemy hurts the player."""
+        inset = {'crab': (5, 5), 'seal': (9, 5),
+                 'skua': (8, 8), 'spirit': (5, 5)}[self.kind]
         box = self.rect.inflate(-inset[0]*2, -inset[1]*2)
         box.bottom = self.rect.bottom
         return box
+
+    def stomp_hitbox(self):
+        """A shallow, forgiving band over the visible head/back."""
+        side = {'crab': 4, 'seal': 8, 'skua': 7, 'spirit': 4}[self.kind]
+        height = {'crab': 10, 'seal': 11, 'skua': 12, 'spirit': 11}[self.kind]
+        return pg.Rect(self.rect.left+side, self.rect.top-3,
+                       self.rect.width-side*2, height)
+
+    def hitbox(self):
+        return self.damage_hitbox()
 
     def update(self, dt, player=None):
         self.previous_top = self.rect.top

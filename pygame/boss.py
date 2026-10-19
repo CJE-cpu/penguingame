@@ -291,6 +291,7 @@ class SkuaBoss:
         self.direction = -1
         self.flash = 0.0
         self.snowballs = []
+        self.contact_grace = 0.0
 
     def start(self):
         if self.active or self.defeated:
@@ -309,6 +310,7 @@ class SkuaBoss:
         self.hits = 0
         self.attack_count = 0
         self.snowballs.clear()
+        self.contact_grace = 0.0
         self.rect.center = (self.arena.centerx, self.floor_y-180)
         self.position.update(self.rect.center)
 
@@ -353,6 +355,10 @@ class SkuaBoss:
         box = pg.Rect(0, 0, 104, 54)
         box.center = (self.rect.centerx, self.rect.centery+5)
         return box
+
+    def can_damage_player(self):
+        return (self.active and not self.defeated and not self.contact_grace
+                and self.state in ('hover', 'carry', 'dive'))
 
     def projectile_hitbox(self):
         """A forgiving target for returned snowballs, separate from contact."""
@@ -401,6 +407,7 @@ class SkuaBoss:
 
     def update(self, dt, player):
         self.flash = max(0.0, self.flash-dt)
+        self.contact_grace = max(0.0, self.contact_grace-dt)
         projectile_event = self._update_snowballs(dt)
         if projectile_event:
             return projectile_event
@@ -445,6 +452,7 @@ class SkuaBoss:
                 self.position.update(self.rect.center)
                 self.state = 'stunned'
                 self.timer = 1.35
+                self.contact_grace = 0.35
                 return 'impact'
         elif self.state == 'stunned' and not self.timer:
             self.state = 'hover'

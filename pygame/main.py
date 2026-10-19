@@ -776,14 +776,31 @@ class Game:
             visual_height = max(height, profile_heights.get(variant, 64))
             surface = pg.Surface((width, visual_height), pg.SRCALPHA)
             cap, body, shadow = self.platform_palettes[kind]
-            inset = 0 if ground else (7 if variant == 'normal' else 11)
-            pg.draw.polygon(surface, body,
-                            [(0, 6), (width, 6),
-                             (max(0, width-inset), visual_height-1),
-                             (min(width, inset), visual_height-1)])
-            # A wide, gently uneven snow lip gives the shelves a natural
-            # platform-game silhouette without filling them with busy detail.
-            dip = 7 if width < 130 else 9
+            inset = 0 if ground else (4 if variant == 'normal' else 6)
+            dip = 10 if ground else 9
+            if ground:
+                silhouette = [(0, 6), (width, 6),
+                              (width, visual_height-1), (0, visual_height-1)]
+            else:
+                underside = []
+                step = 34 if variant == 'thin' else 46
+                for x in range(width-inset, inset-1, -step):
+                    depth = visual_height-1-(3 if (x//step)%2 else 0)
+                    underside.append((x, depth))
+                if not underside or underside[-1][0] != inset:
+                    underside.append((inset, visual_height-2))
+                silhouette = [(0, 6), (width, 6),
+                              (width-inset, visual_height*2//3)] + underside + [
+                                  (inset, visual_height*2//3)]
+            pg.draw.polygon(surface, body, silhouette)
+            inner_top = min(visual_height-3, dip+7)
+            pg.draw.polygon(surface, (*cap[:3], 42),
+                            [(inset+2, inner_top), (width-inset-3, inner_top),
+                             (width-inset-5, min(visual_height-2, inner_top+8)),
+                             (inset+5, min(visual_height-2, inner_top+10))])
+            pg.draw.line(surface, (*shadow, 70),
+                         (inset+4, min(visual_height-3, inner_top+11)),
+                         (width-inset-5, min(visual_height-3, inner_top+9)), 1)
             cap_points = [(0, 0), (width, 0), (width, dip-2),
                           (width*3//4, dip), (width//2, dip-1),
                           (width//4, dip+1), (0, dip-2)]
@@ -793,24 +810,14 @@ class Game:
             pg.draw.lines(surface, shadow, False,
                           [(0, dip-2), (width//4, dip+1),
                            (width//2, dip-1), (width, dip-2)], 2)
-            # A restrained inner ice band and broad facets add material detail
-            # while keeping the walkable edge easy to read.
-            band_y = min(visual_height-4, dip+7)
-            pg.draw.line(surface, (*cap[:3], 105),
-                         (inset+3, band_y), (width-inset-4, band_y), 2)
-            facet_count = min(3, max(1, width//150))
+            band_y = min(visual_height-4, dip+5)
+            facet_count = min(2, max(1, width//190))
             for facet in range(facet_count):
                 center = (facet+1)*width//(facet_count+1)
-                span = 13+(center+width)%17
-                bottom = min(visual_height-4, band_y+10+(facet%2)*7)
-                pg.draw.polygon(surface, (*cap[:3], 42),
-                                [(center-span, band_y+2),
-                                 (center+span, band_y+1),
-                                 (center+span//2, bottom),
-                                 (center-span//2, bottom+3)])
-                pg.draw.line(surface, (*shadow, 92),
-                             (center-span//2, bottom+3),
-                             (center+span//2, bottom), 1)
+                bottom = min(visual_height-4, band_y+9+(facet%2)*5)
+                pg.draw.lines(surface, (*shadow, 105), False,
+                              [(center, band_y), (center-4, bottom-3),
+                               (center+2, bottom)], 1)
             # One broad seam per long shelf adds depth without a noisy pattern.
             if width >= 145:
                 seam_x = width // 2 + (17 if width % 3 else -19)
@@ -1265,21 +1272,28 @@ class Game:
                 self.feedback.emit(self.skua_boss.rect.midtop,
                                    f'눈덩이 명중 {self.skua_boss.hits}/{self.skua_boss.MAX_HITS}',
                                    (174, 235, 249))
-        if (self.skua_boss.active and not self.invincible
-                and (self.skua_boss.snowball_hits(self.player)
-                     or (self.skua_boss.state not in ('stunned', 'hit')
-                         and self.player.colliderect(self.skua_boss.body_hitbox())))):
+        skua_projectile_hit = (not self.invincible and self.skua_boss.active
+                               and self.skua_boss.snowball_hits(self.player))
+        skua_body_hit = (not self.invincible and self.skua_boss.can_damage_player()
+                         and self.player.colliderect(self.skua_boss.body_hitbox()))
+        if skua_projectile_hit or skua_body_hit:
             self.combat.hit(self.player, self.skua_boss)
             self.feedback.emit(self.player.midtop, '갈매기에게 피격!', (255, 133, 125))
             return
         # Descending from above is a stomp; side and upward contact cause damage.
         for enemy in list(self.enemies):
-            enemy_hitbox = enemy.hitbox()
-            if not self.player.colliderect(enemy_hitbox):
+            damage_box = enemy.damage_hitbox()
+            stomp_box = enemy.stomp_hitbox()
+            can_stomp = (self.velocity_y > 0
+                         and previous_bottom <= stomp_box.top+5
+                         and self.player.bottom >= stomp_box.top
+                         and self.player.right > stomp_box.left
+                         and self.player.left < stomp_box.right)
+            if not (self.player.colliderect(damage_box) or can_stomp):
                 continue
             if enemy.respawn_safe:
                 continue
-            if self.effects['grow'] or (self.velocity_y > 0 and previous_bottom <= enemy_hitbox.top + 5):
+            if self.effects['grow'] or can_stomp:
                 self.enemies.remove(enemy)
                 self.combat.defeat(enemy, self.enemy_images)
                 self.score += enemy.points

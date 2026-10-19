@@ -1674,10 +1674,14 @@ class AdventureChecks(unittest.TestCase):
 
     def test_enemy_hitboxes_exclude_transparent_edges_and_clear_platform(self):
         for enemy in self.game.enemies:
-            hitbox = enemy.hitbox()
+            hitbox = enemy.damage_hitbox()
+            stomp = enemy.stomp_hitbox()
             self.assertLess(hitbox.width, enemy.rect.width)
             self.assertLess(hitbox.height, enemy.rect.height)
             self.assertEqual(hitbox.bottom, enemy.rect.bottom)
+            self.assertLess(stomp.height, hitbox.height)
+            self.assertLess(stomp.top, enemy.rect.top)
+            self.assertGreater(stomp.width, 0)
             if enemy.kind != 'skua':
                 support = min(self.game.platforms,
                               key=lambda platform: abs(platform.top-enemy.rect.bottom))
@@ -1691,6 +1695,21 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(boss.rect.contains(projectile))
         self.assertLess(body.width, projectile.width)
         self.assertLess(body.height, projectile.height)
+
+    def test_skua_contact_only_hurts_during_active_attack_states(self):
+        boss = self.game.skua_boss
+        boss.active = True
+        boss.defeated = False
+        boss.contact_grace = 0.0
+        for state in ('hover', 'carry', 'dive'):
+            boss.state = state
+            self.assertTrue(boss.can_damage_player())
+        for state in ('warning', 'stunned', 'hit'):
+            boss.state = state
+            self.assertFalse(boss.can_damage_player())
+        boss.state = 'dive'
+        boss.contact_grace = 0.35
+        self.assertFalse(boss.can_damage_player())
 
     def test_backgrounds_blend_well_before_region_boundary(self):
         game = self.game
