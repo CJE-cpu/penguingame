@@ -136,40 +136,23 @@ class Game:
         self.item_images = {kind: load_image(filename + '-potion.png', (30, 36), keep_aspect=True)
                             for kind, filename in [('grow', 'growth'), ('speed', 'speed'),
                                                    ('shield', 'shield')]}
-        self.platform_images = {kind: load_image(filename + '-platform-tile-v2.png', (160, 30))
-                                for kind, filename in [('snow', 'snow'), ('ice', 'smooth-ice'), ('crumble', 'cracked-ice')]}
-        # Region variants share silhouettes but receive the local background's
-        # color temperature, keeping collision art consistent without making
-        # every biome look like the same pasted tile.
-        self.platform_images['cave'] = self.platform_images['snow'].copy()
-        self.platform_images['cave'].fill((158, 194, 222, 255), special_flags=pg.BLEND_RGBA_MULT)
-        self.platform_images['fracture'] = self.platform_images['crumble'].copy()
-        self.platform_images['sunset'] = self.platform_images['snow'].copy()
-        self.platform_images['sunset'].fill((255, 216, 228, 255), special_flags=pg.BLEND_RGBA_MULT)
-        shelf = load_image('antarctic-ice-shelf-tile-v3.png', (360, 120),
-                           keep_aspect=True)
-        # The painted source has generous transparent canvas above and below
-        # the shelf. Keeping that canvas put the collision top in empty space,
-        # making characters and props appear to hover above the artwork.
-        visible_shelf = shelf.get_bounding_rect(min_alpha=8)
-        if visible_shelf.width and visible_shelf.height:
-            shelf = shelf.subsurface(visible_shelf).copy()
-        shelf = pg.transform.smoothscale(shelf, (360, 120))
-        self.shelf_images = {}
-        shelf_tints = {
-            'snow': (225, 235, 255, 255), 'ice': (185, 235, 255, 255),
-            'cave': (145, 185, 215, 255), 'fracture': (190, 190, 240, 255),
-            'crumble': (205, 190, 235, 255), 'sunset': (255, 205, 220, 255),
+        # A restrained three-tone palette keeps platforms readable against the
+        # painted scenery without filling every ledge with crystals and rocks.
+        self.platform_palettes = {
+            'snow': ((239, 249, 252), (158, 207, 226), (91, 151, 181)),
+            'ice': ((225, 250, 253), (120, 204, 225), (62, 145, 181)),
+            'cave': ((205, 229, 239), (105, 155, 184), (55, 102, 137)),
+            'fracture': ((226, 232, 250), (145, 157, 207), (83, 89, 151)),
+            'crumble': ((236, 225, 247), (163, 146, 204), (101, 82, 157)),
+            'sunset': ((255, 241, 240), (222, 177, 196), (151, 113, 157)),
         }
-        for kind, tint in shelf_tints.items():
-            image = shelf.copy()
-            image.fill(tint, special_flags=pg.BLEND_RGBA_MULT)
-            if kind == 'sunset':
-                # Ice keeps its blue core but catches the same coral light as
-                # the home-region background instead of reading as pasted cyan.
-                image.fill((30, 9, 4, 0), special_flags=pg.BLEND_RGBA_ADD)
-            self.shelf_images[kind] = image
         self.platform_textures = {}
+        self.platform_images = {
+            kind: self.platform_texture(kind, (160, 30), variant='thin')
+            for kind in self.platform_palettes
+        }
+        # Kept as a public preview collection for layout checks and UI cards.
+        self.shelf_images = self.platform_images
         # Reuse transparent effect buffers instead of allocating two full
         # screen surfaces every rendered frame in the browser build.
         self.weather_layer = pg.Surface((WIDTH, HEIGHT), pg.SRCALPHA)
@@ -724,23 +707,33 @@ class Game:
 
     def platform_texture(self, kind, size, ground=False, joins=(False, False),
                          variant='normal'):
-        """Build a clear thin, normal or ground shelf without stacked caps."""
+        """Build a calm, readable ice shelf with minimal repeated detail."""
         if ground:
             variant = 'ground'
         key = (kind, size, ground, joins, variant)
         if key not in self.platform_textures:
             width, height = size
-            profile_heights = {'thin': 48, 'normal': 64, 'ground': 78}
+            profile_heights = {'thin': 30, 'normal': 38, 'ground': 50}
             visual_height = max(height, profile_heights.get(variant, 64))
             surface = pg.Surface((width, visual_height), pg.SRCALPHA)
-            shelf = pg.transform.smoothscale(self.shelf_images[kind],
-                                              (360, visual_height))
-            offset = {'thin': -42, 'normal': 0, 'ground': 0}.get(variant, 0)
-            for tile_index, x in enumerate(range(offset, width, shelf.get_width())):
-                tile = pg.transform.flip(shelf, True, False) if tile_index % 2 else shelf
-                surface.blit(tile, (x, 0))
-            pg.draw.line(surface, (231, 250, 253, 210),
-                         (4, 2), (max(4, width-5), 2), 2)
+            cap, body, shadow = self.platform_palettes[kind]
+            if ground:
+                pg.draw.rect(surface, body, (0, 5, width, visual_height-5))
+            else:
+                pg.draw.polygon(surface, body,
+                                [(0, 5), (width, 5),
+                                 (max(0, width-9), visual_height-1),
+                                 (min(width, 9), visual_height-1)])
+            pg.draw.rect(surface, cap, (0, 0, width, 9))
+            pg.draw.line(surface, (255, 255, 255, 190), (2, 1), (width-3, 1), 2)
+            pg.draw.line(surface, shadow, (0, 9), (width-1, 9), 2)
+            # One broad seam per long shelf adds depth without a noisy pattern.
+            if width >= 145:
+                seam_x = width // 2 + (17 if width % 3 else -19)
+                seam_bottom = min(visual_height-3, 24 if ground else visual_height-5)
+                pg.draw.lines(surface, (*shadow, 135), False,
+                              [(seam_x, 12), (seam_x-5, 18),
+                               (seam_x+2, seam_bottom)], 1)
             self.platform_textures[key] = surface
         return self.platform_textures[key]
     def draw_background(self, screen):

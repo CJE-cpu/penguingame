@@ -168,100 +168,28 @@ class CaveExpedition:
         else:
             deep, middle, edge, shine = ((42,38,70), (70,65,108),
                                          (126,140,190), (207,224,250))
-        surface.fill(deep)
         if ground:
-            # Broad, offset rock layers match the painted cave wall. Thin
-            # repeated diagonals looked like a mechanical conveyor belt.
-            pg.draw.polygon(surface, middle,
-                            [(0, 12), (width, 12), (width, min(height, 30)),
-                             (0, min(height, 35))])
-            lower = tuple(max(0, channel-8) for channel in middle)
-            if height > 31:
-                pg.draw.polygon(surface, lower,
-                                [(0, 34), (width, 29), (width, height), (0, height)])
-            spans = (137, 191, 163, 223)
-            x = 54
-            index = 0
-            while x < width:
-                depth = min(height-3, 28+(index*13)%31)
-                pg.draw.lines(surface, edge, False,
-                              [(x, 11), (x-6, depth-8), (x+2, depth)], 1)
-                x += spans[index % len(spans)]
-                index += 1
-            # Large inset slabs give ground blocks the same sculpted density as
-            # the raised ledges without repeating a narrow stripe pattern.
-            slab_light = tuple(min(255, channel+13) for channel in middle)
-            for slab_index, slab_x in enumerate(range(24, width-18, 96)):
-                slab_width = min(62+(slab_index%3)*9, width-slab_x-3)
-                slab_y = 22+(slab_index*11)%max(3, height-31)
-                pg.draw.polygon(surface, slab_light,
-                                [(slab_x, slab_y),
-                                 (slab_x+slab_width, slab_y-2),
-                                 (slab_x+slab_width-8, min(height-3, slab_y+11)),
-                                 (slab_x+6, min(height-3, slab_y+13))])
-                pg.draw.line(surface, deep,
-                             (slab_x+6, min(height-2, slab_y+13)),
-                             (slab_x+slab_width-8, min(height-2, slab_y+11)), 1)
+            surface.fill(middle)
+            pg.draw.rect(surface, deep, (0, min(24, height), width,
+                                         max(0, height-24)))
         else:
-            # Floating ledges get one sculpted underside rather than horizontal
-            # stripes that visually collide with ledges behind them.
-            pg.draw.polygon(surface,middle,[(0,9),(width,9),(width-9,height-1),
-                                            (10,height-1)])
-            for x in range(16,width-8,37):
-                pg.draw.line(surface,deep,(x,13),(x-5,min(height-1,21)),2)
-            # Alternating underside facets remove the plain rectangular block
-            # silhouette seen on several short cave platforms.
-            for facet_index, x in enumerate(range(12, width-12, 31)):
-                bottom = height-2-(facet_index%2)*3
-                pg.draw.polygon(surface,
-                                edge if facet_index%2 else middle,
-                                [(x, 12), (min(width-4,x+25), 12),
-                                 (min(width-7,x+19), bottom),
-                                 (x+5, bottom)])
-                pg.draw.line(surface, shine,
-                             (x+3, 14), (min(width-8,x+14), bottom-3), 1)
-        top = [(0, 7)] + [(x, 4+((x//18)*5+self.index*3)%6)
-                          for x in range(0, width+18, 18)] + [(width, 12), (0, 12)]
-        pg.draw.polygon(surface, edge, top)
-        pg.draw.line(surface, shine, (0, 3), (width, 3), 2)
-        if not ground:
-            pg.draw.line(surface, tuple(max(0, channel-12) for channel in deep),
-                         (9, height-2), (width-10, height-2), 2)
-        for x in range(11, width, 29):
-            fleck_y = 12+((x*17+self.index*31)%max(5, height-15))
-            pg.draw.ellipse(surface, (*shine, 105),
-                            (x, fleck_y, 2+(x//29)%3, 1+(x//17)%2))
-        # Sparse mineral clusters distinguish the blue and violet caverns and
-        # remain readable on both full ground and small blocks.
-        mineral = ((91, 218, 224), (176, 145, 230))[self.index]
-        for cluster_index, x in enumerate(range(42, width-10, 121)):
-            base_y = min(height-3, 20+(cluster_index*17)%max(4, height-22))
-            pg.draw.polygon(surface, mineral,
-                            [(x, base_y), (x+4, base_y-8),
-                             (x+8, base_y), (x+5, base_y+4)])
-            pg.draw.polygon(surface, shine,
-                            [(x+8, base_y+1), (x+12, base_y-5),
-                             (x+15, base_y+2), (x+11, base_y+5)])
-        if height <= 26:
-            for x in range(15, width-4, 36):
-                drop = 4+(x*7+self.index*5)%8
-                pg.draw.polygon(surface, (*deep, 235),
-                                [(x, height-5), (x+9, height-5), (x+4, height-1+drop)])
-        detail_step = 151 if ground else 47
-        for x in range(31, width, detail_step):
-            y = 16+((x*11+self.index*13)%max(18, height-18))
-            color = (132,205,221) if self.index == 0 else (143,151,203)
-            pg.draw.line(surface, color, (x, y),
-                         (min(width-1, x+13), min(height-1, y+8)), 1)
-            pg.draw.line(surface, color, (min(width-1, x+13), min(height-1, y+8)),
-                         (min(width-1, x+8), min(height-1, y+16)), 1)
+            pg.draw.polygon(surface, middle,
+                            [(0, 7), (width, 7), (width-8, height-1),
+                             (8, height-1)])
+            pg.draw.line(surface, deep, (8, height-2), (width-9, height-2), 2)
+        # A single clean cap separates walkable terrain from the background.
+        pg.draw.rect(surface, edge, (0, 0, width, min(10, height)))
+        pg.draw.line(surface, shine, (1, 2), (width-2, 2), 2)
+        # Long blocks receive only one subdued natural seam.
+        if width >= 170 and height >= 22:
+            seam_x = width // 2 + (-13 if self.index else 11)
+            pg.draw.lines(surface, (*edge, 150), False,
+                          [(seam_x, 11), (seam_x-5, 17),
+                           (seam_x+2, min(height-2, 26))], 1)
         if fragile:
             for x in (width//3, width*2//3):
                 pg.draw.line(surface, (239,159,184), (x, 1), (x-8, 11), 2)
                 pg.draw.line(surface, (239,159,184), (x-8, 11), (x+5, 20), 2)
-                pg.draw.line(surface, (210,116,157), (x-8, 11), (x-17, 15), 1)
-            for x in range(8, width, 31):
-                pg.draw.circle(surface, (44,39,73), (x, 5+(x//31)%5), 2)
         self.texture_cache[key] = surface
         return surface
 
