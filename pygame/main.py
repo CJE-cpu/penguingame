@@ -776,31 +776,20 @@ class Game:
             visual_height = max(height, profile_heights.get(variant, 64))
             surface = pg.Surface((width, visual_height), pg.SRCALPHA)
             cap, body, shadow = self.platform_palettes[kind]
-            inset = 0 if ground else (4 if variant == 'normal' else 6)
             dip = 10 if ground else 9
-            if ground:
-                silhouette = [(0, 6), (width, 6),
-                              (width, visual_height-1), (0, visual_height-1)]
-            else:
-                underside = []
-                step = 34 if variant == 'thin' else 46
-                for x in range(width-inset, inset-1, -step):
-                    depth = visual_height-1-(3 if (x//step)%2 else 0)
-                    underside.append((x, depth))
-                if not underside or underside[-1][0] != inset:
-                    underside.append((inset, visual_height-2))
-                silhouette = [(0, 6), (width, 6),
-                              (width-inset, visual_height*2//3)] + underside + [
-                                  (inset, visual_height*2//3)]
-            pg.draw.polygon(surface, body, silhouette)
+            # The collision rectangle and artwork share one solid silhouette.
+            # This keeps the shelf readable and avoids holes at its lower
+            # corners when several pieces form a continuous route.
+            surface.fill((*body[:3], 255))
+            pg.draw.rect(surface, (*shadow[:3], 255),
+                         (0, 0, width, visual_height), 2)
             inner_top = min(visual_height-3, dip+7)
-            pg.draw.polygon(surface, (*cap[:3], 42),
-                            [(inset+2, inner_top), (width-inset-3, inner_top),
-                             (width-inset-5, min(visual_height-2, inner_top+8)),
-                             (inset+5, min(visual_height-2, inner_top+10))])
+            pg.draw.rect(surface, (*cap[:3], 42),
+                         (3, inner_top, max(1, width-6),
+                          max(1, visual_height-inner_top-3)))
             pg.draw.line(surface, (*shadow, 70),
-                         (inset+4, min(visual_height-3, inner_top+11)),
-                         (width-inset-5, min(visual_height-3, inner_top+9)), 1)
+                         (4, min(visual_height-3, inner_top+11)),
+                         (width-5, min(visual_height-3, inner_top+9)), 1)
             cap_points = [(0, 0), (width, 0), (width, dip-2),
                           (width*3//4, dip), (width//2, dip-1),
                           (width//4, dip+1), (0, dip-2)]
@@ -810,6 +799,15 @@ class Game:
             pg.draw.lines(surface, shadow, False,
                           [(0, dip-2), (width//4, dip+1),
                            (width//2, dip-1), (width, dip-2)], 2)
+            if not ground:
+                # Subtle end brackets echo the solid beam construction in the
+                # reference while preserving the game's ice palette.
+                bracket_width = min(5, max(3, width//28))
+                pg.draw.rect(surface, (*shadow[:3], 190),
+                             (1, dip, bracket_width, visual_height-dip-1))
+                pg.draw.rect(surface, (*shadow[:3], 190),
+                             (width-bracket_width-1, dip, bracket_width,
+                              visual_height-dip-1))
             band_y = min(visual_height-4, dip+5)
             facet_count = min(2, max(1, width//190))
             for facet in range(facet_count):
