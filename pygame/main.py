@@ -774,7 +774,10 @@ class Game:
             width, height = size
             profile_heights = {'thin': 30, 'normal': 38, 'ground': 50}
             visual_height = max(height, profile_heights.get(variant, 64))
-            surface = pg.Surface((width, visual_height), pg.SRCALPHA)
+            # Platforms are solid scenery.  A surface without per-pixel alpha
+            # prevents decorative shading from punching translucent lines or
+            # panels through the body.
+            surface = pg.Surface((width, visual_height)).convert()
             cap, body, shadow = self.platform_palettes[kind]
             dip = 10 if ground else 9
             # The collision rectangle and artwork share one solid silhouette.

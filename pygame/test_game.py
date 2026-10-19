@@ -84,6 +84,7 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(texture.get_bounding_rect(min_alpha=8).top, 0)
         self.assertEqual(pg.mask.from_surface(texture, threshold=1).count(),
                          texture.get_width()*texture.get_height())
+        self.assertFalse(texture.get_flags() & pg.SRCALPHA)
 
     def test_checkpoint_effect_only_on_first_visit_but_spawn_still_changes(self):
         g = self.game
