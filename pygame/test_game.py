@@ -273,11 +273,25 @@ class AdventureChecks(unittest.TestCase):
         g.handle_key(pg.K_RIGHT)
         g.handle_key(pg.K_RETURN)
         self.assertTrue(g.won)
+        self.assertTrue(g.ending_completed)
         self.assertEqual(g.time_bonus, expected)
         self.assertEqual(g.score, starting_score+expected)
         g.finish_open = False
         g.update(0)
         self.assertEqual(g.score, starting_score+expected)
+        g.won = False
+        g.confirm_ending()
+        self.assertEqual(g.score, starting_score+expected)
+
+    def test_free_exploration_after_ending_restores_objectives(self):
+        g = self.game
+        g.won = True
+        g.ending_type = 1
+        g.ending_completed = True
+        g.ending = EndingSequence(1)
+        g.handle_key(pg.K_RETURN)
+        self.assertFalse(g.won)
+        self.assertIsNotNone(g.objective_target())
 
     def test_seal_boss_charge_stun_and_three_hit_defeat(self):
         g = self.game
@@ -373,6 +387,7 @@ class AdventureChecks(unittest.TestCase):
     def test_ending_sequence_pauses_game_and_returns_to_free_exploration(self):
         g = self.game
         g.won = True
+        g.ending_completed = True
         g.ending_type = 3
         g.finish_open = True
         g.score = 2600
@@ -391,7 +406,8 @@ class AdventureChecks(unittest.TestCase):
         g.handle_key(pg.K_RETURN)
         self.assertIsNone(g.ending)
         self.assertFalse(g.finish_open)
-        self.assertTrue(g.won)
+        self.assertFalse(g.won)
+        self.assertTrue(g.ending_completed)
 
     def test_last_igloo_selects_one_of_four_endings(self):
         cases = [

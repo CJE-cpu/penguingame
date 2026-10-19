@@ -291,6 +291,7 @@ class Game:
         self.falls = 0
         self.won = False
         self.ending_type = 0
+        self.ending_completed = False
         self.finish_open = False
         self.game_over = False
         self.ending = None
@@ -442,8 +443,10 @@ class Game:
         self.ending_prompt_open = False
         self.won = True
         self.ending_type = self.ending_result()
-        self.time_bonus = max(0, TIME_BONUS_MAX-round(self.time*TIME_BONUS_RATE))
-        self.score += self.time_bonus
+        if not self.ending_completed:
+            self.time_bonus = max(0, TIME_BONUS_MAX-round(self.time*TIME_BONUS_RATE))
+            self.score += self.time_bonus
+            self.ending_completed = True
         self.finish_open = True
         self.audio.play('ending')
         self.save_score()
@@ -523,9 +526,12 @@ class Game:
                     self.reset()
                     self.start(False)
                 elif action == 'records':
+                    self.won = False
                     self.score_ui.mode = 'ranking'
                     self.score_ui.recent = False
                     self.score_ui.page = 0
+                else:
+                    self.won = False
             elif key == pg.K_RIGHT:
                 self.ending.forward()
             elif key == pg.K_LEFT:

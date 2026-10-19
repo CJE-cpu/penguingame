@@ -38,6 +38,8 @@ class AdventureSave:
             'checkpoint': game.checkpoint_index,
             'score': game.score,
             'time': round(game.time, 3),
+            'ending_completed': game.ending_completed,
+            'time_bonus': game.time_bonus,
             'fish': [list(self._rect_key(entry)) for entry in game.fish],
             'items': [list(self._rect_key(entry)) for entry in game.items],
             'life_items': [[rect.x, rect.y] for rect in game.life_items],
@@ -143,6 +145,8 @@ class AdventureSave:
             game.enemies = [enemy for enemy in game.enemies if enemy.uid in enemy_ids]
             game.score = max(0, min(game.max_score, int(data.get('score', 0))))
             game.time = max(0.0, min(10_000_000.0, float(data.get('time', 0))))
+            game.ending_completed = bool(data.get('ending_completed', False))
+            game.time_bonus = max(0, int(data.get('time_bonus', 0)))
             game.run_id = data.get('run_id') if isinstance(data.get('run_id'), str) else game.run_id
             game.defeated = max(0, int(data.get('defeated', 0)))
             game.hits = max(0, int(data.get('hits', 0)))
