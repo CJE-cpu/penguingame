@@ -109,6 +109,14 @@ class ScoreRecords:
     def ranking(self):
         return sorted(self.best.values(),key=lambda e:(-e['score'],-int(e['cleared']),e['date'],e['name']))
 
+    def ending_best_times(self):
+        best = {}
+        for entry in self.history:
+            ending = entry.get('ending', 0)
+            if entry.get('cleared') and ending in (1, 2, 3, 4):
+                best[ending] = min(best.get(ending, entry['seconds']), entry['seconds'])
+        return best
+
 
 class ScoreUI:
     profile_button = pg.Rect(557,43,182,37)
@@ -238,6 +246,13 @@ class ScoreUI:
         ui.text(screen,'최근 탐험 기록' if self.recent else '탐험가 최고 점수',(400,85),ui.heading,center=True)
         ui.text(screen,f'현재 플레이어: {game.player_name} · 같은 컴퓨터의 기록',(400,120),ui.small,center=True)
         entries = game.records.history if self.recent else game.records.ranking()
+        best_times = game.records.ending_best_times()
+        if best_times:
+            summary = '  '.join(
+                f'E{ending} {seconds//60:02}:{seconds%60:02}'
+                for ending, seconds in sorted(best_times.items()))
+            ui.text(screen, '엔딩별 최단 '+summary, (400, 137), ui.small,
+                    (36,101,127), center=True, max_width=610)
         ui.text(screen,'순위 / 이름',(88,156),ui.small)
         ui.text(screen,'점수',(385,156),ui.small)
         ui.text(screen,'결과 / 수집',(470,156),ui.small)
@@ -248,8 +263,11 @@ class ScoreUI:
                 pg.draw.rect(screen,(211,236,240),(80,y-3,640,31),border_radius=6)
             ui.text(screen,f"{self.page*8+i+1:02}  {entry['name']}",(88,y),ui.body,max_width=272)
             ui.text(screen,str(entry['score']),(385,y),ui.body,max_width=75)
-            ui.text(screen,'완주' if entry['cleared'] else '미완주',(470,y),ui.small)
-            ui.text(screen,f"{entry['fish']}/30 · {entry['rescued']}/3",(527,y),ui.small,max_width=92)
+            ending = entry.get('ending', 0)
+            result = (f'E{ending} {entry["seconds"]//60:02}:{entry["seconds"]%60:02}'
+                      if entry['cleared'] else '미완주')
+            ui.text(screen,result,(470,y),ui.small,max_width=72)
+            ui.text(screen,f"{entry['fish']}/30 · {entry['rescued']}/3",(545,y),ui.small,max_width=76)
             ui.text(screen,entry['date'][:10],(626,y),ui.small,max_width=88)
         if not entries:
             ui.text(screen,'아직 기록이 없어요. 물고기를 찾아 첫 점수를 남겨보세요!',(400,292),ui.body,center=True)

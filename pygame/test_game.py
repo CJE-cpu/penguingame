@@ -1626,6 +1626,36 @@ class AdventureChecks(unittest.TestCase):
                             and platform.right <= boss.arena.left+120
                             for platform in self.game.region_ledges[4]))
 
+    def test_objective_compass_advances_from_rescue_to_bosses(self):
+        game = self.game
+        self.assertEqual(game.objective_target()[0], 'baby')
+        for baby in game.babies:
+            baby['rescued'] = True
+        game.rescued = len(game.babies)
+        self.assertEqual(game.objective_target()[:3:2], ('boss', '바다표범 보스'))
+        game.boss.restore_defeated(True)
+        self.assertEqual(game.objective_target()[:3:2], ('boss', '갈매기 보스'))
+
+    def test_ending_menu_offers_explore_restart_and_records(self):
+        sequence = EndingSequence(3)
+        self.assertEqual(sequence.advance(), 'explore')
+        sequence = EndingSequence(3)
+        sequence.forward()
+        self.assertEqual(sequence.advance(), 'restart')
+        sequence = EndingSequence(3)
+        sequence.back()
+        self.assertEqual(sequence.advance(), 'records')
+
+    def test_score_records_report_best_time_for_each_ending(self):
+        records = self.game.records
+        records.history = [
+            {'cleared': True, 'ending': 2, 'seconds': 240},
+            {'cleared': True, 'ending': 2, 'seconds': 190},
+            {'cleared': True, 'ending': 4, 'seconds': 360},
+            {'cleared': False, 'ending': 1, 'seconds': 20},
+        ]
+        self.assertEqual(records.ending_best_times(), {2: 190, 4: 360})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -47,6 +47,7 @@ class AdventureSave:
             'falls': game.falls,
             'lives': game.lives,
             'visited': sorted(game.visited_checkpoints),
+            'region_fish_rewarded': sorted(game.region_fish_rewarded),
             'babies': [baby['rescued'] for baby in game.babies],
             'rescued': game.rescued,
             'caves': [{
@@ -150,6 +151,9 @@ class AdventureSave:
             game.checkpoint_index = checkpoint
             game.visited_checkpoints = {i for i in data.get('visited', [])
                                         if type(i) is int and 0 <= i < len(game.checkpoints)} | {checkpoint}
+            game.region_fish_rewarded = {
+                i for i in data.get('region_fish_rewarded', [])
+                if type(i) is int and 0 <= i < len(game.region_grounds)}
             baby_states = data.get('babies', [])
             if len(baby_states) != len(game.babies):
                 raise ValueError('Invalid baby state')

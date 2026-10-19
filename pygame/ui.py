@@ -148,24 +148,26 @@ class IceUI:
             pg.draw.rect(screen, BLUE, (x+43, 123, round(89*min(1,game.effects[kind]/8)), 4), border_radius=2)
 
     def rescue_guide(self,game,screen):
-        target = game.rescue_target()
+        target = game.objective_target()
         if target is None or game.won:
             return
-        kind,rect = target
+        kind,rect,title,detail = target
         # Keep objectives in a dedicated right slot; potion timers own the
         # left slot and context prompts use only the space between them.
         x, y, width, height = self.OBJECTIVE_SLOT
         self.panel(screen,(x,y,width,height))
-        self.icon(screen,game.baby_image if kind=='baby' else game.igloo_image,
-                  (x+23,y+22),(24,27))
+        icons = {'baby': game.baby_image, 'home': game.igloo_image,
+                 'boss': game.enemy_images['skua'][0],
+                 'cave': game.cave_image, 'fish': game.fish_images['blue']}
+        self.icon(screen, icons[kind], (x+23,y+22),(25,28))
         dx,dy = rect.centerx-game.player.centerx,rect.centery-game.player.centery
         horizontal = '오른쪽' if dx>40 else '왼쪽' if dx<-40 else '근처'
         vertical = ' 위' if dy<-45 else ' 아래' if dy>45 else ''
         distance = abs(dx)
         range_text = '가까움' if distance < 260 else '조금 멂' if distance < 720 else '멀리'
-        title = ('친구 ' if kind=='baby' else '이글루 ')+horizontal+vertical
-        self.text(screen,title,(x+44,y+5),self.small,max_width=135)
-        self.text(screen,range_text,(x+44,y+23),self.small,MUTED)
+        self.text(screen,title,(x+44,y+4),self.small,max_width=135)
+        self.text(screen,f'{horizontal}{vertical} · {range_text}',
+                  (x+44,y+22),self.small,MUTED,max_width=135)
         angle = math.atan2(dy,dx)
         cx,cy = x+width-18,y+height//2
         tip = (round(cx+math.cos(angle)*11),round(cy+math.sin(angle)*11))
@@ -184,6 +186,20 @@ class IceUI:
                   (145, 23), self.body, 'white', center=True)
         card.set_alpha(round(255*opacity))
         screen.blit(card, (490, 94-round(7*(1-opacity))))
+
+    def boss_intro(self, game, screen):
+        data = game.boss_intro
+        if not data:
+            return
+        opacity = min(1.0, (2.8-data['time'])/0.25, data['time']/0.35)
+        card = pg.Surface((560, 82), pg.SRCALPHA)
+        self.panel(card, (0, 0, 552, 74), dark=True)
+        self.text(card, data['title'], (276, 24), self.heading,
+                  'white', center=True)
+        self.text(card, data['hint'], (276, 53), self.small,
+                  (224, 247, 251), center=True)
+        card.set_alpha(round(255*opacity))
+        screen.blit(card, (124, 157-round((1-opacity)*8)))
 
     def intro(self, game, screen):
         screen.blit(game.scene_backgrounds[0], (0, 0))

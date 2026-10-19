@@ -297,6 +297,8 @@ class Game:
         self.lives = STARTING_LIVES
         self.time_bonus = 0
         self.time = 0.0
+        self.region_fish_rewarded = set()
+        self.boss_intro = None
         self.effects = {kind: 0.0 for kind in ITEM_STYLE}
         self.items = []
         # Five spaced pickups; control-changing potions sit on optional upper paths.
@@ -343,6 +345,7 @@ class Game:
                 rect.centerx = self.region_grounds[4][0].left+80+moved*115
                 moved += 1
         self.max_score += self.skua_boss.SCORE
+        self.max_score += len(REGIONS) * 75  # Complete every region's fish set.
         self.max_score += 6*60 + 170 + 200 + 6*40 + 500 + 225
         self.max_score += 300 + 2*(30+50) + TIME_BONUS_MAX # Caverns, guardians and time bonus.
         self.arrange_potions(placements)
@@ -512,9 +515,19 @@ class Game:
                 self.start(False)
             return False
         if self.ending:
-            if key in (pg.K_RETURN, pg.K_SPACE, pg.K_RIGHT):
-                if self.ending.advance():
-                    self.ending = None
+            if key in (pg.K_RETURN, pg.K_SPACE):
+                action = self.ending.advance()
+                self.ending = None
+                self.finish_open = False
+                if action == 'restart':
+                    self.reset()
+                    self.start(False)
+                elif action == 'records':
+                    self.score_ui.mode = 'ranking'
+                    self.score_ui.recent = False
+                    self.score_ui.page = 0
+            elif key == pg.K_RIGHT:
+                self.ending.forward()
             elif key == pg.K_LEFT:
                 self.ending.back()
             return False
@@ -623,6 +636,13 @@ class Game:
                 self.continue_collecting()
             elif ending.collidepoint(pos):
                 self.confirm_ending()
+            return
+        if self.ending:
+            for index, rect in enumerate(self.ending.buttons()):
+                if rect.collidepoint(pos):
+                    self.ending.choice = index
+                    self.handle_key(pg.K_RETURN)
+                    break
             return
         if self.score_ui.click(self,pos):
             return
@@ -825,6 +845,10 @@ class Game:
         self.camera_x += (target-self.camera_x) * (1-math.exp(-10*dt))
         region = max(0, min(len(REGIONS)-1, self.player.centerx//REGION_WIDTH))
         self.region_banner = max(0, self.region_banner-dt)
+        if self.boss_intro:
+            self.boss_intro['time'] = max(0, self.boss_intro['time']-dt)
+            if not self.boss_intro['time']:
+                self.boss_intro = None
         if region != self.display_region:
             self.display_region = region
             self.region_banner = 2.4
@@ -1133,7 +1157,9 @@ class Game:
         boss_event = self.boss.update(dt, self.player)
         if boss_event == 'start':
             self.audio.play('checkpoint')
-            self.feedback.emit(self.boss.rect.midtop, '거대 바다표범 등장!', (255, 210, 107))
+            self.boss_intro = {'title': '바다표범 보스',
+                               'hint': '돌진을 피하고 빙벽 충돌 후 반격',
+                               'time': 2.8}
         elif boss_event == 'impact':
             self.audio.play('hit')
             self.feedback.emit(self.boss.rect.midtop, '빙벽 충돌! 지금 공격!', (143, 235, 247))
@@ -1184,8 +1210,9 @@ class Game:
         skua_event = self.skua_boss.update(dt, self.player)
         if skua_event == 'start':
             self.audio.play('checkpoint')
-            self.feedback.emit(self.skua_boss.rect.midtop,
-                               '갈매기 대장이 길을 막았습니다!', (255, 210, 107))
+            self.boss_intro = {'title': '갈매기 대장',
+                               'hint': '급강하를 피하고 눈덩이를 X로 반격',
+                               'time': 2.8}
         elif skua_event == 'impact':
             self.audio.play('hit')
             self.feedback.emit(self.skua_boss.rect.midtop,
@@ -1234,15 +1261,34 @@ class Game:
                 self.feedback.emit(self.player.midtop, '피격!', (255,153,153))
                 return
         remaining_fish = []
+        collected_regions = set()
         for kind, rect in self.fish:
             if self.player.colliderect(rect):
                 self.score += FISH_TYPES[kind]
                 self.content.wallet += 1
+                collected_regions.add(min(len(REGIONS)-1, rect.centerx//REGION_WIDTH))
                 self.audio.play('collect')
-                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind]}', (255,232,151))
+                if kind == 'blue':
+                    self.content.wallet += 1
+                    detail = ' · 먹이 +2'
+                elif kind == 'gold':
+                    self.invincible = max(self.invincible, 1.25)
+                    detail = ' · 보호 1.2초'
+                else:
+                    detail = ''
+                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind]}{detail}', (255,232,151))
             else:
                 remaining_fish.append((kind, rect))
         self.fish = remaining_fish
+        for region in collected_regions:
+            if (region not in self.region_fish_rewarded
+                    and not any(rect.centerx//REGION_WIDTH == region
+                                for _kind, rect in self.fish)):
+                self.region_fish_rewarded.add(region)
+                self.score += 75
+                self.feedback.emit(self.player.midtop,
+                                   f'{region+1}구역 물고기 완료! +75', (150, 240, 207))
+                self.progress.save(self)
         remaining_items = []
         for kind, rect in self.items:
             if not self.player.colliderect(rect):
@@ -1360,6 +1406,10 @@ class Game:
             ground = tuple(platform) in self.ground_keys
             joins = self.ground_join_sides(platform) if ground else (False, False)
             variant = self.platform_variants[tuple(platform)]
+            if not ground:
+                shadow = pg.Surface((rect.width, 12), pg.SRCALPHA)
+                pg.draw.ellipse(shadow, (18, 55, 78, 35), shadow.get_rect())
+                screen.blit(shadow, (rect.x, rect.bottom-3))
             screen.blit(self.platform_texture(kind, platform.size, ground, joins,
                                               variant), rect)
             if kind == 'crumble' and tuple(platform) in self.crumbles:
@@ -1446,6 +1496,8 @@ class Game:
         self.draw_region_atmosphere(screen)
         self.draw_baby_markers(screen)
         self.feedback.draw(self, screen)
+        if self.boss_intro:
+            self.ui.boss_intro(self, screen)
         self.ui.hud(self, screen, REGIONS)
         if self.skua_boss.active and not self.skua_boss.defeated:
             self.skua_boss.draw_hud(self, screen)
@@ -1526,6 +1578,31 @@ class Game:
         if waiting:
             return ('baby',min(waiting,key=lambda r:abs(r.centerx-self.player.centerx)+abs(r.centery-self.player.centery)))
         return None
+
+    def objective_target(self):
+        """Return one clear next objective for the compact compass card."""
+        rescue = self.rescue_target()
+        if rescue:
+            kind, rect = rescue
+            return (kind, rect,
+                    '친구를 이글루로' if kind == 'home' else '친구 구조',
+                    '가장 가까운 이글루' if kind == 'home' else '지역 임무를 해결하세요')
+        bosses = [(self.boss, '바다표범 보스'),
+                  (self.skua_boss, '갈매기 보스')]
+        pending = [(boss, label) for boss, label in bosses if not boss.defeated]
+        if pending:
+            boss, label = min(pending,
+                              key=lambda item: abs(item[0].arena.centerx-self.player.centerx))
+            return ('boss', boss.arena, label, '공격 예고를 보고 반격하세요')
+        unopened = [c for c in self.caves if not c['treasure']]
+        if unopened:
+            cave = min(unopened, key=lambda c: abs(c['rect'].centerx-self.player.centerx))
+            return ('cave', cave['rect'], '동굴 보물', '봉인석 3개와 레버 찾기')
+        if self.fish:
+            _kind, rect = min(self.fish,
+                              key=lambda item: abs(item[1].centerx-self.player.centerx))
+            return ('fish', rect, '남은 물고기', f'{len(self.fish)}마리 남음')
+        return ('home', self.checkpoints[-1], '마지막 이글루', 'E로 엔딩 선택')
 
     def draw_baby_markers(self, screen):
         visible_babies = []

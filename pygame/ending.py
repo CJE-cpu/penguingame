@@ -15,16 +15,23 @@ class EndingSequence:
         self.page = 0
         self.time = 0.0
         self.finished = False
+        self.choice = 0
 
     def update(self, dt):
         self.time += dt
 
     def advance(self):
         self.finished = True
-        return True
+        return ('explore', 'restart', 'records')[self.choice]
 
     def back(self):
-        return
+        self.choice = (self.choice-1) % 3
+
+    def forward(self):
+        self.choice = (self.choice+1) % 3
+
+    def buttons(self):
+        return [pg.Rect(190+index*143, 554, 132, 34) for index in range(3)]
 
     def _fade(self, screen):
         age = min(1.0, self.time/0.55)
@@ -54,9 +61,11 @@ class EndingSequence:
         for index, line in enumerate(lines):
             ui.text(screen, line, (400, 490+index*22), ui.small,
                     (224, 246, 251), center=True, max_width=620)
-        ui.panel(screen, (248, 556, 304, 30), dark=True)
-        ui.text(screen, 'ENTER 자유 탐험으로 돌아가기',
-                (400, 571), ui.small, 'white', center=True)
+        labels = ('수집 계속', '새 모험', '기록 보기')
+        for index, (label, rect) in enumerate(zip(labels, self.buttons())):
+            ui.panel(screen, rect, dark=index == self.choice)
+            ui.text(screen, label, rect.center, ui.small,
+                    'white' if index == self.choice else (25,57,76), center=True)
 
     def _home_scene(self, game, screen):
         screen.blit(game.scene_backgrounds[5], (0, 0))
