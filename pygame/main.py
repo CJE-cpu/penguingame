@@ -1106,6 +1106,10 @@ class Game:
             self.feedback.emit(self.boss.rect.midtop, '빙벽 충돌! 지금 공격!', (143, 235, 247))
         elif boss_event in ('ranged_hit', 'ranged_defeat'):
             self.audio.play('defeat')
+            # A successful shot can change the boss from stunned to roaring
+            # while the player is still beside it. Do not turn that same
+            # successful attack into unavoidable contact damage.
+            self.invincible = max(self.invincible, 0.55)
             if boss_event == 'ranged_defeat':
                 self.score += self.boss.SCORE
                 self.feedback.emit(self.boss.rect.midtop,
@@ -1122,9 +1126,14 @@ class Game:
             can_stomp = self.boss.can_stomp(
                 self.player, previous_bottom, self.velocity_y)
             if can_stomp and self.boss.stomp():
+                # Place the feet clear of the new roar hitbox before the next
+                # frame. The bounce alone left several overlapping frames and
+                # caused an immediate retaliatory hit after a valid stomp.
+                self.player.bottom = self.boss.rect.top-4
                 self.velocity_y = -470
                 self.y = float(self.player.y)
                 self.on_ground = False
+                self.invincible = max(self.invincible, 0.75)
                 self.audio.play('defeat')
                 if self.boss.defeated:
                     self.score += self.boss.SCORE

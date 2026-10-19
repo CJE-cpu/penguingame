@@ -312,6 +312,36 @@ class AdventureChecks(unittest.TestCase):
         self.assertFalse(boss.can_stomp(player, boss.rect.top, 180))
         self.assertFalse(boss.can_stomp(player, spot.top-2, -180))
 
+    def test_successful_boss_stomp_separates_and_grants_hit_grace(self):
+        g = self.game
+        boss = g.boss
+        boss.active = True
+        boss.state = 'stunned'
+        boss.timer = 1.0
+        boss.direction = -1
+        spot = boss.weakspot()
+        g.player.size = (40, 52)
+        g.player.midbottom = spot.midtop
+        g.player.move_ip(0, 8)
+        g.x, g.y = map(float, g.player.topleft)
+        g.velocity_y = 180
+        g.on_ground = False
+
+        g.update(0, 0, False, False)
+
+        self.assertEqual(boss.hits, 1)
+        self.assertGreaterEqual(g.invincible, 0.75)
+        self.assertLessEqual(g.player.bottom, boss.rect.top-4)
+        self.assertFalse(g.combat.hurt)
+
+        # Even forced contact on the following frame is covered by the grace
+        # period instead of consuming a life immediately after the hit.
+        g.player.center = boss.rect.center
+        g.x, g.y = map(float, g.player.topleft)
+        g.velocity_y = 0
+        g.update(1/60, 0, False, False)
+        self.assertFalse(g.combat.hurt)
+
     def test_boss_wall_impact_grants_ranged_ice_attack(self):
         boss = self.game.boss
         boss.active = True
