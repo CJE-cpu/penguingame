@@ -40,7 +40,7 @@ export default function Collection() {
       />
       <div className="collection-toolbar">
         <div className="segmented" role="group" aria-label="도감 분류">
-          {["전체", "물고기", "아이템", "친구와 적"].map((name) => (
+          {["전체", "물고기", "아이템", "친구와 적", "보스"].map((name) => (
             <button
               key={name}
               className={category === name ? "active" : ""}
@@ -70,7 +70,7 @@ export default function Collection() {
         {entries.map((item, i) => (
           <article className="collection-card" key={item.name}>
             <div
-              className={`collection-art category-${item.category === "물고기" ? "fish" : item.category === "아이템" ? "item" : "friend"}`}
+              className={`collection-art category-${item.category === "물고기" ? "fish" : item.category === "아이템" ? "item" : item.category === "보스" ? "boss" : "friend"}`}
             >
               <span className="collection-index">
                 FIELD NOTE {String(i + 1).padStart(2, "0")}

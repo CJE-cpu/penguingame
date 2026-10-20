@@ -169,4 +169,20 @@ export const collection = [
     description:
       "동굴의 봉인석 세 개를 모아 레버로 문을 연 뒤 E로 상자를 열어보세요.",
   },
+  {
+    name: "거대 바다표범",
+    category: "보스",
+    image: "seal-boss.png",
+    value: "격파 +500 POINTS",
+    description:
+      "빙벽을 향한 돌진을 피하세요. 충돌 후 기절했을 때 머리의 약점을 세 번 밟으면 길을 열 수 있습니다.",
+  },
+  {
+    name: "갈매기 대장",
+    category: "보스",
+    image: "skua-boss.png",
+    value: "격파 +700 POINTS",
+    description:
+      "급강하를 피하고 떨어진 눈덩이를 되받아치세요. 공격 직후의 짧은 틈을 노려 세 번 명중시키면 승리합니다.",
+  },
 ];

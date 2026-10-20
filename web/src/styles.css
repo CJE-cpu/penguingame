@@ -1280,6 +1280,20 @@ select:focus-visible {
 .category-friend {
   background: #e7eced;
 }
+.category-boss {
+  background:
+    radial-gradient(circle at 50% 74%, #d7edf2 0 24%, transparent 25%),
+    linear-gradient(145deg, #dcebf0, #c9d8e2 58%, #b8cad7);
+}
+.collection-art.category-boss > img {
+  max-width: 132px;
+  max-height: 112px;
+  filter: drop-shadow(0 10px 5px #173f5538);
+}
+.category-boss .collection-category {
+  color: #fff;
+  background: #244f65d9;
+}
 .collection-art > img {
   max-width: 80px;
   max-height: 88px;
@@ -4006,6 +4020,10 @@ td strong {
   .site-header { top: 0; }
   .hero:before { display: none; }
   .hero-scene { border-radius: 90px 22px 22px 22px; }
+  .collection-art.category-boss > img {
+    max-width: 106px;
+    max-height: 92px;
+  }
 }
 
 @media (max-width: 760px) {
