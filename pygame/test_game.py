@@ -7,8 +7,10 @@ import math
 import tempfile
 from pathlib import Path
 import pygame as pg
+import storage
 from main import (Game, REGION_WIDTH, WORLD_WIDTH, REGIONS, Enemy,
-                  TIME_BONUS_MAX, TIME_BONUS_RATE, RESPAWN_INVINCIBILITY)
+                  TIME_BONUS_MAX, TIME_BONUS_RATE, RESPAWN_INVINCIBILITY,
+                  COYOTE_TIME, JUMP_SPEED)
 from window import GameWindow
 from cave import CaveExpedition
 from ending import EndingSequence, ENDING_NAMES
@@ -631,6 +633,27 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(len(loaded.history),3)
         self.assertEqual(sum(e['run']=='first' for e in loaded.history),1)
         self.assertTrue(loaded.best['눈송이']['cleared'])
+
+    def test_score_save_retries_brief_file_lock(self):
+        records = self.game.records
+        real_replace = storage.os.replace
+        attempts = 0
+
+        def briefly_locked(source, target):
+            nonlocal attempts
+            attempts += 1
+            if attempts < 3:
+                raise PermissionError('temporarily locked')
+            return real_replace(source, target)
+
+        entry = {'name':'test','run':'retry','score':50,'fish':1,'rescued':0,
+                 'seconds':20,'cleared':False,'date':'2026-10-20T12:00:00'}
+        with patch('storage.os.replace', side_effect=briefly_locked), \
+                patch('storage.time.sleep') as delay:
+            self.assertTrue(records.record(entry))
+        self.assertEqual(attempts, 3)
+        self.assertEqual(delay.call_count, 2)
+        self.assertEqual(ScoreRecords(self.score_path).ranking()[0]['score'], 50)
 
     def test_score_reset_preserves_history_but_tutorial_does_not_record(self):
         g = self.game
@@ -1670,6 +1693,28 @@ class AdventureChecks(unittest.TestCase):
         tapped = apex(0)
         held = apex(13)
         self.assertLess(held, tapped-60)
+
+    def test_jump_allows_edge_grace_and_landing_buffer(self):
+        g = self.game
+        ground = g.region_grounds[0][0]
+
+        self.place(ground, ground.right-g.player.width)
+        g.on_ground = False
+        g.coyote_time = COYOTE_TIME
+        g.update(1/60, jump=True, jump_held=True)
+        self.assertLess(g.velocity_y, 0)
+        self.assertEqual(g.jump_buffer, 0)
+
+        self.place(ground, ground.left+180)
+        g.player.bottom = ground.top-2
+        g.y = float(g.player.y)
+        g.on_ground = False
+        g.coyote_time = 0
+        g.velocity_y = 240
+        g.update(1/60, jump=True, jump_held=True)
+        self.assertFalse(g.on_ground)
+        self.assertEqual(g.velocity_y, JUMP_SPEED)
+        self.assertEqual(g.jump_buffer, 0)
 
     def test_skua_boss_uses_kickable_snowballs_and_three_hits(self):
         boss = self.game.skua_boss

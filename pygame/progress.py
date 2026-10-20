@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import tempfile
+from storage import atomic_replace
 
 
 class AdventureSave:
@@ -92,7 +93,7 @@ class AdventureSave:
                 json.dump(data, handle, ensure_ascii=False, indent=2)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary, self.path)
+            atomic_replace(temporary, self.path)
             self.error = ''
             return True
         except OSError:

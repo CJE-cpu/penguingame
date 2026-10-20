@@ -66,6 +66,8 @@ JUMP_SPEED = -650
 JUMP_HOLD_TIME = 0.22
 JUMP_HOLD_FORCE = 1050
 JUMP_RELEASE_SPEED = -390
+COYOTE_TIME = 0.1
+JUMP_BUFFER_TIME = 0.12
 ITEM_DURATION = 8.0
 GROW_EXIT_INVINCIBILITY = 1.5
 RESPAWN_INVINCIBILITY = 3.0
@@ -242,6 +244,8 @@ class Game:
         self.x, self.y = float(self.player.x), float(self.player.y)
         self.velocity_y = 0.0
         self.jump_hold = 0.0
+        self.coyote_time = COYOTE_TIME
+        self.jump_buffer = 0.0
         self.velocity_x = 0.0
         self.surface_kind = 'snow'
         self.on_ground = True
@@ -1061,6 +1065,9 @@ class Game:
         self.x, self.y = map(float, self.player.topleft)
         self.velocity_y = 0.0
         self.velocity_x = 0.0
+        self.jump_hold = 0.0
+        self.jump_buffer = 0.0
+        self.coyote_time = COYOTE_TIME
         self.surface_kind = 'snow'
         self.carried_baby = None
         self.content.sliding = False
@@ -1179,6 +1186,14 @@ class Game:
             self.player.midbottom = feet
             self.y = float(self.player.y)
         was_grounded = self.on_ground
+        if self.on_ground:
+            self.coyote_time = COYOTE_TIME
+        else:
+            self.coyote_time = max(0.0, self.coyote_time-dt)
+        if jump:
+            self.jump_buffer = JUMP_BUFFER_TIME
+        else:
+            self.jump_buffer = max(0.0, self.jump_buffer-dt)
         previous_x = self.player.x
         self.update_adventure(dt)
         previous_bottom = self.player.bottom
@@ -1194,10 +1209,12 @@ class Game:
         if self.effects['shield']:
             self.invincible = max(self.invincible, 0.12)
         speed = MOVE_SPEED * (1.6 if self.effects['speed'] else 1.0) * (1.35 if self.content.sliding else 1)
-        if jump and self.on_ground:
+        if self.jump_buffer > 0 and (self.on_ground or self.coyote_time > 0):
             self.velocity_y = JUMP_SPEED
             self.on_ground = False
             self.jump_hold = JUMP_HOLD_TIME
+            self.jump_buffer = 0.0
+            self.coyote_time = 0.0
             self.audio.play('jump')
         if self.velocity_y < 0 and self.jump_hold > 0:
             if jump_held is True:
@@ -1262,6 +1279,15 @@ class Game:
                 self.crumbles.setdefault(tuple(platform), (0.0, 0.0))
             self.y = float(self.player.y)
             self.velocity_y = 0.0
+            # Honor a jump pressed just before touching down. This avoids a
+            # dead input frame on narrow platforms and during fast descents.
+            if self.jump_buffer > 0:
+                self.velocity_y = JUMP_SPEED
+                self.on_ground = False
+                self.jump_hold = JUMP_HOLD_TIME
+                self.jump_buffer = 0.0
+                self.coyote_time = 0.0
+                self.audio.play('jump')
         boss_event = self.boss.update(dt, self.player)
         if boss_event == 'start':
             self.audio.play('checkpoint')

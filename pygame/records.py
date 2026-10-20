@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import unicodedata
 import pygame as pg
+from storage import atomic_replace
 
 
 def player_name(value):
@@ -75,7 +76,7 @@ class ScoreRecords:
                 json.dump(data,handle,ensure_ascii=False,indent=2)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary,self.path)
+            atomic_replace(temporary,self.path)
             self.error = ''
             return True
         except OSError:
