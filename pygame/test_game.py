@@ -1024,6 +1024,26 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.draw(g,self.screen)
         self.assertEqual(g.player.size,(40,52))
 
+    def test_interaction_effect_work_is_bounded_and_cached(self):
+        g = self.game
+        for index in range(20):
+            g.feedback.emit(g.player.center, f'+{index}', (255,232,151))
+        self.assertEqual(len(g.feedback.bursts), g.feedback.MAX_BURSTS)
+        g.feedback.draw(g, self.screen)
+        label_count = len(g.feedback.label_cache)
+        g.feedback.draw(g, self.screen)
+        self.assertEqual(len(g.feedback.label_cache), label_count)
+
+        g.effects = {'grow':0, 'speed':8, 'shield':0}
+        g.velocity_x = 270
+        for _ in range(30):
+            g.feedback.update(0.05, g)
+        self.assertLessEqual(len(g.feedback.trails), g.feedback.MAX_TRAILS)
+        g.feedback.draw_aura(g, self.screen)
+        ghost_count = len(g.feedback.ghost_cache)
+        g.feedback.draw_aura(g, self.screen)
+        self.assertEqual(len(g.feedback.ghost_cache), ghost_count)
+
     def test_potions_leave_reaction_space_from_every_enemy_patrol(self):
         g = self.game
         for kind, item in g.items:

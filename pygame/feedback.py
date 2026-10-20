@@ -4,6 +4,9 @@ import pygame as pg
 
 
 class InteractionEffects:
+    MAX_BURSTS = 8
+    MAX_TRAILS = 5
+
     def __init__(self):
         self.bursts = []
         self.trails = []
@@ -11,6 +14,9 @@ class InteractionEffects:
         self.size_scale = 1.0
         self.layer = pg.Surface((800, 600), pg.SRCALPHA)
         self.player_scale_cache = {}
+        self.label_cache = {}
+        self.icon_cache = {}
+        self.ghost_cache = {}
 
     def reset(self):
         self.bursts.clear()
@@ -20,6 +26,10 @@ class InteractionEffects:
 
     def emit(self, pos, text, color, kind=None):
         self.bursts.append({'pos':tuple(pos), 'text':text, 'color':color, 'life':1.2, 'kind':kind})
+        # A chain pickup or boss hit can emit several reactions in one frame.
+        # Keep the newest reactions without letting draw cost grow unbounded.
+        if len(self.bursts) > self.MAX_BURSTS:
+            del self.bursts[:-self.MAX_BURSTS]
 
     def update(self, dt, game=None):
         for burst in self.bursts:
@@ -30,16 +40,21 @@ class InteractionEffects:
             target = 1.5 if game.effects['grow'] else 1.0
             self.size_scale += (target-self.size_scale)*(1-math.exp(-11*dt))
             self.trail_clock += dt
-            if game.effects['speed'] and abs(game.velocity_x)>20 and self.trail_clock>=0.045:
+            interval = 0.075 if getattr(game, 'quality', 'high') == 'performance' else 0.05
+            if game.effects['speed'] and abs(game.velocity_x)>20 and self.trail_clock>=interval:
                 image = self.player_image(game)
                 self.trails.append((game.player.midbottom,image,0.3))
-                self.trail_clock = 0
+                self.trails = self.trails[-self.MAX_TRAILS:]
+                self.trail_clock %= interval
 
     def player_image(self, game):
         image = (game.animation.action_image('slide',game.facing_right) if game.content.sliding
                  else game.animation.image(False,game.facing_right))
-        size = (round(image.get_width()*self.size_scale),
-                round(image.get_height()*self.size_scale))
+        # Quantizing the smooth growth keeps the animation fluid while avoiding
+        # a new scaled Surface for nearly every frame of the transition.
+        scale = round(self.size_scale * 16) / 16
+        size = (round(image.get_width()*scale),
+                round(image.get_height()*scale))
         if size == image.get_size():
             return image
         key = (id(image), size)
@@ -47,45 +62,86 @@ class InteractionEffects:
         if scaled is None:
             scaled = pg.transform.scale(image, size)
             self.player_scale_cache[key] = scaled
-            if len(self.player_scale_cache) > 96:
+            if len(self.player_scale_cache) > 128:
                 self.player_scale_cache.clear()
         return scaled
+
+    @staticmethod
+    def _alpha_step(alpha):
+        return max(0, min(7, round(alpha / 36)))
+
+    def _label(self, game, text, alpha):
+        step = self._alpha_step(alpha)
+        key = (text, step)
+        label = self.label_cache.get(key)
+        if label is None:
+            label = game.ui.small.render(text, True, (255,246,198))
+            label.set_alpha(step * 36)
+            self.label_cache[key] = label
+            if len(self.label_cache) > 96:
+                self.label_cache.clear()
+        return label
+
+    def _icon(self, game, kind, age, alpha):
+        scale_step = min(5, round(age * 6))
+        alpha_step = self._alpha_step(alpha)
+        key = (kind, scale_step, alpha_step)
+        icon = self.icon_cache.get(key)
+        if icon is None:
+            source = game.item_images[kind]
+            scale = 1 + scale_step / 12
+            size = (round(source.get_width()*scale), round(source.get_height()*scale))
+            icon = pg.transform.scale(source, size)
+            icon.set_alpha(alpha_step * 36)
+            self.icon_cache[key] = icon
+        return icon
+
+    def _ghost(self, image, life):
+        alpha_step = max(1, min(4, round(life / 0.3 * 4)))
+        key = (id(image), alpha_step)
+        ghost = self.ghost_cache.get(key)
+        if ghost is None:
+            ghost = image.copy()
+            ghost.set_alpha(round(125 * alpha_step / 4))
+            self.ghost_cache[key] = ghost
+            if len(self.ghost_cache) > 64:
+                self.ghost_cache.clear()
+        return ghost
 
     def draw(self, game, screen):
         if not self.bursts:
             return
         layer = self.layer
         layer.fill((0, 0, 0, 0))
+        particle_count = {'high':12, 'balanced':8, 'performance':4}.get(
+            getattr(game, 'quality', 'high'), 8)
         for burst in self.bursts:
             age = 1.2-burst['life']
             x,y = burst['pos'];x -= game.camera_x
+            if x < -120 or x > 920 or y < -120 or y > 720:
+                continue
             alpha = round(255*min(1,burst['life']/0.4))
             if age<0.8:
                 radius = round(10+age*70)
                 pg.draw.circle(layer,(*burst['color'],round(alpha*(1-age/0.8))), (round(x),round(y)), radius, 3)
-                for index in range(16):
-                    angle = index*math.tau/16+age*1.8
+                for index in range(particle_count):
+                    angle = index*math.tau/particle_count+age*1.8
                     px,py = round(x+math.cos(angle)*radius),round(y+math.sin(angle)*radius)
                     size = max(1,round(5*(1-age/0.8)))
                     pg.draw.line(layer,(*burst['color'],alpha),(px-size,py),(px+size,py),2)
                     pg.draw.line(layer,(*burst['color'],alpha),(px,py-size),(px,py+size),2)
             if burst['kind'] in ('grow','speed','shield'):
-                icon = game.item_images[burst['kind']]
-                scale = 1+age*0.5
-                icon = pg.transform.scale(icon,(round(icon.get_width()*scale),round(icon.get_height()*scale))).copy()
-                icon.set_alpha(alpha)
+                icon = self._icon(game, burst['kind'], age, alpha)
                 layer.blit(icon,icon.get_rect(center=(round(x),round(y-25-age*35))))
             else:
                 # Scores are secondary to the visible particle burst.
-                label = game.ui.small.render(burst['text'],True,(255,246,198))
-                label.set_alpha(alpha)
+                label = self._label(game, burst['text'], alpha)
                 layer.blit(label,(round(x-label.get_width()/2),round(y-36-age*24)))
         screen.blit(layer,(0,0))
 
     def draw_aura(self, game, screen):
         for pos,image,life in self.trails:
-            ghost = image.copy()
-            ghost.set_alpha(round(125*life/0.3))
+            ghost = self._ghost(image, life)
             screen.blit(ghost,ghost.get_rect(midbottom=(round(pos[0]-game.camera_x),pos[1])))
         active = [k for k,v in game.effects.items() if v>0]
         if not active and game.grow_guard <= 0:
