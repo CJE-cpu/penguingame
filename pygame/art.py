@@ -1,96 +1,206 @@
-        # Boss contact checks should use the readable focal hitbox rather than
-        # the full sprite rectangle. This makes the attack feel intentional and
-        # reduces accidental contact on the boss edges.
-        boss_contact = (self.boss.weakspot() if self.boss.state == 'stunned'
-                        else self.boss.body_hitbox())
-        if self.boss.active and self.player.colliderect(boss_contact):
-            can_stomp = self.boss.can_stomp(
-                self.player, previous_bottom, self.velocity_y)
-            if can_stomp and self.boss.stomp():
-                self.player.bottom = self.boss.rect.top-4
-                self.velocity_y = -470
-                self.y = float(self.player.y)
-                self.on_ground = False
-                self.invincible = max(self.invincible, 0.75)
-                self.audio.play('defeat')
-                self.shake_camera(9.0, 0.25)
-                self.spawn_burst(self.boss.rect.centerx, self.boss.rect.top,
-                                 color=(255, 220, 90), count=18, radius=34)
-                if self.boss.defeated:
-                    self.score += self.boss.SCORE
-                    self.feedback.emit(self.boss.rect.midtop,
-                                       f'보스 격파! +{self.boss.SCORE}', (255, 224, 112))
-                    self.progress.save(self)
-                else:
-                    self.feedback.emit(self.boss.rect.midtop,
-                                       f'보스 타격 {self.boss.hits}/{self.boss.MAX_HITS}',
-                                       (255, 224, 112))
-            elif not self.invincible and self.boss.state != 'stunned':
-                self.combat.hit(self.player, self.boss)
-                self.feedback.emit(self.player.midtop, '보스에게 피격!', (255, 133, 125))
-                self.shake_camera(11.0, 0.32)
-                self.spawn_burst(self.player.centerx, self.player.centery,
-                                 color=(255, 120, 110), count=16, radius=28, gravity=180)
-                return
-        skua_projectile_hit = (not self.invincible and self.skua_boss.active
-                               and self.skua_boss.snowball_hits(self.player))
-        skua_body_hit = (not self.invincible and self.skua_boss.can_damage_player()
-                         and self.player.colliderect(self.skua_boss.body_hitbox()))
-        if skua_projectile_hit or skua_body_hit:
-            self.combat.hit(self.player, self.skua_boss)
-            self.feedback.emit(self.player.midtop, '갈매기에게 피격!', (255, 133, 125))
-            self.shake_camera(7.0, 0.20)
-            self.spawn_burst(self.player.centerx, self.player.centery - 8,
-                             color=(120, 200, 255), count=12, radius=20)
-            return
+"""Slice generated atlases at runtime, preserving alpha and shared proportions."""
+import pygame as pg
 
-        was_grounded = getattr(self, 'was_grounded', self.on_ground)
-        if self.on_ground and not was_grounded and self.velocity_y >= 180:
-            self.spawn_dust(self.player.centerx, self.player.bottom + 2,
-                            count=10, radius=14, color=(206, 230, 240), gravity=150)
-        if self.on_ground and abs(self.velocity_x) > 120:
-            if not hasattr(self, 'dust_timer'):
-                self.dust_timer = 0.0
-            self.dust_timer -= 1.0 / 60.0
-            if self.dust_timer <= 0:
-                self.spawn_dust(self.player.centerx, self.player.bottom + 2,
-                                count=3, radius=8, color=(206, 230, 240), gravity=150)
-                self.dust_timer = 0.08
-        self.was_grounded = self.on_ground
+SHADOW = (24, 57, 72)
 
-    def shake_camera(self, amount, duration=0.2):
-        self.camera_shake = max(getattr(self, 'camera_shake', 0.0), amount)
-        self.camera_tremor = max(getattr(self, 'camera_tremor', 0.0), duration)
 
-    def spawn_burst(self, x, y, color=(255, 220, 110), count=12, radius=26, gravity=260):
-        if not hasattr(self, 'particles'):
-            self.particles = []
-        self.particles.extend(burst_particles(x, y, count=count, radius=radius,
-                                             color=color, gravity=gravity))
+def contact_shadow(screen, feet, width, airborne=False):
+    """Draw the shared cool shadow used by characters and grounded props."""
+    if airborne:
+        return
+    x, y = round(feet[0]), round(feet[1])
+    width = max(12, round(width * 0.72))
+    pg.draw.ellipse(screen, SHADOW, (x-width//2, y-3, width, 7))
+    pg.draw.line(screen, (177, 224, 232),
+                 (x-width//3, y-1), (x+width//3, y-1), 1)
 
-    def spawn_dust(self, x, y, color=(206, 230, 240), count=6, radius=10, gravity=150):
-        if not hasattr(self, 'particles'):
-            self.particles = []
-        self.particles.extend(dust_particles(x, y, count=count, radius=radius,
-                                            color=color, gravity=gravity))
 
-    def update_particles(self, dt):
-        if not hasattr(self, 'particles'):
-            return
-        for p in list(self.particles):
-            p.life -= dt
-            p.x += p.vx * dt
-            p.y += p.vy * dt
-            p.vy += p.gravity * dt
-            if p.life <= 0:
-                self.particles.remove(p)
+def atlas_cells(path, columns, rows):
+    sheet = pg.image.load(str(path)).convert_alpha()
+    width, height = sheet.get_size()
+    # Generation may leave unequal row gutters; locate the actual alpha bands.
+    mask = pg.mask.from_surface(sheet,128)
+    line = pg.Mask((width,1),fill=True)
+    bands = []
+    row_counts = []
+    for y in range(height):
+        count = mask.overlap_area(line,(0,y))
+        row_counts.append(count)
+        if count>5:
+            if not bands or y-bands[-1][1]>12:
+                bands.append([y,y])
+            else:
+                bands[-1][1] = y
+    if len(bands)==rows:
+        row_edges = [0]+[(bands[i][1]+bands[i+1][0])//2 for i in range(rows-1)]+[height]
+    else:
+        row_edges = [0]
+        margin = max(2,round(height/rows*0.18))
+        for i in range(1,rows):
+            nominal = round(i*height/rows)
+            candidates = range(max(1,nominal-margin),min(height-1,nominal+margin))
+            row_edges.append(min(candidates,key=lambda y:(row_counts[y],abs(y-nominal))))
+        row_edges.append(height)
+    cells = []
+    for row in range(rows):
+        top,bottom = row_edges[row],row_edges[row+1]
+        row_mask = pg.mask.from_surface(sheet.subsurface((0,top,width,bottom-top)),128)
+        vertical = pg.Mask((1,bottom-top),fill=True)
+        counts = [row_mask.overlap_area(vertical,(x,0)) for x in range(width)]
+        column_edges = [0]
+        margin = max(2,round(width/columns*0.18))
+        for i in range(1,columns):
+            nominal = round(i*width/columns)
+            candidates = range(max(1,nominal-margin),min(width-1,nominal+margin))
+            column_edges.append(min(candidates,key=lambda x:(counts[x],abs(x-nominal))))
+        column_edges.append(width)
+        for column in range(columns):
+            left, right = column_edges[column],column_edges[column+1]
+            cell = sheet.subsurface((left,top,right-left,bottom-top)).copy()
+            # Discard stray pixels and fragments from a neighboring cell.
+            component = pg.mask.from_surface(cell,128).connected_component()
+            alpha = component.to_surface(setcolor=(255,255,255,255),unsetcolor=(0,0,0,0))
+            cell.blit(alpha,(0,0),special_flags=pg.BLEND_RGBA_MULT)
+            bounds = cell.get_bounding_rect(min_alpha=128)
+            if not bounds.width or not bounds.height:
+                raise ValueError('Empty sprite cell in '+str(path))
+            cells.append(cell.subsurface(bounds).copy())
+    return cells
 
-    def update_camera(self, dt):
-        if hasattr(self, 'camera_shake'):
-            self.camera_shake = max(0.0, self.camera_shake - dt * 38.0)
-        if hasattr(self, 'camera_tremor'):
-            self.camera_tremor = max(0.0, self.camera_tremor - dt)
 
-        # Call draw_particles(screen, self.particles, self.camera_x)
-        # near the end of the main render pass to display the bursts.
+def fit_cycle(cells, size, padding=2, anchor='feet'):
+    # A shared scale prevents every pose from changing the character's size.
+    head_rows = []
+    if anchor=='head':
+        for cell in cells:
+            strip = pg.mask.from_surface(cell.subsurface((0,0,max(1,round(cell.get_width()*0.18)),cell.get_height())),128)
+            scanline = pg.Mask((strip.get_size()[0],1),fill=True)
+            counts = [strip.overlap_area(scanline,(0,y)) for y in range(cell.get_height())]
+            halfway,total = sum(counts)/2,0
+            for y,count in enumerate(counts):
+                total += count
+                if total>=halfway:
+                    head_rows.append(y)
+                    break
+        above = max(head_rows)
+        below = max(c.get_height()-y for c,y in zip(cells,head_rows))
+        height = above+below
+    else:
+        height = max(c.get_height() for c in cells)
+    scale = min((size[0]-padding*2)/max(c.get_width() for c in cells),
+                (size[1]-padding*2)/height)
+    frames = []
+    for index,cell in enumerate(cells):
+        image = pg.transform.scale(cell,(max(1,round(cell.get_width()*scale)),
+                                        max(1,round(cell.get_height()*scale))))
+        canvas = pg.Surface(size,pg.SRCALPHA)
+        rect = image.get_rect(midbottom=(size[0]//2,size[1])) if anchor=='feet' else image.get_rect(center=(size[0]//2,size[1]//2))
+        if anchor=='head':
+            rect.y = padding+round((above-head_rows[index])*scale)
+        canvas.blit(image,rect)
+        frames.append(canvas)
+    return frames
 
+
+class WorldArt:
+    OBJECT_NAMES = ['journal','journal-open','nest','home-flag',
+                    'flowers','ice-cage','lever-down','lever-up',
+                    'dive-hole','practice-arch','ocean-rock','seaweed']
+    OBJECT_SIZES = [(23,29),(46,34),(65,25),(46,75),
+                    (88,36),(48,52),(36,43),(36,43),
+                    (72,24),(180,110),(100,65),(38,62)]
+
+    def __init__(self, data):
+        self.contact_rows = {}
+        babies = atlas_cells(data/'baby-motion-atlas-v2.png',4,2)
+        frames = fit_cycle(babies,(32,40),padding=0)
+        self.babies = {name:[frames[i] for i in indices] for name,indices in
+                       [('walk',range(4)),('idle',[4,5]),('jump',[6]),('fall',[7])]}
+        self.baby_right = {name:[pg.transform.flip(f,True,False) for f in cycle]
+                           for name,cycle in self.babies.items()}
+        cells = atlas_cells(data/'adventure-objects-atlas-v2.png',4,3)
+        self.objects = {name:fit_cycle([cell],size,padding=0)[0]
+                        for name,size,cell in zip(self.OBJECT_NAMES,self.OBJECT_SIZES,cells)}
+        enemies = atlas_cells(data/'enemy-motion-atlas-v2.png',4,4)
+        self.enemies = {kind:fit_cycle(enemies[row*4:row*4+4],size,padding=0,anchor='head' if kind=='skua' else 'feet')
+                        for row,(kind,size) in enumerate([('crab',(44,30)),('seal',(68,34)),
+                                                        ('skua',(48,40)),('spirit',(36,40))])}
+        fish = atlas_cells(data/'fish-motion-atlas-v2.png',4,3)
+        self.fishes = {kind:fit_cycle(fish[row*4:row*4+4],(36,24),padding=0,anchor='center')
+                       for row,kind in enumerate(('orange','blue','gold'))}
+        artifacts = atlas_cells(data/'ocean-artifacts-atlas-v1.png', 2, 2)
+        self.ocean_artifacts = {
+            'beacon-off': fit_cycle([artifacts[0]], (66, 74), padding=1,
+                                    anchor='center')[0],
+            'beacon-on': fit_cycle([artifacts[1]], (66, 74), padding=1,
+                                   anchor='center')[0],
+            'relic-locked': fit_cycle([artifacts[2]], (78, 78), padding=1,
+                                      anchor='center')[0],
+            'relic-open': fit_cycle([artifacts[3]], (78, 78), padding=1,
+                                    anchor='center')[0],
+        }
+        gameplay = atlas_cells(data/'gameplay-objects-atlas-v1.png', 3, 2)
+        gameplay_specs = (
+            ('research-crystal', (28, 34)), ('seal-stone-blue', (44, 54)),
+            ('seal-stone-violet', (44, 54)), ('ice-projectile', (34, 24)),
+            ('snowball', (38, 38)), ('snowball-charged', (42, 42)),
+        )
+        self.gameplay = {
+            name: fit_cycle([cell], size, padding=0, anchor='center')[0]
+            for (name, size), cell in zip(gameplay_specs, gameplay)
+        }
+        self.platform_materials = dict(zip(
+            ('snow', 'ice', 'cave', 'fracture', 'crumble', 'sunset'),
+            atlas_cells(data/'platform-materials-atlas-v1.png', 3, 2)))
+        environment = atlas_cells(data/'environment-effects-atlas-v1.png', 4, 2)
+        self.environment = dict(zip(
+            ('snow-edge', 'ice-edge', 'cave-edge', 'fracture-edge',
+             'arena-post', 'arena-fence', 'ocean-coral', 'pickup-burst'),
+            environment))
+        effects = atlas_cells(data/'interaction-effects-atlas-v1.png', 4, 2)
+        self.interaction_effects = dict(zip(
+            ('fish', 'grow', 'speed', 'shield', 'defeat', 'rescue',
+             'checkpoint', 'boss-hit'), effects))
+        current = pg.image.load(str(data/'underwater-current-v1.png')).convert_alpha()
+        bounds = current.get_bounding_rect(min_alpha=40)
+        self.underwater_current = pg.transform.smoothscale(
+            current.subsurface(bounds), (112, 42))
+        self.underwater_current_left = pg.transform.flip(
+            self.underwater_current, True, False)
+
+    def fish(self, kind, clock):
+        return self.fishes[kind][int(clock/0.2)%4]
+
+    def baby(self, state, clock, right=False):
+        frames = (self.baby_right if right else self.babies)[state]
+        interval = 0.18 if state=='walk' else 0.6
+        return frames[int(clock/interval)%len(frames)]
+
+    def place(self, screen, name, feet):
+        image = self.objects[name]
+        if name in ('journal','journal-open','ocean-rock','seaweed'):
+            screen.blit(image,image.get_rect(midbottom=(round(feet[0]),round(feet[1]))))
+        else:
+            self.grounded(screen,image,feet,snow=name!='dive-hole')
+
+    def contact_row(self, image):
+        key = id(image)
+        if key not in self.contact_rows:
+            mask = pg.mask.from_surface(image,128)
+            bounds = image.get_bounding_rect(128)
+            threshold = max(2,round(bounds.w*0.2))
+            rows = [y for y in range(bounds.top,bounds.bottom)
+                    if sum(mask.get_at((x,y)) for x in range(bounds.left,bounds.right))>=threshold]
+            self.contact_rows[key] = rows[-1] if rows else bounds.bottom-1
+        return self.contact_rows[key]
+
+    def grounded(self, screen, image, feet, snow=True):
+        x,y = round(feet[0]),round(feet[1])
+        bounds = image.get_bounding_rect(128)
+        rect = image.get_rect(midbottom=(x,y+image.get_height()-self.contact_row(image)))
+        if snow:
+            contact_shadow(screen, (x, y+2), bounds.w)
+        screen.blit(image,rect)
+        if snow:
+            pg.draw.line(screen,(231,249,252),(x-bounds.w//3,y+3),(x+bounds.w//3,y+3),2)
+        return rect

@@ -8,7 +8,7 @@ class SealBoss:
     MAX_HITS = 3
     SCORE = 500
 
-    def __init__(self, arena, floor_y, images):
+    def __init__(self, arena, floor_y, images, projectile_image=None):
         self.arena = pg.Rect(arena)
         self.floor_y = floor_y
         self.images = images
@@ -27,6 +27,7 @@ class SealBoss:
         self.shake = 0.0
         self.ammo = 0
         self.projectiles = []
+        self.projectile_image = projectile_image
 
     def start(self):
         if self.defeated or self.active:
@@ -147,26 +148,12 @@ class SealBoss:
         self.projectiles = remaining
         return None
 
-    def body_hitbox(self):
-        """The broad boss body. Normal contact uses this."""
-        box = pg.Rect(0, 0, 96, 58)
-        box.midbottom = self.rect.midbottom
-        return box
-
-    def attack_hitbox(self):
-        """Bigger collision during charge to telegraph the full hit zone."""
-        if self.state != 'charge':
-            return self.body_hitbox()
-        box = pg.Rect(0, 0, 118, 54)
-        box.midbottom = self.rect.midbottom
-        return box
-
     def weakspot(self):
         """Return the small head area that accepts a stomp while stunned."""
         width = 58
         height = 22
-        center_x = self.rect.centerx + self.direction * 34
-        return pg.Rect(center_x-width//2, self.rect.top-8, width, height)
+        center_x = self.rect.centerx + self.direction * 37
+        return pg.Rect(center_x-width//2, self.rect.top-5, width, height)
 
     def can_stomp(self, player, previous_bottom, velocity_y):
         if self.state != 'stunned' or self.defeated or velocity_y <= 0:
@@ -213,14 +200,12 @@ class SealBoss:
             if index % 2 == 0:
                 pg.draw.line(screen, (127, 194, 213),
                              (x+7, floor+depth), (x+17, floor+depth-3), 1)
-        for wall_x, direction in ((left, 1), (right, -1)):
-            pg.draw.polygon(screen, (38, 84, 122),
-                            [(wall_x, floor), (wall_x+direction*30, floor),
-                             (wall_x+direction*20, floor-16),
-                             (wall_x+direction*7, floor-28)])
-            pg.draw.line(screen, (167, 226, 235),
-                         (wall_x+direction*3, floor-25),
-                         (wall_x+direction*22, floor-5), 2)
+        fence = getattr(self, 'arena_fence', None)
+        if fence:
+            for wall_x, flip in ((left, False), (right, True)):
+                image = (getattr(self, 'arena_fence_flipped', fence)
+                         if flip else fence)
+                screen.blit(image, image.get_rect(midbottom=(round(wall_x), floor+3)))
 
     def draw(self, screen, camera_x, time):
         if not self.active and not self.defeated:
@@ -235,14 +220,6 @@ class SealBoss:
                             [(rect.centerx, rect.top-23),
                              (rect.centerx-10, rect.top-5),
                              (rect.centerx+10, rect.top-5)])
-        if self.active:
-            for wall_x in (self.arena.left, self.arena.right):
-                x = wall_x-camera_x
-                for y in range(self.floor_y-116, self.floor_y, 22):
-                    pg.draw.polygon(screen, (111, 222, 238),
-                                    [(x, y-18), (x+10, y), (x, y+13), (x-10, y)])
-                pg.draw.line(screen, (214, 251, 255),
-                             (x, self.floor_y-126), (x, self.floor_y), 2)
         image = self.image()
         if self.flash and int(self.flash*30) % 2:
             white = pg.mask.from_surface(image, 40).to_surface(
@@ -257,10 +234,11 @@ class SealBoss:
         for shot in self.projectiles:
             x = round(shot['pos'].x-camera_x)
             y = round(shot['pos'].y)
-            pg.draw.polygon(screen, (205, 247, 255),
-                            [(x-11,y), (x-3,y-8), (x+11,y-3),
-                             (x+7,y+7), (x-5,y+6)])
-            pg.draw.line(screen, (91, 185, 217), (x-7,y+2), (x+6,y-3), 2)
+            if self.projectile_image:
+                image = self.projectile_image
+                if shot.get('velocity', pg.Vector2()).x < 0:
+                    image = pg.transform.flip(image, True, False)
+                screen.blit(image, image.get_rect(center=(x, y)))
 
     def draw_hud(self, game, screen):
         if not self.active or self.defeated:
@@ -286,7 +264,8 @@ class SkuaBoss:
     MAX_HITS = 3
     SCORE = 700
 
-    def __init__(self, arena, floor_y, images):
+    def __init__(self, arena, floor_y, images, snowball_image=None,
+                 charged_snowball_image=None):
         self.arena = pg.Rect(arena)
         self.floor_y = floor_y
         self.images = images
@@ -305,6 +284,8 @@ class SkuaBoss:
         self.direction = -1
         self.flash = 0.0
         self.snowballs = []
+        self.snowball_image = snowball_image
+        self.charged_snowball_image = charged_snowball_image
         self.contact_grace = 0.0
 
     def start(self):
@@ -338,8 +319,9 @@ class SkuaBoss:
         if not self.active or self.defeated:
             return False
         original = player.x
-        player.left = max(player.left, self.arena.left+10)
-        player.right = min(player.right, self.arena.right-10)
+        left = self.arena.left+18
+        right = self.arena.right-18-player.width
+        player.x = max(left, min(right, player.x))
         return player.x != original
 
     def kick(self, player, facing_right):
@@ -365,17 +347,10 @@ class SkuaBoss:
         return False
 
     def body_hitbox(self):
-        """Smaller contact area matching the bird's torso and inner wings."""
-        box = pg.Rect(0, 0, 104, 54)
-        box.center = (self.rect.centerx, self.rect.centery+5)
-        return box
-
-    def attack_hitbox(self):
-        """Larger hitbox only during dive/charge-like moments."""
-        if self.state != 'dive':
-            return self.body_hitbox()
-        box = pg.Rect(0, 0, 130, 66)
-        box.center = self.rect.center
+        """Contact follows the torso, excluding transparent wing span."""
+        size = (74, 38) if self.state == 'dive' else (70, 34)
+        box = pg.Rect(0, 0, *size)
+        box.center = (self.rect.centerx, self.rect.centery+9)
         return box
 
     def can_damage_player(self):
@@ -499,6 +474,12 @@ class SkuaBoss:
         left, right = self.arena.left-camera_x, self.arena.right-camera_x
         pg.draw.line(screen, (170, 207, 232), (left, self.floor_y-2),
                      (right, self.floor_y-2), 3)
+        fence = getattr(self, 'arena_fence', None)
+        if fence:
+            image = fence
+            screen.blit(image, image.get_rect(midbottom=(round(left+55), self.floor_y+3)))
+            screen.blit(getattr(self, 'arena_fence_flipped', image),
+                        image.get_rect(midbottom=(round(right-55), self.floor_y+3)))
         for index in range(6):
             x = round(left+55+index*(self.arena.width-110)/5)
             sway = round(math.sin(time*3+index)*7)
@@ -510,10 +491,10 @@ class SkuaBoss:
             return
         for ball in self.snowballs:
             rect = ball['rect'].move(-camera_x, 0)
-            color = (225, 247, 252) if not ball['kicked'] else (255, 230, 126)
-            pg.draw.circle(screen, (84, 155, 190), rect.center, 18)
-            pg.draw.circle(screen, color, rect.center, 15)
-            pg.draw.arc(screen, (255,255,255), rect.inflate(-9,-9), math.pi, math.tau, 2)
+            image = (self.charged_snowball_image if ball['kicked']
+                     else self.snowball_image)
+            if image:
+                screen.blit(image, image.get_rect(center=rect.center))
         rect = self.rect.move(-camera_x, 0)
         image = self.image()
         if self.flash and int(self.flash*30)%2:
