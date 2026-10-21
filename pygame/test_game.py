@@ -104,6 +104,9 @@ class AdventureChecks(unittest.TestCase):
         game.handle_click(game.ui.pause_quality_buttons()[0].center)
         self.assertEqual(game.quality_index, 0)
         self.assertEqual(game.quality, 'performance')
+        game.handle_click(game.ui.pause_quality_buttons()[2].center)
+        game.observe_render_time(30)
+        self.assertEqual(game.quality, 'high')
 
     def test_pause_exit_confirmation_stays_inside_game_menu(self):
         game = self.game
@@ -1498,7 +1501,7 @@ class AdventureChecks(unittest.TestCase):
                 break
         g.handle_key(pg.K_e)
         self.assertTrue(t.finished)
-        self.assertEqual(len(g.coach.modal[1]), 4)
+        self.assertEqual(len(g.coach.modal[1]), 5)
         self.assertTrue(any('X' in line for line in g.coach.modal[1]))
         self.assertTrue(any('체크포인트' in line for line in g.coach.modal[1]))
         g.handle_key(pg.K_RETURN)
@@ -1920,6 +1923,28 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(boss.take_hit(), 'hit')
         self.assertEqual(boss.take_hit(), 'defeat')
         self.assertTrue(boss.defeated)
+        self.assertFalse(boss.snowballs)
+        self.assertEqual(boss.contact_grace, 2.0)
+
+    def test_skua_defeat_clears_hazards_and_grants_victory_grace(self):
+        g = self.game
+        g.enemies = []
+        boss = g.skua_boss
+        boss.start()
+        boss.hits = boss.MAX_HITS-1
+        ball_rect = pg.Rect(0, 0, 32, 32)
+        ball_rect.center = boss.rect.center
+        boss.snowballs.append({
+            'rect': ball_rect, 'position': pg.Vector2(ball_rect.center),
+            'velocity': pg.Vector2(), 'resting': False,
+            'kicked': True, 'life': 1.0,
+        })
+        g.invincible = 0
+        g.update(0)
+        self.assertTrue(boss.defeated)
+        self.assertFalse(boss.snowballs)
+        self.assertGreaterEqual(g.invincible, 2.0)
+        self.assertFalse(g.combat.hurt)
 
     def test_skua_arena_has_a_clear_floor_and_approach_step(self):
         boss = self.game.skua_boss

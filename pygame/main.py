@@ -1448,6 +1448,7 @@ class Game:
             self.audio.play('defeat')
             self.invincible = max(self.invincible, 0.6)
             if skua_event == 'defeat':
+                self.invincible = max(self.invincible, 2.0)
                 self.score += self.skua_boss.SCORE
                 self.feedback.emit(self.skua_boss.rect.midtop,
                                    f'갈매기 보스 격파! +{self.skua_boss.SCORE}',
@@ -1579,8 +1580,8 @@ class Game:
 
     @property
     def quality(self):
-        return self.quality_levels[min(self.quality_index,
-                                       self.adaptive_quality_index)]
+        # Menu selections are explicit; the chosen button must match rendering.
+        return self.quality_levels[self.quality_index]
 
     def observe_render_time(self, milliseconds):
         """Keep decorative work inside the frame budget without resizing art."""

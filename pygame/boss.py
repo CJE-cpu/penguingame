@@ -370,6 +370,8 @@ class SkuaBoss:
             self.defeated = True
             self.active = False
             self.state = 'defeated'
+            self.snowballs.clear()
+            self.contact_grace = 2.0
             return 'defeat'
         self.state = 'hit'
         self.timer = 0.75
