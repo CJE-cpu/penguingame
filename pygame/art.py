@@ -157,6 +157,10 @@ class WorldArt:
             ('snow-edge', 'ice-edge', 'cave-edge', 'fracture-edge',
              'arena-post', 'arena-fence', 'ocean-coral', 'pickup-burst'),
             environment))
+        effects = atlas_cells(data/'interaction-effects-atlas-v1.png', 4, 2)
+        self.interaction_effects = dict(zip(
+            ('fish', 'grow', 'speed', 'shield', 'defeat', 'rescue',
+             'checkpoint', 'boss-hit'), effects))
 
     def fish(self, kind, clock):
         return self.fishes[kind][int(clock/0.2)%4]

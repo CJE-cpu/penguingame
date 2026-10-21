@@ -94,15 +94,19 @@ class InteractionEffects:
             self.icon_cache[key] = icon
         return icon
 
-    def _burst_image(self, game, age, alpha):
+    def _burst_image(self, game, kind, age, alpha):
         size_step = max(0, min(7, round(age*9)))
         alpha_step = self._alpha_step(alpha)
-        key = ('painted-burst', size_step, alpha_step)
+        effect_kind = kind if kind in game.art.interaction_effects else None
+        key = ('painted-burst', effect_kind, size_step, alpha_step)
         image = self.icon_cache.get(key)
         if image is None:
-            source = game.art.environment['pickup-burst']
-            size = 30+size_step*11
-            image = pg.transform.smoothscale(source, (size, size))
+            source = (game.art.interaction_effects[effect_kind] if effect_kind
+                      else game.art.environment['pickup-burst'])
+            base = 38 if effect_kind in ('speed', 'boss-hit') else 34
+            size = base+size_step*10
+            width = round(size*1.25) if effect_kind == 'speed' else size
+            image = pg.transform.smoothscale(source, (width, size))
             image.set_alpha(alpha_step*36)
             self.icon_cache[key] = image
         return image
@@ -119,7 +123,7 @@ class InteractionEffects:
                 continue
             alpha = round(255*min(1,burst['life']/0.4))
             if age<0.8:
-                painted = self._burst_image(game, age, alpha)
+                painted = self._burst_image(game, burst['kind'], age, alpha)
                 layer.blit(painted, painted.get_rect(center=(round(x),round(y))))
             if burst['kind'] in ('grow','speed','shield'):
                 icon = self._icon(game, burst['kind'], age, alpha)

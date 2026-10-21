@@ -696,11 +696,11 @@ class Game:
             if self.skua_boss.active and self.skua_boss.kick(self.player, self.facing_right):
                 self.audio.play('item')
                 self.feedback.emit(self.player.midtop, '눈덩이 반격!',
-                                   (255, 224, 112))
+                                   (255, 224, 112), kind='boss-hit')
             elif self.boss.active and self.boss.launch_ice(self.player, self.facing_right):
                 self.audio.play('item')
                 self.feedback.emit(self.player.midtop, '얼음 조각 투척!',
-                                   (174, 235, 249))
+                                   (174, 235, 249), kind='boss-hit')
             else:
                 self.content.say('빙벽 충돌 뒤 얼음 조각을 얻을 수 있어요.')
             return False
@@ -1074,7 +1074,7 @@ class Game:
         if sanctuary:
             self.invincible = max(self.invincible,0.15)
             if not self.sanctuary_seen:
-                self.feedback.emit(self.player.midtop,'보금자리의 안전지대',(160,239,193))
+                self.feedback.emit(self.player.midtop,'보금자리의 안전지대',(160,239,193), kind='checkpoint')
                 self.sanctuary_seen = True
         self.in_sanctuary = sanctuary
         for key, (elapsed, hidden) in list(self.crumbles.items()):
@@ -1111,13 +1111,13 @@ class Game:
                     self.rescued += 1
                     self.score += 100
                     self.audio.play('rescue')
-                    self.feedback.emit(checkpoint.midtop, '친구 구조! +100', (157,238,183))
+                    self.feedback.emit(checkpoint.midtop, '친구 구조! +100', (157,238,183), kind='rescue')
                 if self._checkpoint_contact != index:
                     saved = self.progress.save(self)
                     if first_visit or not saved:
                         self.feedback.emit(checkpoint.midtop,
                                            '저장 완료' if saved else '저장 실패',
-                                           (169,235,255) if saved else (255,170,150))
+                                           (169,235,255) if saved else (255,170,150), kind='checkpoint')
                 self._checkpoint_contact = index
                 break
         if not touching_checkpoint:
@@ -1128,7 +1128,7 @@ class Game:
                     and self.player.colliderect(baby['rect'])):
                 self.carried_baby = index
                 self.companion.start(self, baby)
-                self.feedback.emit(baby['rect'].midtop, '이글루로 데려가요!', (178,227,255))
+                self.feedback.emit(baby['rect'].midtop, '이글루로 데려가요!', (178,227,255), kind='rescue')
         for cave in self.caves:
             if self.player.colliderect(cave['rect']):
                 cave['found'] = True
@@ -1183,7 +1183,7 @@ class Game:
         self.clear_respawn_area()
         self.invincible = RESPAWN_INVINCIBILITY
         self.grow_guard = 0.0
-        self.feedback.emit(self.player.midtop, '피격! 저장 지점 복귀' if hit else '저장 지점에서 다시!', (205,235,255))
+        self.feedback.emit(self.player.midtop, '피격! 저장 지점 복귀' if hit else '저장 지점에서 다시!', (205,235,255), kind='defeat')
         self.camera_x = max(0, min(WORLD_WIDTH - WIDTH, self.player.centerx - WIDTH // 2))
         self.display_region = self.player.centerx // REGION_WIDTH
         self.region_banner = 0.0
@@ -1310,7 +1310,7 @@ class Game:
             if kind=='grow' and previous>0 and self.effects[kind]==0:
                 self.invincible = max(self.invincible,GROW_EXIT_INVINCIBILITY)
                 self.grow_guard = GROW_EXIT_INVINCIBILITY
-                self.feedback.emit(self.player.midtop,'거대 효과 종료 · 보호 1.5초',(159,231,255))
+                self.feedback.emit(self.player.midtop,'거대 효과 종료 · 보호 1.5초',(159,231,255), kind='shield')
         if self.effects['shield']:
             self.invincible = max(self.invincible, 0.12)
         speed = MOVE_SPEED * (1.6 if self.effects['speed'] else 1.0) * (1.35 if self.content.sliding else 1)
@@ -1401,7 +1401,7 @@ class Game:
                                'time': 2.8}
         elif boss_event == 'impact':
             self.audio.play('hit')
-            self.feedback.emit(self.boss.rect.midtop, '빙벽 충돌! 지금 공격!', (143, 235, 247))
+            self.feedback.emit(self.boss.rect.midtop, '빙벽 충돌! 지금 공격!', (143, 235, 247), kind='boss-hit')
         elif boss_event in ('ranged_hit', 'ranged_defeat'):
             self.audio.play('defeat')
             # A successful shot can change the boss from stunned to roaring
@@ -1412,12 +1412,12 @@ class Game:
                 self.score += self.boss.SCORE
                 self.feedback.emit(self.boss.rect.midtop,
                                    f'원거리 보스 격파! +{self.boss.SCORE}',
-                                   (255, 224, 112))
+                                   (255, 224, 112), kind='boss-hit')
                 self.progress.save(self)
             else:
                 self.feedback.emit(self.boss.rect.midtop,
                                    f'얼음 조각 명중 {self.boss.hits}/{self.boss.MAX_HITS}',
-                                   (143, 235, 247))
+                                   (143, 235, 247), kind='boss-hit')
         boss_contact = (self.boss.weakspot() if self.boss.state == 'stunned'
                         else self.boss.rect)
         if self.boss.active and self.player.colliderect(boss_contact):
@@ -1436,15 +1436,15 @@ class Game:
                 if self.boss.defeated:
                     self.score += self.boss.SCORE
                     self.feedback.emit(self.boss.rect.midtop,
-                                       f'보스 격파! +{self.boss.SCORE}', (255, 224, 112))
+                                       f'보스 격파! +{self.boss.SCORE}', (255, 224, 112), kind='boss-hit')
                     self.progress.save(self)
                 else:
                     self.feedback.emit(self.boss.rect.midtop,
                                        f'보스 타격 {self.boss.hits}/{self.boss.MAX_HITS}',
-                                       (255, 224, 112))
+                                       (255, 224, 112), kind='boss-hit')
             elif not self.invincible and self.boss.state != 'stunned':
                 self.combat.hit(self.player, self.boss)
-                self.feedback.emit(self.player.midtop, '보스에게 피격!', (255, 133, 125))
+                self.feedback.emit(self.player.midtop, '보스에게 피격!', (255, 133, 125), kind='defeat')
                 return
         skua_event = self.skua_boss.update(dt, self.player)
         if self.skua_boss.confine(self.player):
@@ -1458,7 +1458,7 @@ class Game:
         elif skua_event == 'impact':
             self.audio.play('hit')
             self.feedback.emit(self.skua_boss.rect.midtop,
-                               '급강하 충돌! 지금 반격하세요!', (174, 235, 249))
+                               '급강하 충돌! 지금 반격하세요!', (174, 235, 249), kind='boss-hit')
         elif skua_event in ('hit', 'defeat'):
             self.audio.play('defeat')
             self.invincible = max(self.invincible, 0.6)
@@ -1466,19 +1466,19 @@ class Game:
                 self.score += self.skua_boss.SCORE
                 self.feedback.emit(self.skua_boss.rect.midtop,
                                    f'갈매기 보스 격파! +{self.skua_boss.SCORE}',
-                                   (255, 224, 112))
+                                   (255, 224, 112), kind='boss-hit')
                 self.progress.save(self)
             else:
                 self.feedback.emit(self.skua_boss.rect.midtop,
                                    f'눈덩이 명중 {self.skua_boss.hits}/{self.skua_boss.MAX_HITS}',
-                                   (174, 235, 249))
+                                   (174, 235, 249), kind='boss-hit')
         skua_projectile_hit = (not self.invincible and self.skua_boss.active
                                and self.skua_boss.snowball_hits(self.player))
         skua_body_hit = (not self.invincible and self.skua_boss.can_damage_player()
                          and self.player.colliderect(self.skua_boss.body_hitbox()))
         if skua_projectile_hit or skua_body_hit:
             self.combat.hit(self.player, self.skua_boss)
-            self.feedback.emit(self.player.midtop, '갈매기에게 피격!', (255, 133, 125))
+            self.feedback.emit(self.player.midtop, '갈매기에게 피격!', (255, 133, 125), kind='defeat')
             return
         # Descending from above is a stomp; side and upward contact cause damage.
         for enemy in list(self.enemies):
@@ -1499,7 +1499,7 @@ class Game:
                 self.combat.defeat(enemy, self.enemy_images)
                 self.score += enemy.points
                 self.audio.play('defeat')
-                self.feedback.emit(enemy.rect.midtop, f'{ENEMY_INFO[enemy.kind][0]} 처치 +{enemy.points}', (255,219,132))
+                self.feedback.emit(enemy.rect.midtop, f'{ENEMY_INFO[enemy.kind][0]} 처치 +{enemy.points}', (255,219,132), kind='defeat')
                 self.defeated += 1
                 # The defeated sprite remains briefly as animation only. Give
                 # the player enough grace to leave its former contact area and
@@ -1514,7 +1514,7 @@ class Game:
             elif not self.invincible:
                 self.last_hit_enemy = enemy
                 self.combat.hit(self.player, enemy)
-                self.feedback.emit(self.player.midtop, '피격!', (255,153,153))
+                self.feedback.emit(self.player.midtop, '피격!', (255,153,153), kind='defeat')
                 return
         remaining_fish = []
         collected_regions = set()
@@ -1532,7 +1532,7 @@ class Game:
                     detail = ' · 보호 1.2초'
                 else:
                     detail = ''
-                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind]}{detail}', (255,232,151))
+                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind]}{detail}', (255,232,151), kind='fish')
             else:
                 remaining_fish.append((kind, rect))
         self.fish = remaining_fish
@@ -1543,7 +1543,7 @@ class Game:
                 self.region_fish_rewarded.add(region)
                 self.score += 75
                 self.feedback.emit(self.player.midtop,
-                                   f'{region+1}구역 물고기 완료! +75', (150, 240, 207))
+                                   f'{region+1}구역 물고기 완료! +75', (150, 240, 207), kind='checkpoint')
                 self.progress.save(self)
         remaining_items = []
         for kind, rect in self.items:
@@ -1570,7 +1570,7 @@ class Game:
                 self.lives += 1
                 self.audio.play('rescue')
                 self.feedback.emit(rect.center, '목숨 회복!',
-                                   (255, 225, 117), kind='life')
+                                   (255, 225, 117), kind='rescue')
                 self.progress.save(self)
             else:
                 remaining_lives.append(rect)

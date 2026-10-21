@@ -167,19 +167,19 @@ class AdventureContent:
                 self.book_page = index
                 game.score += 60
                 game.audio.play('collect')
-                game.feedback.emit(journal['rect'].center,'탐험 일지! +60',(255,224,124))
+                game.feedback.emit(journal['rect'].center,'탐험 일지! +60',(255,224,124),kind='checkpoint')
                 self.say('탐험 일지 발견! TAB으로 읽어 보세요.')
         for crystal in self.crystals:
             if not crystal['found'] and game.player.colliderect(crystal['rect']):
                 crystal['found'] = True
                 game.score += 40
                 game.audio.play('collect')
-                game.feedback.emit(crystal['rect'].center,'빙하 결정! +40',(128,227,255))
+                game.feedback.emit(crystal['rect'].center,'빙하 결정! +40',(128,227,255),kind='fish')
                 self.say('빙하 결정 발견! 6개를 모아 이글루에서 E로 조사 보상 받기')
         baby = game.babies[0] if game.babies else None
         if baby and not self.quests[0] and self.sliding and abs(game.velocity_x)>40 and self.nearby(game,baby['rect'],80):
             self.quests[0] = True
-            game.feedback.emit(baby['rect'].center,'얼음 껍질 돌파!',(132,224,255))
+            game.feedback.emit(baby['rect'].center,'얼음 껍질 돌파!',(132,224,255),kind='rescue')
             self.say('얼음에 갇힌 친구를 구했어요! 이글루로 데려가세요.')
         if not self.escape_cleared and not self.escape_active and self.escape_start <= game.player.centerx <= self.escape_start+130:
             self.begin_escape()
