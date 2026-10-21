@@ -49,6 +49,24 @@ class Enemy:
     def hitbox(self):
         return self.damage_hitbox()
 
+    def animation_rate(self):
+        """State-specific pacing makes enemy motion readable and less robotic."""
+        if self.kind == 'seal':
+            if self.warning:
+                return 0.15
+            if self.charge:
+                return 0.08
+            return 0.22
+        if self.kind == 'spirit':
+            if self.rect.y < self.base_y or self.velocity_y < 0:
+                return 0.12
+            return 0.26
+        if self.kind == 'skua':
+            return 0.12 if self.rect.y != self.base_y else 0.18
+        if self.kind == 'crab':
+            return 0.18
+        return 0.22
+
     def update(self, dt, player=None):
         self.previous_top = self.rect.top
         self.clock += dt
@@ -93,16 +111,25 @@ class Enemy:
             self.rect.y = round(self.y)
 
     def sprite_image(self, images):
-        if self.kind == 'seal':
-            index = 3 if self.charge else 2 if self.warning else int(self.clock/0.2)%2
-        elif self.kind == 'spirit':
-            index = (2 if self.velocity_y<0 else 3) if self.rect.y<self.base_y else int(self.clock/0.3)%2
-        else:
-            index = int(self.clock/(0.16 if self.kind=='skua' else 0.2))%4
         frames = images[self.kind]
-        image = frames[min(index,len(frames)-1)]
+        frame_count = len(frames)
+        if self.kind == 'seal':
+            if self.warning:
+                index = 1
+            elif self.charge:
+                index = 2
+            else:
+                index = int(self.clock/self.animation_rate()) % frame_count
+        elif self.kind == 'spirit':
+            if self.rect.y < self.base_y or self.velocity_y < 0:
+                index = 2
+            else:
+                index = int(self.clock/self.animation_rate()) % frame_count
+        else:
+            index = int(self.clock/self.animation_rate()) % frame_count
+        image = frames[min(index, frame_count-1)]
         if self.speed > 0:
-            frame_index = min(index,len(frames)-1)
+            frame_index = min(index, frame_count-1)
             if frame_index not in self.flipped_frames:
                 self.flipped_frames[frame_index] = pg.transform.flip(image,True,False)
             image = self.flipped_frames[frame_index]
@@ -122,3 +149,4 @@ class Enemy:
         if self.warning:
             pg.draw.polygon(screen,(255,209,90), [(rect.centerx,rect.y-19),(rect.centerx-7,rect.y-5),(rect.centerx+7,rect.y-5)])
             pg.draw.line(screen,(99,61,30),(rect.centerx,rect.y-15),(rect.centerx,rect.y-10),2)
+
