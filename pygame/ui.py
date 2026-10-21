@@ -175,6 +175,14 @@ class IceUI:
         right = (round(cx+math.cos(angle-2.5)*8),round(cy+math.sin(angle-2.5)*8))
         pg.draw.polygon(screen,BLUE,[tip,left,right])
 
+    def context_slot(self, effect_count, objective_visible):
+        """Place action text without covering potion timers or objectives."""
+        left = 12 + effect_count*157 if effect_count else 12
+        right = self.OBJECTIVE_SLOT.left-8 if objective_visible else 788
+        if right-left >= 210:
+            return pg.Rect(left, 94, right-left, 43)
+        return pg.Rect(210, 146, 380, 43)
+
     def transition(self, game, screen, regions):
         if game.region_banner <= 0 or game.won:
             return
@@ -259,38 +267,54 @@ class IceUI:
 
     def pause_buttons(self):
         # Three equal buttons with a clear 16 px gap inside the pause panel.
-        return (pg.Rect(156, 414, 152, 56),
-                pg.Rect(324, 414, 152, 56),
-                pg.Rect(492, 414, 152, 56))
+        return (pg.Rect(156, 478, 152, 56),
+                pg.Rect(324, 478, 152, 56),
+                pg.Rect(492, 478, 152, 56))
 
     def pause_audio_buttons(self):
-        return (pg.Rect(218, 338, 116, 48),
-                pg.Rect(350, 338, 64, 48),
-                pg.Rect(430, 338, 64, 48))
+        return (pg.Rect(218, 286, 116, 44),
+                pg.Rect(350, 286, 64, 44),
+                pg.Rect(430, 286, 64, 44))
+
+    def pause_quality_buttons(self):
+        return (pg.Rect(218, 382, 100, 44),
+                pg.Rect(330, 382, 100, 44),
+                pg.Rect(442, 382, 100, 44))
 
     def pause_menu(self, game, screen):
         # Full-screen veil and centered panel
         self.veil(screen)
-        self.panel(screen, (120, 94, 560, 404))
+        self.panel(screen, (120, 38, 560, 524))
         # Icon + title
-        self.icon(screen, game.penguin_right, (400, 158), (58, 78))
-        self.text(screen, '일시정지', (400, 218), self.title, center=True)
+        self.icon(screen, game.penguin_right, (400, 91), (48, 64))
+        self.text(screen, '일시정지', (400, 145), self.title, center=True)
         # Hints
         hints = [
-            'P 또는 ESC: 계속  /  R: 재시작  /  Q: 종료',
-            'M: 음소거  /  방향키 ← →: 음량 조절'
+            'P 또는 ESC 계속 · R 재시작 · Q 종료',
+            'M 음소거 · ← → 음량 · F6 / G 그래픽 품질'
         ]
         for i, txt in enumerate(hints):
-            self.text(screen, txt, (400, 270 + i*26), self.small, MUTED, center=True)
+            self.text(screen, txt, (400, 190 + i*24), self.small, MUTED, center=True)
         mute, quieter, louder = self.pause_audio_buttons()
         volume = round(game.audio.master_volume*100)
-        self.text(screen, f'음량 {volume}%', (400, 320), self.body, BLUE, center=True)
+        self.text(screen, f'사운드 · 음량 {volume}%', (400, 256), self.body, BLUE, center=True)
         audio_labels = ('켜기' if not game.audio.enabled else '음소거', '−', '+')
         for rect, label in zip((mute, quieter, louder), audio_labels):
             self.panel(screen, rect, dark=rect == mute and not game.audio.enabled)
             self.text(screen, label, rect.center, self.body,
                       'white' if rect == mute and not game.audio.enabled else INK,
                       center=True)
+        pg.draw.rect(screen, (190,218,228), (254,338,292,7), border_radius=4)
+        pg.draw.rect(screen, BLUE, (254,338,round(292*volume/100),7), border_radius=4)
+        quality_labels = ('성능', '균형', '고화질')
+        self.text(screen, '그래픽 품질', (400, 360), self.body, BLUE, center=True)
+        for index, (rect, label) in enumerate(zip(self.pause_quality_buttons(), quality_labels)):
+            selected = game.quality_levels[index] == game.quality
+            self.panel(screen, rect, dark=selected)
+            self.text(screen, label, rect.center, self.small,
+                      'white' if selected else INK, center=True)
+        self.text(screen, '웹에서 끊기면 성능 또는 균형을 권장합니다.',
+                  (400, 448), self.small, MUTED, center=True)
         # Buttons
         labels = ('계속', '재시작', '종료')
         for rect, label in zip(self.pause_buttons(), labels):

@@ -461,6 +461,13 @@ class Game:
         self.ending_prompt_open = False
         self.ending_prompt_choice = False
 
+    def cycle_quality(self, step=1):
+        self.quality_index = (self.quality_index + step) % len(self.quality_levels)
+        self.adaptive_quality_index = len(self.quality_levels)-1
+        labels = {'performance':'성능', 'balanced':'균형', 'high':'고화질'}
+        self.content.say('그래픽 품질 · '+labels[self.quality])
+        return self.quality
+
     def handle_key(self, key):
         # Keep pause controls isolated from normal gameplay input.
         if getattr(self, 'paused', False):
@@ -479,6 +486,9 @@ class Game:
             if key in (pg.K_RIGHT, pg.K_UP):
                 volume = self.audio.change_master_volume(0.1)
                 self.content.say(f'음량 {round(volume*100)}%')
+                return False
+            if key in (pg.K_F6, pg.K_g):
+                self.cycle_quality()
                 return False
             if key == pg.K_r:
                 self.paused = False
@@ -501,9 +511,7 @@ class Game:
             self.content.say('소리 켜짐' if enabled else '소리 꺼짐')
             return False
         if key == pg.K_F6:
-            self.quality_index = (self.quality_index + 1) % len(self.quality_levels)
-            self.content.say({'performance':'성능 모드', 'balanced':'균형 모드',
-                              'high':'고화질 모드'}[self.quality])
+            self.cycle_quality()
             return False
         if self.exit_open:
             if key in (pg.K_ESCAPE,pg.K_n):
@@ -665,6 +673,7 @@ class Game:
         if getattr(self, 'paused', False):
             resume, restart, quitb = self.ui.pause_buttons()
             mute, quieter, louder = self.ui.pause_audio_buttons()
+            quality_buttons = self.ui.pause_quality_buttons()
             if mute.collidepoint(pos):
                 enabled = self.audio.toggle()
                 self.content.say('소리 켜짐' if enabled else '음소거')
@@ -677,6 +686,12 @@ class Game:
                 volume = self.audio.change_master_volume(0.1)
                 self.content.say(f'음량 {round(volume*100)}%')
                 return
+            for index, button in enumerate(quality_buttons):
+                if button.collidepoint(pos):
+                    self.quality_index = index
+                    self.adaptive_quality_index = len(self.quality_levels)-1
+                    self.cycle_quality(0)
+                    return
             if resume.collidepoint(pos):
                 self.paused = False
                 self.content.say('계속')
@@ -1378,6 +1393,9 @@ class Game:
                 self.feedback.emit(self.player.midtop, '보스에게 피격!', (255, 133, 125))
                 return
         skua_event = self.skua_boss.update(dt, self.player)
+        if self.skua_boss.confine(self.player):
+            self.x = float(self.player.x)
+            self.velocity_x = 0.0
         if skua_event == 'start':
             self.audio.play('checkpoint')
             self.boss_intro = {'title': '갈매기 대장',
@@ -1421,14 +1439,15 @@ class Game:
                 continue
             if enemy.respawn_safe:
                 continue
-            if self.effects['grow'] or can_stomp:
+            powered_contact = self.effects['grow'] or self.effects['shield']
+            if powered_contact or can_stomp:
                 self.enemies.remove(enemy)
                 self.combat.defeat(enemy, self.enemy_images)
                 self.score += enemy.points
                 self.audio.play('defeat')
                 self.feedback.emit(enemy.rect.midtop, f'{ENEMY_INFO[enemy.kind][0]} 처치 +{enemy.points}', (255,219,132))
                 self.defeated += 1
-                if not self.effects['grow']:
+                if not powered_contact:
                     self.player.bottom = enemy.rect.top
                     self.y = float(self.player.y)
                     self.velocity_y = -420

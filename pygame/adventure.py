@@ -331,14 +331,12 @@ class AdventureContent:
         if message:
             # Potion time stays on the left and the rescue target stays on the
             # right. Context text expands only into currently unused slots.
-            left = (game.ui.EFFECT_SLOT.right+10
-                    if any(game.effects.values()) else 12)
-            right = (game.ui.OBJECTIVE_SLOT.left-8
-                     if game.rescue_target() is not None and not game.won else 788)
-            width = max(210, right-left)
-            game.ui.panel(screen,(left,94,width,43),dark=True)
-            game.ui.text(screen,message,(left+width//2,115),game.ui.small,
-                         'white',center=True,max_width=width-24)
+            effect_count = sum(value > 0 for value in game.effects.values())
+            objective_visible = game.rescue_target() is not None and not game.won
+            rect = game.ui.context_slot(effect_count, objective_visible)
+            game.ui.panel(screen,rect,dark=True)
+            game.ui.text(screen,message,rect.center,game.ui.small,
+                         'white',center=True,max_width=rect.width-24)
 
     def draw_book(self, game, screen):
         game.ui.veil(screen)

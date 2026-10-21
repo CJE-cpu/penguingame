@@ -67,9 +67,11 @@ class AdventureChecks(unittest.TestCase):
     def test_pause_buttons_do_not_overlap_and_resume_cleanly(self):
         buttons = self.game.ui.pause_buttons()
         audio_buttons = self.game.ui.pause_audio_buttons()
+        quality_buttons = self.game.ui.pause_quality_buttons()
         self.assertEqual(len(buttons), 3)
-        for index, button in enumerate(buttons+audio_buttons):
-            for other in (buttons+audio_buttons)[index+1:]:
+        controls = buttons+audio_buttons+quality_buttons
+        for index, button in enumerate(controls):
+            for other in controls[index+1:]:
                 self.assertFalse(button.colliderect(other))
         self.game.handle_key(pg.K_p)
         self.assertTrue(self.game.paused)
@@ -93,6 +95,20 @@ class AdventureChecks(unittest.TestCase):
         self.assertAlmostEqual(game.audio.master_volume, 0.4)
         game.handle_click(louder.center)
         self.assertAlmostEqual(game.audio.master_volume, 0.5)
+        original = game.quality_index
+        game.handle_key(pg.K_F6)
+        self.assertEqual(game.quality_index, (original+1)%3)
+        game.handle_click(game.ui.pause_quality_buttons()[0].center)
+        self.assertEqual(game.quality_index, 0)
+        self.assertEqual(game.quality, 'performance')
+
+    def test_context_slot_moves_below_full_potion_and_objective_rows(self):
+        ui = self.game.ui
+        crowded = ui.context_slot(3, True)
+        self.assertGreater(crowded.top, ui.EFFECT_SLOT.bottom)
+        self.assertFalse(crowded.colliderect(ui.OBJECTIVE_SLOT))
+        open_slot = ui.context_slot(0, True)
+        self.assertEqual(open_slot.top, ui.EFFECT_SLOT.top)
 
     def test_normal_click_does_not_read_pause_buttons(self):
         self.game.paused = False
@@ -1023,6 +1039,30 @@ class AdventureChecks(unittest.TestCase):
             g.animation.update(1/60,g.player,0,True,True,20)
         self.assertAlmostEqual(g.animation.walk_clock,1.3)
 
+    def test_shield_contact_defeats_enemy_but_respawn_grace_does_not(self):
+        g = self.game
+        ground = g.region_grounds[0][0]
+        enemy = Enemy(ground, 0, 'crab')
+        enemy.speed = 0
+        g.enemies = [enemy]
+        self.place(ground, enemy.rect.centerx)
+        g.player.center = enemy.rect.center
+        g.x, g.y = map(float, g.player.topleft)
+        g.effects['shield'] = 4
+        g.update(0)
+        self.assertNotIn(enemy, g.enemies)
+
+        enemy = Enemy(ground, 0, 'crab')
+        enemy.speed = 0
+        g.enemies = [enemy]
+        self.place(ground, enemy.rect.centerx)
+        g.player.center = enemy.rect.center
+        g.x, g.y = map(float, g.player.topleft)
+        g.effects['shield'] = 0
+        g.invincible = 2
+        g.update(0)
+        self.assertIn(enemy, g.enemies)
+
     def test_sparse_potions_and_visible_animation(self):
         g = self.game
         self.assertEqual(len(g.items),5)
@@ -1764,6 +1804,18 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(any(platform.top > boss.arena.top
                             and platform.right <= boss.arena.left+120
                             for platform in self.game.region_ledges[4]))
+
+    def test_skua_arena_clamps_player_on_activation_frame(self):
+        g = self.game
+        boss = g.skua_boss
+        g.enemies = []
+        g.player.centerx = boss.arena.right-35
+        g.player.bottom = boss.floor_y
+        g.x, g.y = map(float, g.player.topleft)
+        g.on_ground = True
+        g.update(0)
+        self.assertTrue(boss.active)
+        self.assertLessEqual(g.player.right, boss.arena.right-18)
 
     def test_objective_compass_advances_from_rescue_to_bosses(self):
         game = self.game

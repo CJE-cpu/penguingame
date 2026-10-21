@@ -324,8 +324,9 @@ class SkuaBoss:
         if not self.active or self.defeated:
             return False
         original = player.x
-        player.left = max(player.left, self.arena.left+10)
-        player.right = min(player.right, self.arena.right-10)
+        left = self.arena.left+18
+        right = self.arena.right-18-player.width
+        player.x = max(left, min(right, player.x))
         return player.x != original
 
     def kick(self, player, facing_right):
@@ -478,6 +479,13 @@ class SkuaBoss:
         left, right = self.arena.left-camera_x, self.arena.right-camera_x
         pg.draw.line(screen, (170, 207, 232), (left, self.floor_y-2),
                      (right, self.floor_y-2), 3)
+        for edge, direction in ((left, 1), (right, -1)):
+            for row in range(4):
+                y = self.floor_y-34-row*25
+                sway = round(math.sin(time*5+row)*5)
+                pg.draw.lines(screen, (205, 242, 250), False,
+                              [(edge, y), (edge+direction*(18+sway), y-7),
+                               (edge+direction*7, y-14)], 2)
         for index in range(6):
             x = round(left+55+index*(self.arena.width-110)/5)
             sway = round(math.sin(time*3+index)*7)
