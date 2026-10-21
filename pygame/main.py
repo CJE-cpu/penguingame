@@ -922,14 +922,68 @@ class Game:
             surface = pg.Surface((width, visual_height)).convert()
             _cap, body, shadow = self.platform_palettes[kind]
             surface.fill(body[:3])
-            material = pg.transform.smoothscale(
-                self.art.platform_materials[kind], (width, visual_height))
-            surface.blit(material, (0, 0))
-            # Generated texture edges can be feathered. An opaque inset frame
-            # preserves a continuous silhouette where neighboring shelves meet.
-            pg.draw.rect(surface, shadow[:3], surface.get_rect(), 2)
+            material = self.art.platform_materials[kind]
+            # Repeat painted material at a stable scale. Stretching one image
+            # across a long shelf made every mark wide and left the terrain
+            # looking like a flat UI panel.
+            tile_w = max(72, min(128, material.get_width()))
+            tile_h = max(30, min(58, material.get_height()))
+            tile = pg.transform.smoothscale(material, (tile_w, tile_h)).convert()
+            for y in range(0, visual_height, tile_h):
+                row_shift = tile_w // 2 if (y // tile_h) % 2 else 0
+                for x in range(-row_shift, width, tile_w):
+                    surface.blit(tile, (x, y))
+            cap, body, shadow = self.platform_palettes[kind]
+            cap_height = 8 if variant == 'thin' else 11
+            pg.draw.rect(surface, cap[:3], (0, 0, width, cap_height))
+            pg.draw.line(surface, (255, 255, 255), (2, 2), (width-3, 2), 2)
+            pg.draw.line(surface, shadow[:3], (0, cap_height),
+                         (width, cap_height), 2)
+            # Sparse seams give large masses some geological scale without
+            # returning to the noisy, over-decorated platform design.
+            if width >= 100:
+                spacing = 92 if ground else 76
+                seed = sum(ord(char) for char in kind) + width + height
+                for x in range(48 + seed % 31, width-20, spacing):
+                    depth = min(visual_height-5, cap_height+10+(x//spacing)%12)
+                    pg.draw.lines(surface, shadow[:3], False,
+                                  [(x, cap_height+1), (x-4, depth-4),
+                                   (x+2, depth)], 1)
+            # Opaque frame keeps adjoining shelves continuous and eliminates
+            # transparent fringes from generated source art.
+            pg.draw.line(surface, shadow[:3], (0, visual_height-1),
+                         (width, visual_height-1), 2)
+            if not joins[0]:
+                pg.draw.line(surface, shadow[:3], (0, 0),
+                             (0, visual_height-1), 2)
+            if not joins[1]:
+                pg.draw.line(surface, shadow[:3], (width-1, 0),
+                             (width-1, visual_height-1), 2)
             self.platform_textures[key] = surface
         return self.platform_textures[key]
+
+    def draw_foreground_landmarks(self, screen):
+        """Add inexpensive scene-specific depth behind playable terrain."""
+        region = max(0, min(len(REGIONS)-1, self.player.centerx//REGION_WIDTH))
+        local_camera = self.camera_x-region*REGION_WIDTH
+        palette = [
+            ((112,171,193),(198,228,235)), ((73,151,183),(170,220,232)),
+            ((47,91,119),(126,180,197)), ((91,154,180),(188,224,234)),
+            ((74,73,124),(155,163,205)), ((153,112,151),(231,190,201)),
+        ][region]
+        dark, light = palette
+        # Parallax ice stacks bridge the visual gap between the panorama and
+        # the collision floor. Coordinates are deterministic and allocation-free.
+        for index in range(7):
+            world_x = index*173 + (region*67)%109
+            x = round(world_x-local_camera*0.32)
+            height = 26+(index*19+region*13)%58
+            base = 550
+            points = [(x-38,base),(x-30,base-height+14),(x-9,base-height),
+                      (x+8,base-height+9),(x+34,base)]
+            pg.draw.polygon(screen, dark, points)
+            pg.draw.lines(screen, light, False,
+                          [(x-27,base-5),(x-8,base-height+5),(x+4,base-height+13)],2)
     def draw_background(self, screen):
         drift = round(400 * max(0, min(1, self.camera_x / (WORLD_WIDTH-WIDTH))))
         weights = self.scene_weights()
@@ -1578,6 +1632,7 @@ class Game:
             self.coach.draw(self,screen)
             return
         self.draw_background(screen)
+        self.draw_foreground_landmarks(screen)
         # Show water in the ground gaps so falls are visually clear.
         pg.draw.rect(screen, (24, 88, 130), (0, 550, WIDTH, 50))
         # Entrances are cut into the shelf. The shelf lip drawn next embeds the
