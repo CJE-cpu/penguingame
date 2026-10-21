@@ -1404,7 +1404,7 @@ class Game:
                                    f'얼음 조각 명중 {self.boss.hits}/{self.boss.MAX_HITS}',
                                    (143, 235, 247), kind='boss-hit')
         boss_contact = (self.boss.weakspot() if self.boss.state == 'stunned'
-                        else self.boss.rect)
+                        else self.boss.body_hitbox())
         if self.boss.active and self.player.colliderect(boss_contact):
             can_stomp = self.boss.can_stomp(
                 self.player, previous_bottom, self.velocity_y)

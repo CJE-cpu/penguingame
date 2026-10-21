@@ -259,9 +259,12 @@ class AdventureContent:
             self.ocean_rings.append((self.ocean_relic.center, 1.0))
             self.say('고대 해저 유물 발견! +150점')
         if self.oxygen <= 0:
-            self.diving = False
-            game.respawn()
-            self.say('산소가 떨어졌어요! 모은 물고기는 유지됩니다.')
+            if self.swimmer.distance_to(self.ocean_exit) < 85:
+                self.leave_ocean(game)
+            else:
+                self.diving = False
+                game.respawn()
+                self.say('산소가 떨어졌어요! 모은 물고기는 유지됩니다.')
 
     def context(self, game):
         for index,baby in enumerate(game.babies):

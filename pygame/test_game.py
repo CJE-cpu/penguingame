@@ -430,6 +430,16 @@ class AdventureChecks(unittest.TestCase):
         self.assertFalse(boss.can_stomp(player, boss.rect.top, 180))
         self.assertFalse(boss.can_stomp(player, spot.top-2, -180))
 
+    def test_seal_boss_contact_excludes_transparent_sprite_edges(self):
+        boss = self.game.boss
+        body = boss.body_hitbox()
+        self.assertLess(body.width, boss.rect.width)
+        self.assertLess(body.height, boss.rect.height)
+        self.assertEqual(body.bottom, boss.rect.bottom)
+        edge = pg.Rect(boss.rect.left, boss.rect.centery, 4, 4)
+        self.assertTrue(edge.colliderect(boss.rect))
+        self.assertFalse(edge.colliderect(body))
+
     def test_successful_boss_stomp_separates_and_grants_hit_grace(self):
         g = self.game
         boss = g.boss
@@ -1590,12 +1600,27 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(g.player.midbottom,shore)
         c.action(g)
         self.assertTrue(c.diving)
+        c.swimmer.update(900, 300)
         c.oxygen = 0.01
         g.update(0.02)
         self.assertFalse(c.diving)
         self.assertEqual(g.falls,1)
         self.assertEqual(c.wallet,1)
         self.assertEqual(len(c.ocean_fish),5)
+
+    def test_oxygen_expiring_inside_exit_returns_without_losing_life(self):
+        g = self.game
+        c = g.content
+        g.player.midbottom = c.hole.midbottom
+        shore = g.player.midbottom
+        c.action(g)
+        c.swimmer.update(c.ocean_exit)
+        c.oxygen = 0.01
+        lives, falls = g.lives, g.falls
+        g.update(0.02)
+        self.assertFalse(c.diving)
+        self.assertEqual(g.player.midbottom, shore)
+        self.assertEqual((g.lives, g.falls), (lives, falls))
 
     def test_swimming_pose_turns_smoothly_and_slows_when_idle(self):
         animation = self.game.animation

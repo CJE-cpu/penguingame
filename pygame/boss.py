@@ -155,6 +155,12 @@ class SealBoss:
         center_x = self.rect.centerx + self.direction * 37
         return pg.Rect(center_x-width//2, self.rect.top-5, width, height)
 
+    def body_hitbox(self):
+        """Match contact damage to the visible torso, excluding sprite padding."""
+        box = pg.Rect(0, 0, 96, 58)
+        box.midbottom = self.rect.midbottom
+        return box
+
     def can_stomp(self, player, previous_bottom, velocity_y):
         if self.state != 'stunned' or self.defeated or velocity_y <= 0:
             return False
