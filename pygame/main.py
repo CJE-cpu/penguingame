@@ -529,9 +529,10 @@ class Game:
                 return False
             return False
 
-        if (key == pg.K_p and self.started
+        if (key in (pg.K_p, pg.K_ESCAPE) and self.started
                 and not (self.exit_open or self.restart_open
-                         or self.ending_prompt_open or self.ending)):
+                         or self.ending_prompt_open or self.ending)
+                and not self.score_ui.open):
             self.paused = True
             self.content.say('일시정지')
             return False
@@ -584,6 +585,8 @@ class Game:
         if self.score_ui.key(self,key):
             return False
         if key == pg.K_ESCAPE:
+            # On the title screen ESC still offers a safe exit. During play it
+            # is handled above and opens the fully interactive game menu.
             self.ask_exit()
             return False
         if key == pg.K_r and self.started:

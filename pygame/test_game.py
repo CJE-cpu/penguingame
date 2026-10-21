@@ -81,7 +81,9 @@ class AdventureChecks(unittest.TestCase):
     def test_pause_menu_controls_volume_and_mute(self):
         game = self.game
         game.audio.set_master_volume(0.5)
-        game.handle_key(pg.K_p)
+        game.handle_key(pg.K_ESCAPE)
+        self.assertTrue(game.paused)
+        self.assertFalse(game.exit_open)
         game.handle_key(pg.K_RIGHT)
         self.assertAlmostEqual(game.audio.master_volume, 0.6)
         game.handle_key(pg.K_LEFT)
@@ -1189,7 +1191,7 @@ class AdventureChecks(unittest.TestCase):
         g.grow_guard = 1
         g.content.escape_active = True
         g.content.escape_left = 20
-        g.handle_key(pg.K_ESCAPE)
+        g.ask_exit()
         self.assertTrue(g.exit_open)
         self.assertTrue(g.paused)
         self.assertFalse(g.exit_choice)
@@ -1204,10 +1206,11 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(g.coach.modal,lesson)
         self.assertFalse(g.quit_requested)
         g.coach.modal = None
-        g.handle_key(pg.K_ESCAPE)
+        g.ask_exit()
         g.handle_key(pg.K_RETURN)
         self.assertFalse(g.quit_requested)
         self.assertFalse(g.exit_open)
+        self.assertFalse(g.paused)
         g.update(1)
         self.assertEqual(g.content.oxygen,snapshot[2]-1)
 
