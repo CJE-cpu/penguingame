@@ -276,14 +276,21 @@ class CaveExpedition:
                 self.say(f"봉인석 {len(self.state['stones'])}/3 · 결정의 힘으로 이동 가속 5초!")
         for i,enemy in list(self.enemies):
             enemy.update(dt,self.player)
-            if self.player.colliderect(enemy.rect):
-                if self.vy>0 and previous_bottom<=enemy.previous_top+12:
+            damage_box = enemy.damage_hitbox()
+            stomp_box = enemy.stomp_hitbox()
+            can_stomp = (self.vy > 0
+                         and previous_bottom <= stomp_box.top+5
+                         and self.player.bottom >= stomp_box.top
+                         and self.player.right > stomp_box.left
+                         and self.player.left < stomp_box.right)
+            if self.player.colliderect(damage_box) or can_stomp:
+                if can_stomp:
                     self.enemies.remove((i,enemy))
                     self.state['defeated'].add(i)
                     game.score += enemy.points
                     game.audio.play('defeat')
                     self.vy = -400
-                    self.player.bottom = enemy.rect.top
+                    self.player.bottom = stomp_box.top
                     self.y = float(self.player.y)
                     self.grounded = False
                     self.invincible = max(self.invincible, 0.45)

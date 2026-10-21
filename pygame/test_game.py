@@ -657,6 +657,35 @@ class AdventureChecks(unittest.TestCase):
             cave.update(g,1/60,1,frame==0,False)
         self.assertLessEqual(cave.player.right,cave.gate.left)
 
+    def test_cavern_enemies_use_visible_body_and_stomp_hitboxes(self):
+        g = self.game
+        cave = CaveExpedition(g,0)
+        g.cave_expedition = cave
+        cave.enemies = [cave.enemies[0]]
+        _index, enemy = cave.enemies[0]
+
+        # Touching transparent sprite padding must not cost a life.
+        cave.player.size = (40,52)
+        cave.player.right = enemy.rect.left+3
+        cave.player.centery = enemy.rect.centery
+        cave.x,cave.y = map(float,cave.player.topleft)
+        cave.vy = 0
+        cave.invincible = 0
+        lives = g.lives
+        cave.update(g,0,0,False,False)
+        self.assertEqual(g.lives,lives)
+        self.assertEqual(len(cave.enemies),1)
+
+        # Descending feet in the shallow head band count as a stomp even when
+        # the player's full body does not overlap the damage box deeply.
+        stomp = enemy.stomp_hitbox()
+        cave.player.midbottom = (stomp.centerx,stomp.top+4)
+        cave.x,cave.y = map(float,cave.player.topleft)
+        cave.vy = 120
+        cave.update(g,0,0,False,False)
+        self.assertFalse(cave.enemies)
+        self.assertGreater(cave.invincible,0)
+
     def test_named_scores_reload_sort_and_keep_best_per_player(self):
         g = self.game
         records = g.records
