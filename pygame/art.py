@@ -161,6 +161,12 @@ class WorldArt:
         self.interaction_effects = dict(zip(
             ('fish', 'grow', 'speed', 'shield', 'defeat', 'rescue',
              'checkpoint', 'boss-hit'), effects))
+        current = pg.image.load(str(data/'underwater-current-v1.png')).convert_alpha()
+        bounds = current.get_bounding_rect(min_alpha=40)
+        self.underwater_current = pg.transform.smoothscale(
+            current.subsurface(bounds), (112, 42))
+        self.underwater_current_left = pg.transform.flip(
+            self.underwater_current, True, False)
 
     def fish(self, kind, clock):
         return self.fishes[kind][int(clock/0.2)%4]

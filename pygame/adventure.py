@@ -401,59 +401,10 @@ class AdventureContent:
     def draw_ocean(self, game, screen):
         camera = max(0,min(1000,self.swimmer.x-400))
         screen.blit(game.ocean_background,(-round(camera),0))
-        self.draw_water_light(screen,game.time,camera,game.quality)
-        # Distant shelf silhouettes and hanging ice break up the open water
-        # while staying behind fish and the swimming route.
-        distant = (34, 101, 136)
-        for i in range(7):
-            world_x = 70+i*305
-            x = round(world_x-camera*.42)
-            shelf_y = 145+(i*47)%115
-            pg.draw.polygon(screen, distant,
-                            [(x-95, shelf_y), (x-42, shelf_y-5),
-                             (x+20, shelf_y-11), (x+76, shelf_y-12),
-                             (x+55, shelf_y+10), (x+31, shelf_y+17),
-                             (x+4, shelf_y+13), (x-21, shelf_y+25),
-                             (x-61, shelf_y+29)])
-            pg.draw.line(screen, (92, 173, 196),
-                         (x-83, shelf_y+1), (x+61, shelf_y-9), 2)
-            for spike in range(1+(i%3)):
-                spike_x = x-45+spike*31
-                length = 18+(i*11+spike*7)%26
-                pg.draw.polygon(screen, (48, 123, 154),
-                                [(spike_x-8, shelf_y+21),
-                                 (spike_x+8, shelf_y+19),
-                                 (spike_x, shelf_y+21+length)])
-                pg.draw.line(screen, (105, 188, 204),
-                             (spike_x-3, shelf_y+22),
-                             (spike_x, shelf_y+17+length), 1)
-        # Three moving depth layers give the dive a route and scale instead of
-        # leaving one flat panorama behind the collectibles.
-        for layer,(speed,color,base) in enumerate([
-                (.12,(19,74,105),500),(.28,(13,62,91),535)]):
-            points = [(-40,600)]
-            for world_x in range(-80,1940,110):
-                x = round(world_x-camera*speed)
-                ridge = base-18-((world_x//110*37+layer*23)%54)
-                points.append((x,ridge))
-            points.extend([(1880,600),(-40,600)])
-            pg.draw.polygon(screen,color,points)
-        # Pebble fields and shell-like glints make the seabed read as textured
-        # terrain instead of a single flat silhouette.
-        seabed_details = 18 if game.quality == 'performance' else 32
-        for i in range(seabed_details):
-            world_x = 34+i*59
-            x = round(world_x-camera*.88)
-            y = 548+(i*17)%34
-            radius = 2+(i*7)%5
-            pg.draw.ellipse(screen, (20, 79, 101),
-                            (x-radius*2, y-radius//2, radius*4, radius))
-            if i % 4 == 1:
-                pg.draw.arc(screen, (94, 176, 181),
-                            (x-7, y-7, 14, 9), math.pi, math.tau, 1)
-        # Painted coral groves divide the long swim into readable rooms. They
-        # replace the old polygon columns and match the panorama's brushwork.
-        detail = 5 if game.quality=='performance' else 8
+        # The panorama already contains the ice ceiling, distant columns, light
+        # shafts and seabed. Only a few painted foreground clusters are layered
+        # over it, avoiding the former stack of polygon silhouettes.
+        detail = 5 if game.quality=='performance' else 7
         coral_source = game.art.environment['ocean-coral']
         for i in range(detail):
             world_x = 210+i*225
@@ -469,28 +420,6 @@ class AdventureContent:
                     coral = pg.transform.flip(coral, True, False)
                 self._decor_cache[cache_key] = coral
             screen.blit(coral, coral.get_rect(midbottom=(x,568)))
-        # Dark foreground arches occasionally frame the route and strengthen
-        # the feeling of swimming through submerged ice caverns.
-        for i in range(4):
-            world_x = 360+i*470
-            x = round(world_x-camera*1.08)
-            height = 88+(i%2)*34
-            color = (7, 43, 69)
-            pg.draw.polygon(screen, color,
-                            [(x-75,600),(x-62,548-height),(x-34,527-height),
-                             (x-15,558-height),(x+9,535-height),
-                             (x+37,554-height),(x+69,600)])
-            pg.draw.line(screen, (30, 93, 113),
-                         (x-56,548-height), (x-34,532-height), 2)
-        school_count = 4 if game.quality=='performance' else 7
-        for i in range(school_count):
-            world_x=(i*277+game.time*(12+i%2*8))%1800
-            x=round(world_x-camera)
-            y=160+(i*73)%260
-            for j in range(3):
-                px=x-j*18
-                pg.draw.polygon(screen,(44,107,133),
-                                [(px-6,y+j*7),(px+5,y+j*7-3),(px+5,y+j*7+3)])
         game.art.place(screen,'dive-hole',(100-camera,94))
         # A breathing ring connects the surface opening to its interaction area.
         if camera<170:
@@ -517,12 +446,11 @@ class AdventureContent:
                 y = zone.top+70+row*82
                 phase = (game.time*45+row*47)%120
                 x = round(zone.left-camera+phase)
-                color = (105, 197, 214)
-                pg.draw.arc(screen, color, (x-30,y-10,72,24), 0, math.pi, 2)
-                tip_x = x+38 if direction>0 else x-26
-                pg.draw.polygon(screen, color,
-                                [(tip_x,y+2),(tip_x-direction*9,y-4),
-                                 (tip_x-direction*9,y+8)])
+                current = (game.art.underwater_current if direction > 0 else
+                           game.art.underwater_current_left)
+                current.set_alpha(145)
+                screen.blit(current, current.get_rect(center=(x,y)))
+                current.set_alpha(None)
         relic = self.ocean_relic.move(-camera, 0)
         if not self.ocean_relic_found:
             unlocked = all(b['active'] for b in self.ocean_beacons)
@@ -532,11 +460,6 @@ class AdventureContent:
             image = game.art.ocean_artifacts[
                 'relic-open' if unlocked else 'relic-locked']
             screen.blit(image, image.get_rect(center=relic.center))
-        bubble_count = {'performance':10, 'balanced':16, 'high':24}[game.quality]
-        for i in range(bubble_count):
-            x = round((i*83+math.sin(game.time+i)*9)%1800-camera)
-            y = round(540-(game.time*28+i*37)%425)
-            pg.draw.circle(screen,(104,181,211),(x,y),3,1)
         for kind,rect in self.ocean_fish:
             image = game.art.fish(kind,game.time+rect.x*0.01)
             center = (round(rect.centerx-camera),round(rect.centery+math.sin(game.time*2+rect.x)*3))
