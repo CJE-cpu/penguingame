@@ -227,6 +227,7 @@ class Game:
         self.run_id = uuid4().hex
         self.exit_open = False
         self.exit_choice = False
+        self.exit_return_paused = False
         self.restart_open = False
         self.restart_choice = False
         self.ending_prompt_open = False
@@ -471,6 +472,19 @@ class Game:
     def handle_key(self, key):
         # Keep pause controls isolated from normal gameplay input.
         if getattr(self, 'paused', False):
+            if self.exit_open:
+                if key in (pg.K_ESCAPE, pg.K_n, pg.K_q):
+                    self.cancel_exit()
+                elif key in (pg.K_LEFT, pg.K_RIGHT, pg.K_TAB):
+                    self.exit_choice = not self.exit_choice
+                elif key == pg.K_y:
+                    self.quit_requested = True
+                elif key in (pg.K_RETURN, pg.K_SPACE):
+                    if self.exit_choice:
+                        self.quit_requested = True
+                    else:
+                        self.cancel_exit()
+                return False
             if key in (pg.K_p, pg.K_ESCAPE):
                 self.paused = False
                 self.content.say('계속')
@@ -495,7 +509,6 @@ class Game:
                 self.ask_restart()
                 return False
             if key == pg.K_q:
-                self.paused = False
                 self.ask_exit()
                 return False
             return False
@@ -657,8 +670,14 @@ class Game:
 
     def ask_exit(self):
         if not self.exit_open:
+            self.exit_return_paused = bool(getattr(self, 'paused', False))
+            self.paused = True
             self.exit_open = True
             self.exit_choice = False
+
+    def cancel_exit(self):
+        self.exit_open = False
+        self.paused = bool(getattr(self, 'exit_return_paused', False))
 
     def ask_restart(self):
         if not self.restart_open:
@@ -671,6 +690,13 @@ class Game:
 
     def handle_click(self, pos):
         if getattr(self, 'paused', False):
+            if self.exit_open:
+                cancel, confirm = self.ui.exit_buttons()
+                if cancel.collidepoint(pos):
+                    self.cancel_exit()
+                elif confirm.collidepoint(pos):
+                    self.quit_requested = True
+                return
             resume, restart, quitb = self.ui.pause_buttons()
             mute, quieter, louder = self.ui.pause_audio_buttons()
             quality_buttons = self.ui.pause_quality_buttons()
@@ -701,7 +727,6 @@ class Game:
                 self.ask_restart()
                 return
             if quitb.collidepoint(pos):
-                self.paused = False
                 self.ask_exit()
                 return
             return
@@ -1535,8 +1560,6 @@ class Game:
             self.ui.restart_dialog(self,screen)
         if self.ending_prompt_open:
             self.ui.ending_prompt(self,screen)
-        if self.exit_open:
-            self.ui.exit_dialog(self,screen)
         if getattr(self, 'paused', False):
             self.ui.pause_menu(self, screen)
 

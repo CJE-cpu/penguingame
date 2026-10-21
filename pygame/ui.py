@@ -256,7 +256,7 @@ class IceUI:
                 for index, (action, label) in enumerate(choices)]
 
     def exit_buttons(self):
-        return pg.Rect(188,334,194,54),pg.Rect(418,334,194,54)
+        return pg.Rect(238,478,152,56),pg.Rect(410,478,152,56)
 
     def restart_buttons(self):
         return pg.Rect(188, 342, 194, 54), pg.Rect(418, 342, 194, 54)
@@ -287,7 +287,7 @@ class IceUI:
         self.panel(screen, (120, 38, 560, 524))
         # Icon + title
         self.icon(screen, game.penguin_right, (400, 91), (48, 64))
-        self.text(screen, '일시정지', (400, 145), self.title, center=True)
+        self.text(screen, '게임 메뉴', (400, 145), self.title, center=True)
         # Hints
         hints = [
             'P 또는 ESC 계속 · R 재시작 · Q 종료',
@@ -313,13 +313,25 @@ class IceUI:
             self.panel(screen, rect, dark=selected)
             self.text(screen, label, rect.center, self.small,
                       'white' if selected else INK, center=True)
-        self.text(screen, '웹에서 끊기면 성능 또는 균형을 권장합니다.',
-                  (400, 448), self.small, MUTED, center=True)
-        # Buttons
-        labels = ('계속', '재시작', '종료')
-        for rect, label in zip(self.pause_buttons(), labels):
-            self.panel(screen, rect, dark=False)
-            self.text(screen, label, rect.center, self.body, INK, center=True)
+        if not game.exit_open:
+            self.text(screen, '웹에서 끊기면 성능 또는 균형을 권장합니다.',
+                      (400, 448), self.small, MUTED, center=True)
+        # Actions and exit confirmation share this panel so the player never
+        # loses the settings context while deciding whether to leave.
+        if game.exit_open:
+            self.text(screen, '게임을 종료할까요?', (400, 448), self.small,
+                      MUTED, center=True)
+            labels = ('돌아가기', '게임 종료')
+            for index, (rect, label) in enumerate(zip(self.exit_buttons(), labels)):
+                selected = bool(index) == game.exit_choice
+                self.panel(screen, rect, dark=selected)
+                self.text(screen, label, rect.center, self.body,
+                          'white' if selected else INK, center=True)
+        else:
+            labels = ('계속', '재시작', '종료')
+            for rect, label in zip(self.pause_buttons(), labels):
+                self.panel(screen, rect, dark=False)
+                self.text(screen, label, rect.center, self.body, INK, center=True)
 
     def ending_prompt(self, game, screen):
         self.veil(screen)

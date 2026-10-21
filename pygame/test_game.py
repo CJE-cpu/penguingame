@@ -102,6 +102,22 @@ class AdventureChecks(unittest.TestCase):
         self.assertEqual(game.quality_index, 0)
         self.assertEqual(game.quality, 'performance')
 
+    def test_pause_exit_confirmation_stays_inside_game_menu(self):
+        game = self.game
+        game.paused = True
+        game.handle_key(pg.K_q)
+        self.assertTrue(game.paused)
+        self.assertTrue(game.exit_open)
+        game.handle_key(pg.K_ESCAPE)
+        self.assertTrue(game.paused)
+        self.assertFalse(game.exit_open)
+        game.handle_click(game.ui.pause_buttons()[2].center)
+        self.assertTrue(game.paused)
+        self.assertTrue(game.exit_open)
+        game.handle_click(game.ui.exit_buttons()[0].center)
+        self.assertTrue(game.paused)
+        self.assertFalse(game.exit_open)
+
     def test_context_slot_moves_below_full_potion_and_objective_rows(self):
         ui = self.game.ui
         crowded = ui.context_slot(3, True)
@@ -1171,6 +1187,7 @@ class AdventureChecks(unittest.TestCase):
         g.content.escape_left = 20
         g.handle_key(pg.K_ESCAPE)
         self.assertTrue(g.exit_open)
+        self.assertTrue(g.paused)
         self.assertFalse(g.exit_choice)
         snapshot = (g.time,g.player.copy(),g.content.oxygen,g.effects.copy(),g.grow_guard,g.content.escape_left)
         g.handle_key(pg.K_r)
@@ -1179,6 +1196,7 @@ class AdventureChecks(unittest.TestCase):
         g.draw(self.screen)
         g.handle_key(pg.K_ESCAPE)
         self.assertFalse(g.exit_open)
+        self.assertFalse(g.paused)
         self.assertEqual(g.coach.modal,lesson)
         self.assertFalse(g.quit_requested)
         g.coach.modal = None
@@ -1200,6 +1218,7 @@ class AdventureChecks(unittest.TestCase):
         g.ask_exit()
         g.handle_click(g.ui.exit_buttons()[0].center)
         self.assertFalse(g.exit_open)
+        self.assertFalse(g.paused)
         g.ask_exit()
         g.handle_key(pg.K_RIGHT)
         g.handle_key(pg.K_RETURN)
