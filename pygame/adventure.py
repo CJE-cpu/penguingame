@@ -3,7 +3,7 @@ import math
 import pygame as pg
 
 JOURNALS = [
-    ('해안의 첫 발자국', '첫 이글루 오른쪽의 넓은 눈밭 끝에서 잠수 구멍을 찾았다. E로 들어가면 왼쪽 위에 출구가 있다.\n산소 35초 안에 귀환해야 한다. 깊은 곳의 황금 물고기를 찾더라도 산소가 절반 남으면 귀환을 준비하자.\n↓를 누르며 이동하면 1.35배로 활주한다. 서두르지 말고 순찰하는 적과 거리를 두자.'),
+    ('해안의 첫 발자국', '눈밭 끝의 잠수 구멍에서 E로 들어가면, 들어온 구멍이 그대로 출구가 된다.\n산소 35초 안에 귀환해야 한다. 깊은 곳의 황금 물고기를 찾더라도 산소가 절반 남으면 귀환을 준비하자.\n↓를 누르며 이동하면 1.35배로 활주한다. 서두르지 말고 순찰하는 적과 거리를 두자.'),
     ('얼음에 갇힌 친구', '빙하의 가장 높은 발판 오른쪽에 아기 펭귄이 얼음 껍질에 갇혀 있다. 발판 위에 착지한 뒤 ↓를 누르며 가까이 이동하면 껍질이 깨진다.\n친구가 따라오기 시작하면 가까운 이글루로 데려가자. 몸에 닿는 것만으로 구조가 완료되지는 않는다.\n거대 물약은 8초간 적을 돌파한다. 종료 직후에는 1.5초의 보호 시간이 있어 안전한 곳으로 이동할 수 있다.'),
     ('동굴의 비밀', '동굴 구역과 빙붕 구역 오른쪽 땅의 얼음 입구에서 E를 누르면 별도의 내부를 탐험한다. 푸른 동굴은 낮은 활주 통로, 빙붕 동굴은 무너지는 다리가 특징이다.\n봉인석 3개를 찾아 오른쪽 레버에서 E로 보물방을 연다. 상자에서 E로 100점을 얻고, 끝의 출구에서 E로 나오면 150점과 먹이 3개, 높은 옆길로 이어지는 지름길을 얻는다.\n입구 근처 E로 언제든 돌아올 수 있다. 찾은 봉인석과 보물 기록은 유지되고, 같은 보상은 두 번 지급되지 않는다. 반전 물약은 바깥 동굴 구역의 오른쪽 위 옆길에 한 개 있다.'),
     ('눈보라 속 식사', '눈보라 구역의 가장 높은 발판 오른쪽에서 배고픈 친구를 만났다. 먹이 3마리를 가진 채 가까이서 E를 누르면 친구가 따라온다.\n먹이는 물고기 한 마리를 주울 때 한 개씩 늘어난다. 나눠 줘도 점수와 30마리 수집 목표는 줄어들지 않는다.\n바람은 왼쪽으로 분다. 속도 물약과 활주를 이용하되, 갈매기가 낮게 내려올 때는 잠시 기다리자.'),
@@ -74,6 +74,11 @@ class AdventureContent:
     def nearby(self, game, rect, distance=85):
         return abs(game.player.centerx-rect.centerx)<distance and abs(game.player.bottom-rect.bottom)<70
 
+    def ocean_exit_direction(self):
+        horizontal = '왼쪽' if self.ocean_exit.x < 900 else '오른쪽'
+        vertical = '위' if self.ocean_exit.y < 300 else '아래'
+        return f'{horizontal} {vertical}'
+
     def action(self, game):
         if self.book_open:
             self.book_open = False
@@ -82,7 +87,7 @@ class AdventureContent:
             if self.swimmer.distance_to(self.ocean_exit) < 85:
                 self.leave_ocean(game)
             else:
-                self.say('왼쪽 위 얼음 구멍으로 돌아가세요!')
+                self.say(f'{self.ocean_exit_direction()} 얼음 구멍으로 돌아가세요!')
             return
         if game.combat.hurt:
             return
@@ -112,7 +117,7 @@ class AdventureContent:
                 game.animation.swim_angle = 0.0
                 game.animation.swim_movement.update(0,0)
                 self.dive_return = game.player.midbottom
-                self.say('잠수! 방향키로 수영 · 왼쪽 위 구멍에서 E로 나가기')
+                self.say(f'잠수! 방향키로 수영 · {self.ocean_exit_direction()} 구멍에서 E로 나가기')
                 game.coach.explain('swim')
             return
         if any(self.nearby(game,checkpoint) for checkpoint in game.checkpoints):

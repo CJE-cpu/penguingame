@@ -1057,6 +1057,20 @@ class AdventureChecks(unittest.TestCase):
         g.feedback.update(2)
         self.assertEqual(g.feedback.bursts,[])
 
+    def test_fish_collection_has_no_visual_burst(self):
+        g = self.game
+        g.enemies = []
+        self.place(g.region_grounds[0][0], 75)
+        collected = g.player.copy()
+        remaining = pg.Rect(collected.right+180, collected.y, 36, 24)
+        g.fish = [('orange', collected), ('blue', remaining)]
+        g.feedback.bursts.clear()
+        score = g.score
+        g.update(0)
+        self.assertEqual(g.score, score+10)
+        self.assertEqual(g.fish, [('blue', remaining)])
+        self.assertFalse(g.feedback.bursts)
+
     def test_enemy_behaviors_and_walk_rate(self):
         g = self.game
         self.assertEqual({e.kind for e in g.enemies},{'crab','seal','skua','spirit'})
@@ -1603,6 +1617,12 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(c.diving)
         self.assertEqual(tuple(c.swimmer), site['ocean_start'])
         self.assertEqual(tuple(c.ocean_exit), site['ocean_start'])
+        self.assertIn('오른쪽 아래', c.notice)
+        c.swimmer.update(900, 300)
+        c.action(g)
+        self.assertTrue(c.diving)
+        self.assertIn('오른쪽 아래', c.notice)
+        c.swimmer.update(site['ocean_start'])
         c.action(g)
         self.assertFalse(c.diving)
         self.assertEqual(g.player.midbottom, site['rect'].midbottom)
