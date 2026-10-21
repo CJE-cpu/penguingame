@@ -95,21 +95,62 @@ class InteractionEffects:
         return icon
 
     def _burst_image(self, game, kind, age, alpha):
-        size_step = max(0, min(7, round(age*9)))
-        alpha_step = self._alpha_step(alpha)
+        progress = max(0.0, min(1.0, age/0.8))
+        frame = max(0, min(9, round(progress*9)))
+        # Four opacity bands keep all eight animated effects below a modest
+        # cache size in the browser build.
+        alpha_step = max(0, min(3, round(alpha/85)))
         effect_kind = kind if kind in game.art.interaction_effects else None
-        key = ('painted-burst', effect_kind, size_step, alpha_step)
+        key = ('painted-burst', effect_kind, frame, alpha_step)
         image = self.icon_cache.get(key)
         if image is None:
             source = (game.art.interaction_effects[effect_kind] if effect_kind
                       else game.art.environment['pickup-burst'])
-            base = 38 if effect_kind in ('speed', 'boss-hit') else 34
-            size = base+size_step*10
-            width = round(size*1.25) if effect_kind == 'speed' else size
-            image = pg.transform.smoothscale(source, (width, size))
-            image.set_alpha(alpha_step*36)
+            pulse = math.sin(progress*math.pi)
+            scale = {
+                'fish': .65+.45*pulse, 'grow': .55+.75*progress,
+                'speed': .72+.3*pulse, 'shield': .58+.55*pulse,
+                'defeat': .6+.62*pulse, 'rescue': .68+.38*pulse,
+                'checkpoint': .58+.52*progress,
+                'boss-hit': 1.18-.3*progress,
+            }.get(effect_kind, .65+.55*pulse)
+            max_size = round(74*scale)
+            ratio = source.get_width()/source.get_height()
+            size = ((max_size, max(1, round(max_size/ratio))) if ratio >= 1 else
+                    (max(1, round(max_size*ratio)), max_size))
+            image = pg.transform.smoothscale(source, size)
+            angle = {
+                'fish': math.sin(progress*math.tau)*9,
+                'grow': frame*8, 'shield': math.sin(progress*math.pi)*8,
+                'defeat': frame*12, 'rescue': math.sin(progress*math.tau)*6,
+                'checkpoint': frame*4,
+                'boss-hit': math.sin(progress*math.tau*2)*12,
+            }.get(effect_kind, 0)
+            if angle:
+                image = pg.transform.rotate(image, angle)
+            image.set_alpha(alpha_step*85)
             self.icon_cache[key] = image
+            if len(self.icon_cache) > 384:
+                self.icon_cache.clear()
         return image
+
+    @staticmethod
+    def _burst_offset(kind, progress, facing_right):
+        """Give every event a readable motion instead of a static pop."""
+        if kind == 'fish':
+            return (round(math.sin(progress*math.tau)*8), round(-28*progress))
+        if kind == 'speed':
+            return (round((1 if facing_right else -1)*35*progress), 0)
+        if kind == 'rescue':
+            return (0, round(-38*progress))
+        if kind == 'checkpoint':
+            return (0, round(-14*progress))
+        if kind == 'boss-hit':
+            return (round(math.sin(progress*math.tau*3)*6*(1-progress)),
+                    round(-8*progress))
+        if kind == 'defeat':
+            return (round(math.sin(progress*math.pi)*7), round(-18*progress))
+        return (0, 0)
 
     def draw(self, game, screen):
         if not self.bursts:
@@ -124,7 +165,19 @@ class InteractionEffects:
             alpha = round(255*min(1,burst['life']/0.4))
             if age<0.8:
                 painted = self._burst_image(game, burst['kind'], age, alpha)
-                layer.blit(painted, painted.get_rect(center=(round(x),round(y))))
+                progress = age/0.8
+                offset = self._burst_offset(burst['kind'], progress,
+                                            game.facing_right)
+                center = (round(x+offset[0]), round(y+offset[1]))
+                layer.blit(painted, painted.get_rect(center=center))
+                # Speed reads better as a short two-frame afterimage while the
+                # other symbols remain clean single silhouettes.
+                if burst['kind'] == 'speed' and progress < .65:
+                    ghost = painted.copy()
+                    ghost.set_alpha(max(0, alpha//3))
+                    direction = -1 if game.facing_right else 1
+                    layer.blit(ghost, ghost.get_rect(
+                        center=(center[0]+direction*22, center[1])))
             if burst['kind'] in ('grow','speed','shield'):
                 icon = self._icon(game, burst['kind'], age, alpha)
                 layer.blit(icon,icon.get_rect(center=(round(x),round(y-25-age*35))))
