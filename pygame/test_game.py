@@ -1665,6 +1665,9 @@ class AdventureChecks(unittest.TestCase):
         g.combat.update(1)
         self.assertFalse(g.combat.defeated)
         g.effects['grow'] = 0
+        # This part checks the separate hurt animation after the newly added
+        # post-defeat contact grace has elapsed.
+        g.invincible = 0
         enemy = g.enemies[0]
         g.player.center = enemy.rect.center
         g.x, g.y = map(float,g.player.topleft)
@@ -1896,6 +1899,34 @@ class AdventureChecks(unittest.TestCase):
                 support = min(self.game.platforms,
                               key=lambda platform: abs(platform.top-enemy.rect.bottom))
                 self.assertLessEqual(enemy.rect.bottom, support.top-2)
+
+    def test_defeated_enemy_cannot_leave_contact_damage(self):
+        game = self.game
+        ground = game.region_grounds[0][0]
+        defeated = Enemy(ground, 0, 'crab')
+        neighbor = Enemy(ground, 0, 'crab')
+        neighbor.rect.topleft = defeated.rect.topleft
+        neighbor.x = float(neighbor.rect.x)
+        game.enemies = [defeated, neighbor]
+        game.player.midbottom = (defeated.rect.centerx, defeated.rect.top+2)
+        game.x, game.y = map(float, game.player.topleft)
+        game.velocity_y = 180
+        game.on_ground = False
+
+        game.update(0)
+
+        self.assertNotIn(defeated, game.enemies)
+        self.assertIn(neighbor, game.enemies)
+        self.assertGreaterEqual(game.invincible, 0.45)
+        self.assertFalse(game.combat.hurt)
+        self.assertLessEqual(game.player.bottom, defeated.rect.top)
+
+        # Remaining overlap on the next frame is covered by defeat grace.
+        game.player.center = neighbor.rect.center
+        game.x, game.y = map(float, game.player.topleft)
+        game.velocity_y = 0
+        game.update(0.1)
+        self.assertFalse(game.combat.hurt)
 
     def test_skua_boss_contact_is_tighter_than_return_projectile_target(self):
         boss = self.game.skua_boss

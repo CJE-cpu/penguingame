@@ -283,7 +283,12 @@ class CaveExpedition:
                     game.score += enemy.points
                     game.audio.play('defeat')
                     self.vy = -400
+                    self.player.bottom = enemy.rect.top
+                    self.y = float(self.player.y)
+                    self.grounded = False
+                    self.invincible = max(self.invincible, 0.45)
                     self.pulses.append((enemy.rect.center,0.8))
+                    break
                 elif not self.invincible:
                     game.audio.play('hit')
                     if not game.consume_life(True):

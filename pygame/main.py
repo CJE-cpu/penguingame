@@ -74,6 +74,7 @@ JUMP_BUFFER_TIME = 0.12
 ITEM_DURATION = 8.0
 GROW_EXIT_INVINCIBILITY = 1.5
 RESPAWN_INVINCIBILITY = 3.0
+ENEMY_DEFEAT_GRACE = 0.45
 RESPAWN_CLEAR_RADIUS = 280
 STARTING_LIVES = 3
 TIME_BONUS_MAX = 1800
@@ -1429,11 +1430,16 @@ class Game:
                 self.audio.play('defeat')
                 self.feedback.emit(enemy.rect.midtop, f'{ENEMY_INFO[enemy.kind][0]} 처치 +{enemy.points}', (255,219,132))
                 self.defeated += 1
+                # The defeated sprite remains briefly as animation only. Give
+                # the player enough grace to leave its former contact area and
+                # stop evaluating further enemies during the same frame.
+                self.invincible = max(self.invincible, ENEMY_DEFEAT_GRACE)
                 if not powered_contact:
                     self.player.bottom = enemy.rect.top
                     self.y = float(self.player.y)
                     self.velocity_y = -420
                     self.on_ground = False
+                break
             elif not self.invincible:
                 self.last_hit_enemy = enemy
                 self.combat.hit(self.player, enemy)
