@@ -623,8 +623,6 @@ class Game:
             elif key in (pg.K_RETURN,pg.K_SPACE,pg.K_t):
                 self.start(True)
             elif key == pg.K_n:
-                self.start(False)
-            elif key == pg.K_g:
                 self.start(False, False)
             return False
         if key == pg.K_n and self.tutorial:
@@ -786,8 +784,6 @@ class Game:
                 if action == 'tutorial':
                     self.start(True)
                 elif action == 'skip':
-                    self.start(False)
-                elif action == 'quiet':
                     self.start(False, False)
                 elif action == 'continue':
                     self.continue_adventure()

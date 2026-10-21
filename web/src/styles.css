@@ -3852,6 +3852,15 @@ td strong {
   color: #244a59;
 }
 
+.play-help-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.play-help-copy p:first-child {
+  color: #102b3b;
+}
+
 .game-save-status {
   display: flex;
   align-items: center;

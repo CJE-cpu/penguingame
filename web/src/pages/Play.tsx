@@ -78,7 +78,7 @@ export default function Play() {
             <span /> PLAY IN YOUR BROWSER
           </span>
           <h1>지금 바로 남극으로</h1>
-          <p>설치 없이 화면을 클릭하면 모험이 시작됩니다.</p>
+          <p>설치 없이 실행하고, 튜토리얼 또는 바로 시작을 선택하세요.</p>
         </div>
         <div className="play-actions">
           <button className="button button-outline" onClick={fullscreen}>
@@ -93,7 +93,7 @@ export default function Play() {
         <iframe
           ref={frameRef}
           className="game-frame"
-          src="/game/index.html?v=4"
+          src="/game/index.html?v=5"
           title="남극 펭귄의 모험"
           allow="autoplay; fullscreen"
           allowFullScreen
@@ -109,11 +109,13 @@ export default function Play() {
       )}
       <div className="play-help">
         <Gamepad2 size={20} />
-        <span><strong>화질</strong> F6</span>
-        <p>
-          <strong>이동</strong> 방향키 또는 A·D · <strong>점프</strong> Space ·{" "}
-          <strong>슬라이딩</strong> 아래 방향키 또는 S
-        </p>
+        <div className="play-help-copy">
+          <p><strong>첫 시작</strong> Enter 튜토리얼 · N 바로 시작(자동 안내창 없음)</p>
+          <p>
+            <strong>이동</strong> 방향키 또는 A·D · <strong>점프</strong> Space ·{" "}
+            <strong>슬라이딩</strong> 아래 방향키 또는 S · <strong>게임 메뉴</strong> ESC · <strong>화질</strong> F6
+          </p>
+        </div>
       </div>
     </main>
   );

@@ -1439,27 +1439,21 @@ class AdventureChecks(unittest.TestCase):
         self.assertFalse(any(j['found'] for j in g.content.journals))
         self.assertEqual(g.player.topleft,(55,498))
 
-    def test_intro_offers_guided_and_quiet_starts(self):
+    def test_intro_has_one_tutorial_free_start(self):
         g = self.game
         g.reset()
         choices = g.ui.intro_buttons(g)
         self.assertEqual([action for action, _rect, _label in choices],
-                         ['tutorial', 'skip', 'quiet'])
+                         ['tutorial', 'skip'])
+        self.assertIn('안내창 없음', choices[1][2])
         g.handle_click(choices[1][1].center)
-        self.assertTrue(g.started)
-        self.assertIsNone(g.tutorial)
-        self.assertIsNotNone(g.coach.modal)
-        g.reset()
-        quiet = g.ui.intro_buttons(g)[2]
-        self.assertIn('안내 없이 시작', quiet[2])
-        g.handle_click(quiet[1].center)
         self.assertTrue(g.started)
         self.assertIsNone(g.tutorial)
         self.assertFalse(g.coach.enabled)
         self.assertIsNone(g.coach.modal)
         self.assertFalse(g.coach.explain('move'))
         g.reset()
-        g.handle_key(pg.K_g)
+        g.handle_key(pg.K_n)
         self.assertTrue(g.started)
         self.assertFalse(g.coach.enabled)
         self.assertIsNone(g.coach.modal)
