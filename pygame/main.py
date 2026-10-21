@@ -365,6 +365,8 @@ class Game:
                              self.boss_images, self.art.gameplay['ice-projectile'])
         self.boss.arena_fence = pg.transform.smoothscale(
             self.art.environment['arena-post'], (62, 108))
+        self.boss.arena_fence_flipped = pg.transform.flip(
+            self.boss.arena_fence, True, False)
         moved = 0
         for _kind, rect in self.fish:
             if rect.colliderect(self.boss.arena):
@@ -384,6 +386,8 @@ class Game:
                                   self.art.gameplay['snowball-charged'])
         self.skua_boss.arena_fence = pg.transform.smoothscale(
             self.art.environment['arena-fence'], (132, 102))
+        self.skua_boss.arena_fence_flipped = pg.transform.flip(
+            self.skua_boss.arena_fence, True, False)
         moved = 0
         for _kind, rect in self.fish:
             if rect.colliderect(self.skua_boss.arena):

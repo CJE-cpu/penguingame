@@ -17,6 +17,12 @@ TARGETS = {
     "adventure-objects-atlas-v2.png": (724, 543),
     "shield-potion.png": (256, 256),
     "skua-boss-atlas.png": (1024, 512),
+    # Generated source atlases retain far more pixels than their 40-132 px
+    # runtime sprites need. Two-times display size keeps edges crisp while
+    # reducing browser download and PNG decoding work.
+    "environment-effects-atlas-v1.png": (880, 440),
+    "interaction-effects-atlas-v1.png": (880, 440),
+    "underwater-current-v1.png": (448, 224),
 }
 
 

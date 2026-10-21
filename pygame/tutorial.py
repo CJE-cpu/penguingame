@@ -195,7 +195,10 @@ class TutorialStage:
             game.art.place(screen,'dive-hole',(100,120))
             if not self.swim_fish:
                 screen.blit(game.art.fish('blue',self.time),(452,338))
-            game.content.draw_water_light(screen,self.time,0)
+            # Match the finished dive scene: the panorama supplies the light
+            # shafts, while a painted current sprite teaches directional flow.
+            current = game.art.underwater_current
+            screen.blit(current, current.get_rect(center=(330,300)))
             image = game.animation.swim_image(self.right)
             screen.blit(image,image.get_rect(center=(self.swimmer.x,self.swimmer.y+game.animation.swim_bob())))
             game.ui.text(screen,'연습 바다 · 산소 제한 없음',(400,520),game.ui.body,'white',center=True)

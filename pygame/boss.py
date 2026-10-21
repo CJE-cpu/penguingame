@@ -203,9 +203,8 @@ class SealBoss:
         fence = getattr(self, 'arena_fence', None)
         if fence:
             for wall_x, flip in ((left, False), (right, True)):
-                image = fence
-                if flip:
-                    image = pg.transform.flip(image, True, False)
+                image = (getattr(self, 'arena_fence_flipped', fence)
+                         if flip else fence)
                 screen.blit(image, image.get_rect(midbottom=(round(wall_x), floor+3)))
 
     def draw(self, screen, camera_x, time):
@@ -479,7 +478,7 @@ class SkuaBoss:
         if fence:
             image = fence
             screen.blit(image, image.get_rect(midbottom=(round(left+55), self.floor_y+3)))
-            screen.blit(pg.transform.flip(image, True, False),
+            screen.blit(getattr(self, 'arena_fence_flipped', image),
                         image.get_rect(midbottom=(round(right-55), self.floor_y+3)))
         for index in range(6):
             x = round(left+55+index*(self.arena.width-110)/5)
