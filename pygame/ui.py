@@ -123,6 +123,19 @@ class IceUI:
         region = min(len(regions)-1, game.player.centerx//game.region_width)
         self.text(screen, regions[region][0], (28, 18), self.body)
         self.text(screen, f'{region+1}/6 구역 · 저장 {game.checkpoint_index+1}', (28, 43), self.small, MUTED)
+        # The expanded journey needs a persistent sense of distance without
+        # adding another HUD panel. This slim bar tracks the whole overworld.
+        journey = max(0.0, min(1.0, game.player.centerx/game.world_width))
+        track = pg.Rect(28, 66, 180, 4)
+        pg.draw.rect(screen, (186, 219, 232), track, border_radius=2)
+        if journey > 0:
+            fill = track.copy()
+            fill.width = max(2, round(track.width*journey))
+            pg.draw.rect(screen, BLUE, fill, border_radius=2)
+        for boundary in range(1, len(regions)):
+            x = track.left+round(track.width*boundary/len(regions))
+            pg.draw.line(screen, (255, 255, 255), (x, track.top),
+                         (x, track.bottom-1))
         for x in (225,370,510,635):
             pg.draw.line(screen,EDGE,(x,24),(x,62))
         self.icon(screen, game.fish_images['gold'], (249, 46))
