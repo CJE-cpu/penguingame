@@ -152,6 +152,11 @@ class WorldArt:
         self.platform_materials = dict(zip(
             ('snow', 'ice', 'cave', 'fracture', 'crumble', 'sunset'),
             atlas_cells(data/'platform-materials-atlas-v1.png', 3, 2)))
+        environment = atlas_cells(data/'environment-effects-atlas-v1.png', 4, 2)
+        self.environment = dict(zip(
+            ('snow-edge', 'ice-edge', 'cave-edge', 'fracture-edge',
+             'arena-post', 'arena-fence', 'ocean-coral', 'pickup-burst'),
+            environment))
 
     def fish(self, kind, clock):
         return self.fishes[kind][int(clock/0.2)%4]

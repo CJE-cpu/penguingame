@@ -200,14 +200,13 @@ class SealBoss:
             if index % 2 == 0:
                 pg.draw.line(screen, (127, 194, 213),
                              (x+7, floor+depth), (x+17, floor+depth-3), 1)
-        for wall_x, direction in ((left, 1), (right, -1)):
-            pg.draw.polygon(screen, (38, 84, 122),
-                            [(wall_x, floor), (wall_x+direction*30, floor),
-                             (wall_x+direction*20, floor-16),
-                             (wall_x+direction*7, floor-28)])
-            pg.draw.line(screen, (167, 226, 235),
-                         (wall_x+direction*3, floor-25),
-                         (wall_x+direction*22, floor-5), 2)
+        fence = getattr(self, 'arena_fence', None)
+        if fence:
+            for wall_x, flip in ((left, False), (right, True)):
+                image = fence
+                if flip:
+                    image = pg.transform.flip(image, True, False)
+                screen.blit(image, image.get_rect(midbottom=(round(wall_x), floor+3)))
 
     def draw(self, screen, camera_x, time):
         if not self.active and not self.defeated:
@@ -222,14 +221,6 @@ class SealBoss:
                             [(rect.centerx, rect.top-23),
                              (rect.centerx-10, rect.top-5),
                              (rect.centerx+10, rect.top-5)])
-        if self.active:
-            for wall_x in (self.arena.left, self.arena.right):
-                x = wall_x-camera_x
-                for y in range(self.floor_y-116, self.floor_y, 22):
-                    pg.draw.polygon(screen, (111, 222, 238),
-                                    [(x, y-18), (x+10, y), (x, y+13), (x-10, y)])
-                pg.draw.line(screen, (214, 251, 255),
-                             (x, self.floor_y-126), (x, self.floor_y), 2)
         image = self.image()
         if self.flash and int(self.flash*30) % 2:
             white = pg.mask.from_surface(image, 40).to_surface(
@@ -484,13 +475,12 @@ class SkuaBoss:
         left, right = self.arena.left-camera_x, self.arena.right-camera_x
         pg.draw.line(screen, (170, 207, 232), (left, self.floor_y-2),
                      (right, self.floor_y-2), 3)
-        for edge, direction in ((left, 1), (right, -1)):
-            for row in range(4):
-                y = self.floor_y-34-row*25
-                sway = round(math.sin(time*5+row)*5)
-                pg.draw.lines(screen, (205, 242, 250), False,
-                              [(edge, y), (edge+direction*(18+sway), y-7),
-                               (edge+direction*7, y-14)], 2)
+        fence = getattr(self, 'arena_fence', None)
+        if fence:
+            image = fence
+            screen.blit(image, image.get_rect(midbottom=(round(left+55), self.floor_y+3)))
+            screen.blit(pg.transform.flip(image, True, False),
+                        image.get_rect(midbottom=(round(right-55), self.floor_y+3)))
         for index in range(6):
             x = round(left+55+index*(self.arena.width-110)/5)
             sway = round(math.sin(time*3+index)*7)

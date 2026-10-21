@@ -363,6 +363,8 @@ class Game:
         boss_arena = pg.Rect(boss_left, 350, boss_right-boss_left, 200)
         self.boss = SealBoss(boss_arena, self.region_grounds[2][0].top,
                              self.boss_images, self.art.gameplay['ice-projectile'])
+        self.boss.arena_fence = pg.transform.smoothscale(
+            self.art.environment['arena-post'], (62, 108))
         moved = 0
         for _kind, rect in self.fish:
             if rect.colliderect(self.boss.arena):
@@ -380,6 +382,8 @@ class Game:
                                   self.skua_boss_images,
                                   self.art.gameplay['snowball'],
                                   self.art.gameplay['snowball-charged'])
+        self.skua_boss.arena_fence = pg.transform.smoothscale(
+            self.art.environment['arena-fence'], (132, 102))
         moved = 0
         for _kind, rect in self.fish:
             if rect.colliderect(self.skua_boss.arena):
@@ -959,6 +963,19 @@ class Game:
             if not joins[1]:
                 pg.draw.line(surface, shadow[:3], (width-1, 0),
                              (width-1, visual_height-1), 2)
+            edge_name = {'snow':'snow-edge', 'ice':'ice-edge',
+                         'cave':'cave-edge', 'fracture':'fracture-edge',
+                         'crumble':'fracture-edge', 'sunset':'snow-edge'}[kind]
+            edge = self.art.environment[edge_name]
+            edge_height = min(visual_height, 38 if variant == 'thin' else 50)
+            edge_width = max(30, round(edge.get_width()*edge_height/edge.get_height()))
+            edge = pg.transform.smoothscale(edge, (edge_width, edge_height))
+            # Painted end caps break the rectangular silhouette but stay inside
+            # the collision-aligned opaque surface.
+            surface.blit(edge, (0, 0))
+            if width >= edge_width*2+35:
+                surface.blit(pg.transform.flip(edge, True, False),
+                             (width-edge_width, 0))
             self.platform_textures[key] = surface
         return self.platform_textures[key]
 

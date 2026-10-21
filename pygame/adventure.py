@@ -451,24 +451,24 @@ class AdventureContent:
             if i % 4 == 1:
                 pg.draw.arc(screen, (94, 176, 181),
                             (x-7, y-7, 14, 9), math.pi, math.tau, 1)
-        # Ice columns and kelp groves divide the long swim into readable rooms.
+        # Painted coral groves divide the long swim into readable rooms. They
+        # replace the old polygon columns and match the panorama's brushwork.
         detail = 5 if game.quality=='performance' else 8
+        coral_source = game.art.environment['ocean-coral']
         for i in range(detail):
             world_x = 210+i*225
             x = round(world_x-camera)
-            height = 70+(i*43)%105
-            pg.draw.polygon(screen,(27,91,121),
-                            [(x-38,560),(x+39,560),(x+25,530-height),
-                             (x+7,548-height),(x-9,516-height),(x-24,542-height)])
-            pg.draw.polygon(screen,(48,133,158),
-                            [(x-22,558),(x+18,558),(x+11,536-height),
-                             (x-3,552-height),(x-13,526-height)])
-            pg.draw.line(screen,(119,207,215),(x-7,548),(x+8,531-height),2)
-            for stem in range(2+(i%2)):
-                base_x=x-48+stem*22
-                sway=round(math.sin(game.time*.8+i+stem)*8)
-                pg.draw.lines(screen,(34,124,105),False,
-                              [(base_x,565),(base_x-5,525),(base_x+sway,487)],4)
+            size = (96+(i%3)*12, 76+(i*17)%38)
+            cache_key = ('ocean-coral', size, i%2)
+            coral = getattr(self, '_decor_cache', {}).get(cache_key)
+            if coral is None:
+                if not hasattr(self, '_decor_cache'):
+                    self._decor_cache = {}
+                coral = pg.transform.smoothscale(coral_source, size)
+                if i%2:
+                    coral = pg.transform.flip(coral, True, False)
+                self._decor_cache[cache_key] = coral
+            screen.blit(coral, coral.get_rect(midbottom=(x,568)))
         # Dark foreground arches occasionally frame the route and strengthen
         # the feeling of swimming through submerged ice caverns.
         for i in range(4):

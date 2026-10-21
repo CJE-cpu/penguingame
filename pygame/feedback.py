@@ -94,13 +94,24 @@ class InteractionEffects:
             self.icon_cache[key] = icon
         return icon
 
+    def _burst_image(self, game, age, alpha):
+        size_step = max(0, min(7, round(age*9)))
+        alpha_step = self._alpha_step(alpha)
+        key = ('painted-burst', size_step, alpha_step)
+        image = self.icon_cache.get(key)
+        if image is None:
+            source = game.art.environment['pickup-burst']
+            size = 30+size_step*11
+            image = pg.transform.smoothscale(source, (size, size))
+            image.set_alpha(alpha_step*36)
+            self.icon_cache[key] = image
+        return image
+
     def draw(self, game, screen):
         if not self.bursts:
             return
         layer = self.layer
         layer.fill((0, 0, 0, 0))
-        particle_count = {'high':12, 'balanced':8, 'performance':4}.get(
-            getattr(game, 'quality', 'high'), 8)
         for burst in self.bursts:
             age = 1.2-burst['life']
             x,y = burst['pos'];x -= game.camera_x
@@ -108,14 +119,8 @@ class InteractionEffects:
                 continue
             alpha = round(255*min(1,burst['life']/0.4))
             if age<0.8:
-                radius = round(10+age*70)
-                pg.draw.circle(layer,(*burst['color'],round(alpha*(1-age/0.8))), (round(x),round(y)), radius, 3)
-                for index in range(particle_count):
-                    angle = index*math.tau/particle_count+age*1.8
-                    px,py = round(x+math.cos(angle)*radius),round(y+math.sin(angle)*radius)
-                    size = max(1,round(5*(1-age/0.8)))
-                    pg.draw.line(layer,(*burst['color'],alpha),(px-size,py),(px+size,py),2)
-                    pg.draw.line(layer,(*burst['color'],alpha),(px,py-size),(px,py+size),2)
+                painted = self._burst_image(game, age, alpha)
+                layer.blit(painted, painted.get_rect(center=(round(x),round(y))))
             if burst['kind'] in ('grow','speed','shield'):
                 icon = self._icon(game, burst['kind'], age, alpha)
                 layer.blit(icon,icon.get_rect(center=(round(x),round(y-25-age*35))))
