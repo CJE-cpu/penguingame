@@ -120,6 +120,11 @@ class Game:
         self.big_penguin_right = pg.transform.flip(self.big_penguin_left,True,False)
         self.art = WorldArt(DATA)
         self.ocean_background = load_image('ocean-panorama-v2.png',(1800,HEIGHT)).convert()
+        self.cave_backgrounds = [
+            load_image(name, (WIDTH+400, HEIGHT)).convert()
+            for name in ('cave-blue-interior-v1.png',
+                         'cave-fracture-interior-v1.png')
+        ]
         self.feedback = InteractionEffects()
         self.combat = CombatMotion()
         self.companion = BabyCompanion()
@@ -345,7 +350,7 @@ class Game:
         boss_right = exit_route_edge-28
         boss_arena = pg.Rect(boss_left, 350, boss_right-boss_left, 200)
         self.boss = SealBoss(boss_arena, self.region_grounds[2][0].top,
-                             self.boss_images)
+                             self.boss_images, self.art.gameplay['ice-projectile'])
         moved = 0
         for _kind, rect in self.fish:
             if rect.colliderect(self.boss.arena):
@@ -360,7 +365,9 @@ class Game:
                              skua_right-skua_ground.left-30,
                              skua_ground.top-330)
         self.skua_boss = SkuaBoss(skua_arena, skua_ground.top,
-                                  self.skua_boss_images)
+                                  self.skua_boss_images,
+                                  self.art.gameplay['snowball'],
+                                  self.art.gameplay['snowball-charged'])
         moved = 0
         for _kind, rect in self.fish:
             if rect.colliderect(self.skua_boss.arena):
@@ -889,7 +896,7 @@ class Game:
 
     def platform_texture(self, kind, size, ground=False, joins=(False, False),
                          variant='normal'):
-        """Build a calm, readable ice shelf with minimal repeated detail."""
+        """Build a solid collision-aligned shelf from painted material art."""
         if ground:
             variant = 'ground'
         key = (kind, size, ground, joins, variant)
@@ -901,90 +908,14 @@ class Game:
             # prevents decorative shading from punching translucent lines or
             # panels through the body.
             surface = pg.Surface((width, visual_height)).convert()
-            cap, body, shadow = self.platform_palettes[kind]
-            dip = 10 if ground else 9
-            # The collision rectangle and artwork share one solid silhouette.
-            # This keeps the shelf readable and avoids holes at its lower
-            # corners when several pieces form a continuous route.
-            surface.fill((*body[:3], 255))
-            pg.draw.rect(surface, (*shadow[:3], 255),
-                         (0, 0, width, visual_height), 2)
-            inner_top = min(visual_height-3, dip+7)
-            pg.draw.rect(surface, (*cap[:3], 42),
-                         (3, inner_top, max(1, width-6),
-                          max(1, visual_height-inner_top-3)))
-            pg.draw.line(surface, (*shadow, 70),
-                         (4, min(visual_height-3, inner_top+11)),
-                         (width-5, min(visual_height-3, inner_top+9)), 1)
-            profiles = {
-                'snow': (0, 2, 1, 3), 'ice': (1, 4, 0, 2),
-                'cave': (3, 1, 4, 2), 'fracture': (2, 5, 1, 4),
-                'crumble': (4, 2, 5, 1), 'sunset': (1, 3, 2, 4),
-            }
-            q1, mid, q3, end = profiles[kind]
-            cap_points = [(0, 0), (width, 0), (width, dip-2+end),
-                          (width*3//4, dip+q3), (width//2, dip-1+mid),
-                          (width//4, dip+q1), (0, dip-2+end)]
-            pg.draw.polygon(surface, cap, cap_points)
-            pg.draw.lines(surface, (255, 255, 255, 190), False,
-                          [(2, 1), (width//2, 2), (width-3, 1)], 2)
-            pg.draw.lines(surface, shadow, False,
-                          [(0, dip-2), (width//4, dip+1),
-                           (width//2, dip-1), (width, dip-2)], 2)
-            if not ground:
-                # Subtle end brackets echo the solid beam construction in the
-                # reference while preserving the game's ice palette.
-                bracket_width = min(5, max(3, width//28))
-                pg.draw.rect(surface, (*shadow[:3], 190),
-                             (1, dip, bracket_width, visual_height-dip-1))
-                pg.draw.rect(surface, (*shadow[:3], 190),
-                             (width-bracket_width-1, dip, bracket_width,
-                              visual_height-dip-1))
-            band_y = min(visual_height-4, dip+5)
-            facet_count = min(2, max(1, width//190))
-            for facet in range(facet_count):
-                center = (facet+1)*width//(facet_count+1)
-                bottom = min(visual_height-4, band_y+9+(facet%2)*5)
-                pg.draw.lines(surface, (*shadow, 105), False,
-                              [(center, band_y), (center-4, bottom-3),
-                               (center+2, bottom)], 1)
-            # One broad seam per long shelf adds depth without a noisy pattern.
-            if width >= 145:
-                seam_x = width // 2 + (17 if width % 3 else -19)
-                seam_bottom = min(visual_height-3, 24 if ground else visual_height-5)
-                pg.draw.lines(surface, (*shadow, 135), False,
-                              [(seam_x, 12), (seam_x-5, 18),
-                               (seam_x+2, seam_bottom)], 1)
-            # Distinct geology makes each region readable at a glance while
-            # preserving the solid collision-aligned silhouette.
-            detail_y = min(visual_height-5, dip+12)
-            if kind == 'snow':
-                for x in range(18, width, 42):
-                    pg.draw.arc(surface, (255,255,255),
-                                (x-11, 2, 22, 9), math.pi, math.tau, 2)
-            elif kind == 'ice':
-                for x in range(24, width, 55):
-                    pg.draw.lines(surface, cap, False,
-                                  [(x, detail_y+8), (x+9, detail_y-3),
-                                   (x+18, detail_y+7)], 2)
-            elif kind == 'cave':
-                for y in range(detail_y, visual_height-4, 11):
-                    offset = 12 if (y//11)%2 else 0
-                    pg.draw.line(surface, shadow, (4, y), (width-5, y), 1)
-                    for x in range(offset+28, width, 62):
-                        pg.draw.line(surface, shadow, (x, y),
-                                     (x-4, min(visual_height-3, y+7)), 1)
-            elif kind in ('fracture', 'crumble'):
-                crack_color = (108,91,169) if kind == 'crumble' else shadow
-                for x in range(32, width, 74):
-                    pg.draw.lines(surface, crack_color, False,
-                                  [(x, 4), (x-6, detail_y),
-                                   (x+4, min(visual_height-3, detail_y+10))], 2)
-            elif kind == 'sunset':
-                pg.draw.line(surface, (255,218,207), (5, detail_y),
-                             (width-6, max(3, detail_y-2)), 2)
-                for x in range(26, width, 64):
-                    pg.draw.circle(surface, cap, (x, detail_y+9), 3)
+            _cap, body, shadow = self.platform_palettes[kind]
+            surface.fill(body[:3])
+            material = pg.transform.smoothscale(
+                self.art.platform_materials[kind], (width, visual_height))
+            surface.blit(material, (0, 0))
+            # Generated texture edges can be feathered. An opaque inset frame
+            # preserves a continuous silhouette where neighboring shelves meet.
+            pg.draw.rect(surface, shadow[:3], surface.get_rect(), 2)
             self.platform_textures[key] = surface
         return self.platform_textures[key]
     def draw_background(self, screen):

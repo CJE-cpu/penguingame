@@ -8,7 +8,7 @@ class SealBoss:
     MAX_HITS = 3
     SCORE = 500
 
-    def __init__(self, arena, floor_y, images):
+    def __init__(self, arena, floor_y, images, projectile_image=None):
         self.arena = pg.Rect(arena)
         self.floor_y = floor_y
         self.images = images
@@ -27,6 +27,7 @@ class SealBoss:
         self.shake = 0.0
         self.ammo = 0
         self.projectiles = []
+        self.projectile_image = projectile_image
 
     def start(self):
         if self.defeated or self.active:
@@ -243,10 +244,11 @@ class SealBoss:
         for shot in self.projectiles:
             x = round(shot['pos'].x-camera_x)
             y = round(shot['pos'].y)
-            pg.draw.polygon(screen, (205, 247, 255),
-                            [(x-11,y), (x-3,y-8), (x+11,y-3),
-                             (x+7,y+7), (x-5,y+6)])
-            pg.draw.line(screen, (91, 185, 217), (x-7,y+2), (x+6,y-3), 2)
+            if self.projectile_image:
+                image = self.projectile_image
+                if shot.get('velocity', pg.Vector2()).x < 0:
+                    image = pg.transform.flip(image, True, False)
+                screen.blit(image, image.get_rect(center=(x, y)))
 
     def draw_hud(self, game, screen):
         if not self.active or self.defeated:
@@ -272,7 +274,8 @@ class SkuaBoss:
     MAX_HITS = 3
     SCORE = 700
 
-    def __init__(self, arena, floor_y, images):
+    def __init__(self, arena, floor_y, images, snowball_image=None,
+                 charged_snowball_image=None):
         self.arena = pg.Rect(arena)
         self.floor_y = floor_y
         self.images = images
@@ -291,6 +294,8 @@ class SkuaBoss:
         self.direction = -1
         self.flash = 0.0
         self.snowballs = []
+        self.snowball_image = snowball_image
+        self.charged_snowball_image = charged_snowball_image
         self.contact_grace = 0.0
 
     def start(self):
@@ -497,10 +502,10 @@ class SkuaBoss:
             return
         for ball in self.snowballs:
             rect = ball['rect'].move(-camera_x, 0)
-            color = (225, 247, 252) if not ball['kicked'] else (255, 230, 126)
-            pg.draw.circle(screen, (84, 155, 190), rect.center, 18)
-            pg.draw.circle(screen, color, rect.center, 15)
-            pg.draw.arc(screen, (255,255,255), rect.inflate(-9,-9), math.pi, math.tau, 2)
+            image = (self.charged_snowball_image if ball['kicked']
+                     else self.snowball_image)
+            if image:
+                screen.blit(image, image.get_rect(center=rect.center))
         rect = self.rect.move(-camera_x, 0)
         image = self.image()
         if self.flash and int(self.flash*30)%2:

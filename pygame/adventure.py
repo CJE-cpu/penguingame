@@ -279,10 +279,8 @@ class AdventureContent:
             if crystal['found']:
                 continue
             rect = crystal['rect'].move(-game.camera_x,round(math.sin(game.time*3+index)*3))
-            cx,cy = rect.center
-            pg.draw.polygon(screen,(43,133,195),[(cx,rect.top),(rect.right,cy),(cx,rect.bottom),(rect.left,cy)])
-            pg.draw.polygon(screen,(148,238,255),[(cx,rect.top+2),(cx+7,cy),(cx,rect.bottom-3),(cx-7,cy)])
-            pg.draw.line(screen,(239,255,255),(cx,rect.top+4),(cx-5,cy),2)
+            image = game.art.gameplay['research-crystal']
+            screen.blit(image, image.get_rect(center=rect.center))
         for journal in self.journals:
             if journal['found']:
                 continue

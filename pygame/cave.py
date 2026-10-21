@@ -29,10 +29,8 @@ class CaveExpedition:
         self.entrance_image.set_alpha(178)
         self.arch_image = None
         self.atmosphere_layer = pg.Surface((800, 600), pg.SRCALPHA)
-        self.wall_layer = pg.Surface((800, 600), pg.SRCALPHA)
-        self.ceiling_layer = pg.Surface((800, 155), pg.SRCALPHA)
-        self.rock_layer = pg.Surface((800, 600), pg.SRCALPHA)
         self.mist_layer = pg.Surface((800, 92), pg.SRCALPHA)
+        self.background = game.cave_backgrounds[index]
         if index == 0:
             ground = [(0,550,650,50),(720,550,520,50),(1320,550,880,50)]
             ledges = [(370,445,180,24),(570,345,170,24),(810,445,190,24),
@@ -62,30 +60,6 @@ class CaveExpedition:
                         if i not in self.state['defeated']]
         self.player = pg.Rect(55,498,40,52)
         self.reset_position()
-        self.build_static_ceiling()
-
-    def build_static_ceiling(self):
-        """Render cave decoration that never changes once per expedition."""
-        ceiling = self.ceiling_layer
-        ceiling.fill((0, 0, 0, 0))
-        ceiling_color = (17,54,75,235) if self.index == 0 else (43,35,72,235)
-        ceiling_points = [(0, 0), (800, 0)]
-        for x in range(800, -21, -20):
-            depth = 66+((x//20)*17+self.index*29)%55
-            ceiling_points.append((x, depth))
-        pg.draw.polygon(ceiling, ceiling_color, ceiling_points)
-        strata = (74,128,151,150) if self.index == 0 else (91,81,132,155)
-        for y in (23, 42, 58):
-            points = [(x, y+round(math.sin(x*.018+y)*5))
-                      for x in range(-10, 821, 18)]
-            pg.draw.lines(ceiling, strata, False, points, 2)
-        icicle = (91,157,180,170) if self.index == 0 else (111,105,157,170)
-        for x in range(22, 800, 73):
-            length = 18+(x*7+self.index*19)%43
-            pg.draw.polygon(ceiling, icicle,
-                            [(x-9, 68), (x+9, 68), (x, 68+length)])
-            pg.draw.line(ceiling, (189,235,242,150),
-                         (x-5, 70), (x, 68+length-4), 2)
 
     def say(self, text):
         self.notice,self.notice_left = text,3.0
@@ -323,67 +297,20 @@ class CaveExpedition:
 
     def draw(self, game, screen):
         # One continuous panorama covers the full scroll range without seams.
-        drift = round(400*self.camera/(self.WIDTH-800))
-        screen.blit(game.scene_backgrounds[2],(-drift,0))
         atmosphere = self.atmosphere_layer
         atmosphere.fill((0, 0, 0, 0))
         atmosphere.fill((8,27,50,55) if self.index==0 else (30,19,50,75))
+        background_drift = round(400 * max(0, min(1, self.camera /
+                                                   (self.WIDTH-800))))
+        screen.blit(self.background, (-background_drift, 0))
         screen.blit(atmosphere,(0,0))
-        # World-space mineral seams move with the camera and break up the
-        # repeated panorama. Blue crystal veins distinguish the first cavern;
-        # violet sediment and old fractures distinguish the collapsed shelf.
-        wall = self.wall_layer
-        wall.fill((0, 0, 0, 0))
-        vein = (72,205,224,48) if self.index == 0 else (178,121,196,45)
-        shadow = (7,36,58,48) if self.index == 0 else (28,20,55,52)
-        vein_count = {'performance':9, 'balanced':13, 'high':17}[game.quality]
-        for i in range(vein_count):
-            world_x = 65+i*139
-            x = round(world_x-self.camera*0.42)
-            base_y = 165+(i*73)%295
-            direction = -1 if i%2 else 1
-            points = [(x, base_y), (x+direction*13, base_y-27),
-                      (x+direction*29, base_y-11), (x+direction*43, base_y-43)]
-            pg.draw.lines(wall, shadow, False, [(px+3, py+4) for px,py in points], 5)
-            pg.draw.lines(wall, vein, False, points, 2)
-            for branch in (1, 2):
-                px, py = points[branch]
-                fork = -direction if (i+branch)%2 else direction
-                pg.draw.line(wall, vein, (px, py), (px+fork*13, py-12), 1)
-        if self.index == 0:
-            for i in range(10):
-                x = round(70+i*241-self.camera*0.3)
-                y = 350+(i*47)%130
-                pg.draw.polygon(wall, (95,222,238,58),
-                                [(x,y+35),(x+13,y),(x+25,y+35)])
-                pg.draw.line(wall, (206,252,255,75), (x+13,y+3), (x+13,y+31), 2)
-        else:
-            for i in range(14):
-                x = round(35+i*169-self.camera*0.34)
-                y = 185+(i*61)%280
-                pg.draw.ellipse(wall, (42,31,73,70), (x,y,70+(i%3)*18,15), 3)
-        screen.blit(wall, (0, 0))
-        # Layered ceiling and wall strata make the caverns feel enclosed instead
-        # of like the outdoor ice tiles placed over a dark background.
-        screen.blit(self.ceiling_layer, (0, 0))
-        # Distant translucent rock silhouettes stay behind the playable ledges.
-        rocks = self.rock_layer
-        rocks.fill((0, 0, 0, 0))
-        rock_layers = 1 if game.quality == 'performance' else 2
-        for layer in range(rock_layers):
-            for i in range(16):
-                x = round(i*205-self.camera*(0.18+layer*0.2))
-                height = 20+(i*43+layer*21)%80
-                color = (30+layer*10,69+layer*8,99+layer*9,45)
-                pg.draw.polygon(rocks,color,[(x-25,85),(x+80,85),(x+35,85+height)])
-                pg.draw.polygon(rocks,color,[(x-30,550),(x+120,550),(x+60,480-(i%3)*23)])
-        screen.blit(rocks,(0,0))
+        # Mineral seams, strata and distant rock silhouettes are baked into the
+        # panorama, avoiding duplicate geometric overlays and per-frame work.
         dust_count = {'performance':12, 'balanced':22, 'high':35}[game.quality]
         for i in range(dust_count):
             x = round((i*137+self.time*6)%self.WIDTH-self.camera*0.65)
             y = 240+(i*67)%300
             pg.draw.circle(screen,(80,132,154),(x,y),1)
-        pg.draw.rect(screen,(20,69,96),(0,550,800,50))
         # Low mist softens the hard join between the scrolling wall and floor.
         mist = self.mist_layer
         mist.fill((0, 0, 0, 0))
@@ -433,10 +360,9 @@ class CaveExpedition:
             if i in self.state['stones']:
                 continue
             rect = stone.move(-self.camera,round(math.sin(self.time*2+i)*3))
-            radius = 21+round(math.sin(self.time*3+i)*3)
-            pg.draw.circle(screen,(34,87,113),rect.center,radius)
-            pg.draw.polygon(screen,(128,229,246),[rect.midtop,rect.midright,rect.midbottom,rect.midleft])
-            pg.draw.line(screen,'white',rect.midtop,(rect.centerx-4,rect.centery),2)
+            image = game.art.gameplay[
+                'seal-stone-blue' if self.index == 0 else 'seal-stone-violet']
+            screen.blit(image, image.get_rect(center=rect.center))
         game.art.place(screen,'lever-up' if self.state['lever'] else 'lever-down',self.lever.move(-self.camera,0).midbottom)
         if not self.state['lever']:
             gate = self.gate.move(-self.camera,0)

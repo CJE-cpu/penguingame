@@ -139,6 +139,19 @@ class WorldArt:
             'relic-open': fit_cycle([artifacts[3]], (78, 78), padding=1,
                                     anchor='center')[0],
         }
+        gameplay = atlas_cells(data/'gameplay-objects-atlas-v1.png', 3, 2)
+        gameplay_specs = (
+            ('research-crystal', (28, 34)), ('seal-stone-blue', (44, 54)),
+            ('seal-stone-violet', (44, 54)), ('ice-projectile', (34, 24)),
+            ('snowball', (38, 38)), ('snowball-charged', (42, 42)),
+        )
+        self.gameplay = {
+            name: fit_cycle([cell], size, padding=0, anchor='center')[0]
+            for (name, size), cell in zip(gameplay_specs, gameplay)
+        }
+        self.platform_materials = dict(zip(
+            ('snow', 'ice', 'cave', 'fracture', 'crumble', 'sunset'),
+            atlas_cells(data/'platform-materials-atlas-v1.png', 3, 2)))
 
     def fish(self, kind, clock):
         return self.fishes[kind][int(clock/0.2)%4]
