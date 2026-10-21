@@ -580,7 +580,7 @@ class AdventureChecks(unittest.TestCase):
 
     def test_cavern_puzzle_persists_and_rewards_only_once(self):
         g = self.game
-        for index in range(2):
+        for index in range(len(g.caves)):
             g.player.midbottom = g.caves[index]['rect'].midbottom
             g.content.action(g)
             cave = g.cave_expedition
@@ -626,7 +626,7 @@ class AdventureChecks(unittest.TestCase):
             self.assertIsNone(g.cave_expedition)
             self.assertEqual(g.score,score+250)
             self.assertEqual(g.content.wallet,wallet+3)
-            return_platform = min(g.region_ledges[2 if index==0 else 4],key=lambda p:p.y)
+            return_platform = min(g.region_ledges[g.caves[index]['region']],key=lambda p:p.y)
             self.assertEqual(g.player.bottom, return_platform.top)
             self.assertGreaterEqual(g.player.centerx, return_platform.left+60)
             self.assertLessEqual(g.player.centerx, return_platform.right-60)
@@ -1577,10 +1577,11 @@ class AdventureChecks(unittest.TestCase):
         c.diving = True
         c.swimmer.update(c.ocean_fish[0][1].center)
         g.update(1/60)
-        self.assertEqual(len(c.ocean_rings),1)
+        self.assertEqual(len(c.ocean_rings),0)
         c.swimmer.update(100,590)
         g.update(0.1)
         self.assertEqual(c.swimmer.y,500)
+
         c.swimmer.update(100,80)
         g.update(0.1)
         self.assertEqual(c.swimmer.y,125)
@@ -1592,6 +1593,19 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(ocean_labels[0].startswith('남은 시간 '))
         g.update(0.7)
         self.assertFalse(c.ocean_rings)
+
+    def test_second_dive_site_enters_and_returns_at_far_ocean_exit(self):
+        g = self.game
+        c = g.content
+        site = c.dive_sites[1]
+        g.player.midbottom = site['rect'].midbottom
+        c.action(g)
+        self.assertTrue(c.diving)
+        self.assertEqual(tuple(c.swimmer), site['ocean_start'])
+        self.assertEqual(tuple(c.ocean_exit), site['ocean_start'])
+        c.action(g)
+        self.assertFalse(c.diving)
+        self.assertEqual(g.player.midbottom, site['rect'].midbottom)
 
     def test_ocean_beacons_restore_air_and_unlock_relic(self):
         g = self.game

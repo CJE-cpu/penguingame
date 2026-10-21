@@ -166,7 +166,7 @@ class AdventureSave:
                 baby['rescued'] = bool(rescued)
             game.rescued = sum(baby['rescued'] for baby in game.babies)
             cave_states = data.get('caves', [])
-            if len(cave_states) != len(game.caves):
+            if not isinstance(cave_states, list) or len(cave_states) > len(game.caves):
                 raise ValueError('Invalid cave state')
             for cave, saved in zip(game.caves, cave_states):
                 expedition = saved.get('expedition', {})

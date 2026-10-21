@@ -33,8 +33,15 @@ class AdventureContent:
             self.journals.append({'rect': pg.Rect(platform.left+24, platform.top-32, 23, 29), 'found': False})
         platform = min(game.region_ledges[5], key=lambda p:p.y)
         self.lever = pg.Rect(platform.left+20, platform.top-34, 25, 34)
-        ground = game.region_grounds[0][0]
-        self.hole = pg.Rect(ground.right-95,ground.top-17,64,17)
+        first_ground = game.region_grounds[0][0]
+        far_ground = game.region_grounds[3][-1]
+        self.dive_sites = [
+            {'rect': pg.Rect(first_ground.right-95, first_ground.top-17, 64, 17),
+             'ocean_start': (100, 115)},
+            {'rect': pg.Rect(far_ground.left+135, far_ground.top-17, 64, 17),
+             'ocean_start': (1700, 455)},
+        ]
+        self.hole = self.dive_sites[0]['rect']
         self.crystals = []
         for ledges in game.region_ledges:
             platform = ledges[-2]
@@ -46,6 +53,7 @@ class AdventureContent:
         self.oxygen = OXYGEN_DURATION
         self.swimmer = pg.Vector2(100, 115)
         self.dive_return = None
+        self.ocean_exit = pg.Vector2(100, 115)
         self.ocean_rings = []
         self.ocean_fish = [(kind, pg.Rect(x,y,36,24)) for kind,x,y in
                            [('orange',300,230),('blue',550,390),('orange',800,220),
@@ -71,7 +79,7 @@ class AdventureContent:
             self.book_open = False
             return
         if self.diving:
-            if self.swimmer.distance_to((100,115)) < 85:
+            if self.swimmer.distance_to(self.ocean_exit) < 85:
                 self.leave_ocean(game)
             else:
                 self.say('왼쪽 위 얼음 구멍으로 돌아가세요!')
@@ -91,13 +99,16 @@ class AdventureContent:
             self.quests[2] = True
             self.say('길 안내 깃발을 세웠어요! 마지막 친구에게 가세요.')
             return
-        if self.nearby(game,self.hole,65):
+        dive_site = next((site for site in self.dive_sites
+                          if self.nearby(game, site['rect'], 65)), None)
+        if dive_site:
             if game.carried_baby is not None:
                 self.say('친구를 먼저 이글루에 데려다 주세요.')
             else:
                 self.diving = True
                 self.oxygen = OXYGEN_DURATION
-                self.swimmer.update(100,115)
+                self.swimmer.update(dive_site['ocean_start'])
+                self.ocean_exit.update(dive_site['ocean_start'])
                 game.animation.swim_angle = 0.0
                 game.animation.swim_movement.update(0,0)
                 self.dive_return = game.player.midbottom
@@ -223,7 +234,6 @@ class AdventureContent:
                 game.score += points
                 self.wallet += 1
                 game.audio.play('collect')
-                self.ocean_rings.append((fish.center,0.65))
                 self.say(f'바닷속 물고기 발견! +{points}점')
             else:
                 remaining.append((kind,fish))
@@ -254,7 +264,7 @@ class AdventureContent:
                 return ['↓ + 이동: 얼음 껍질 깨기','E: 물고기 3마리 나눠 주기','위쪽 옆길의 깃발 레버를 찾아 E'][index]
         if not self.quests[2] and self.nearby(game,self.lever):
             return 'E: 길 안내 깃발 세우기'
-        if self.nearby(game,self.hole):
+        if any(self.nearby(game, site['rect']) for site in self.dive_sites):
             return 'E: 바닷속 탐험 · 산소 35초 · 구멍으로 돌아오기'
         if self.nearby(game,game.checkpoints[-1]) and game.ending_unlocked:
             return f'E: 모험 마무리 · {game.ending_preview_name()} / F: 보금자리 활동'
@@ -286,15 +296,14 @@ class AdventureContent:
                 continue
             rect = journal['rect'].move(-game.camera_x,round(math.sin(game.time*3)*3))
             game.art.place(screen,'journal',rect.midbottom)
-        hole = self.hole.move(-game.camera_x,0)
-        # Sink the opening into the snow surface. Anchoring the sprite by its
-        # bottom made the dark rim read as an object hovering above the shelf.
-        image = game.art.objects['dive-hole']
-        center = (hole.centerx,hole.bottom+2)
-        pg.draw.ellipse(screen,(38,103,137),(center[0]-37,center[1]-8,74,17))
-        screen.blit(image,image.get_rect(center=center))
-        pg.draw.arc(screen,(226,248,252),(center[0]-39,center[1]-10,78,19),
-                    math.pi,math.tau,2)
+        for site in self.dive_sites:
+            hole = site['rect'].move(-game.camera_x,0)
+            image = game.art.objects['dive-hole']
+            center = (hole.centerx,hole.bottom+2)
+            pg.draw.ellipse(screen,(38,103,137),(center[0]-37,center[1]-8,74,17))
+            screen.blit(image,image.get_rect(center=center))
+            pg.draw.arc(screen,(226,248,252),(center[0]-39,center[1]-10,78,19),
+                        math.pi,math.tau,2)
         for index,baby in enumerate(game.babies):
             if self.quests[index] or baby['rescued']:
                 continue
@@ -420,11 +429,13 @@ class AdventureContent:
                     coral = pg.transform.flip(coral, True, False)
                 self._decor_cache[cache_key] = coral
             screen.blit(coral, coral.get_rect(midbottom=(x,568)))
-        game.art.place(screen,'dive-hole',(100-camera,94))
+        game.art.place(screen,'dive-hole',(self.ocean_exit.x-camera,
+                                           self.ocean_exit.y-21))
         # A breathing ring connects the surface opening to its interaction area.
-        if camera<170:
-            exit_center = (round(100-camera),115)
-            pg.draw.ellipse(screen,(162,238,239),(exit_center[0]-47,103,94,24),2)
+        exit_center = (round(self.ocean_exit.x-camera), round(self.ocean_exit.y))
+        if -60 < exit_center[0] < 860:
+            pg.draw.ellipse(screen,(162,238,239),
+                            (exit_center[0]-47,exit_center[1]-12,94,24),2)
         for i in range(10):
             x = i*190-camera+70
             game.art.place(screen,'ocean-rock' if i%3==0 else 'seaweed',(x,560))
@@ -480,7 +491,7 @@ class AdventureContent:
                 angle = i*math.pi/4
                 dot = (round(center[0]+math.cos(angle)*radius),round(center[1]+math.sin(angle)*radius))
                 pg.draw.circle(screen,(255,230,141),dot,max(1,round(life*5)))
-        return_seconds = self.swimmer.distance_to((100,115))/235+3
+        return_seconds = self.swimmer.distance_to(self.ocean_exit)/235+3
         warning = self.oxygen<return_seconds+6
         oxygen_color = (216,110,82) if warning else (51,155,175)
         game.ui.panel(screen,(286,14,228,58),dark=True)

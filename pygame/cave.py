@@ -6,7 +6,7 @@ from enemies import Enemy
 
 class CaveExpedition:
     WIDTH = 2200
-    TITLES = ('푸른 결정의 동굴','무너진 빙붕의 동굴')
+    TITLES = ('얼음 결정 동굴', '서리 기둥 동굴', '무너진 빙붕 동굴')
 
     def __init__(self, game, index):
         self.index = index
@@ -30,13 +30,21 @@ class CaveExpedition:
         self.arch_image = None
         self.atmosphere_layer = pg.Surface((800, 600), pg.SRCALPHA)
         self.mist_layer = pg.Surface((800, 92), pg.SRCALPHA)
-        self.background = game.cave_backgrounds[index]
+        self.background = game.cave_backgrounds[index % len(game.cave_backgrounds)]
         if index == 0:
             ground = [(0,550,650,50),(720,550,520,50),(1320,550,880,50)]
             ledges = [(370,445,180,24),(570,345,170,24),(810,445,190,24),
                       (1100,345,170,24),(1340,445,170,24),(1540,345,190,24)]
             self.stones = [pg.Rect(590,315,24,30),pg.Rect(960,520,24,30),pg.Rect(1600,315,24,30)]
             self.arch = pg.Rect(865,450,120,62) # Ground-to-ceiling clearance: 38 px.
+        elif index == 1:
+            ground = [(0,550,470,50),(570,550,550,50),(1270,550,930,50)]
+            ledges = [(260,445,150,24),(500,365,160,24),(760,285,180,24),
+                      (1030,385,150,24),(1250,455,150,24),(1500,365,170,24),
+                      (1740,285,170,24)]
+            self.stones = [pg.Rect(545,335,24,30),pg.Rect(840,255,24,30),
+                           pg.Rect(1800,255,24,30)]
+            self.arch = None
         else:
             ground = [(0,550,530,50),(640,550,460,50),(1390,550,810,50)]
             ledges = [(310,445,160,24),(540,425,160,24),(810,345,180,24),
@@ -109,7 +117,8 @@ class CaveExpedition:
 
     def leave(self, game, shortcut):
         if shortcut:
-            platform = min(game.region_ledges[2 if self.index==0 else 4],key=lambda p:p.y)
+            region = game.caves[self.index].get('region', 2 if self.index==0 else 4)
+            platform = min(game.region_ledges[region],key=lambda p:p.y)
             game.player.midbottom = (platform.centerx,platform.top)
             if not self.state['cleared']:
                 self.state['cleared'] = True
@@ -119,7 +128,7 @@ class CaveExpedition:
             else:
                 game.content.say('개방한 지름길로 돌아왔어요.')
         else:
-            region = 2 if self.index == 0 else 4
+            region = game.caves[self.index].get('region', 2 if self.index == 0 else 4)
             entrance = game.caves[self.index]['rect']
             supports = [ground for ground in game.region_grounds[region]
                         if ground.left <= entrance.centerx <= ground.right]

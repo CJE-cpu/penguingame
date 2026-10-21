@@ -338,8 +338,10 @@ class Game:
         self._checkpoint_contact = None
         self.spawn = (55, 498)
         self.crumbles = {}  # key -> (elapsed since stepped on, time left hidden)
-        self.caves = [{'rect': pg.Rect(self.region_grounds[i][-1].right - 210, self.region_grounds[i][-1].top-130, 180, 130),
-                       'found': False, 'treasure': False} for i in (2, 4)]
+        self.caves = [{'rect': pg.Rect(self.region_grounds[i][-1].right - 210,
+                                       self.region_grounds[i][-1].top-130, 180, 130),
+                       'region': i, 'found': False, 'treasure': False}
+                      for i in (1, 2, 4)]
         self.babies = []
         for region in (1, 3, 5):
             platform = min(self.region_ledges[region], key=lambda p:p.y)
@@ -854,7 +856,8 @@ class Game:
         obstacles += [self.igloo_image.get_rect(midbottom=r.midbottom) for r in self.checkpoints]
         obstacles += [self.cave_image.get_rect(midbottom=c['rect'].midbottom) for c in self.caves]
         obstacles += [self.baby_image.get_rect(midbottom=b['rect'].midbottom) for b in self.babies]
-        obstacles += [j['rect'] for j in self.content.journals] + [self.content.hole, self.content.lever]
+        obstacles += [j['rect'] for j in self.content.journals]
+        obstacles += [site['rect'] for site in self.content.dive_sites] + [self.content.lever]
         obstacles += [c['rect'] for c in self.content.crystals]
         for enemy in self.enemies:
             # Reserve the full patrol plus enough reaction room for a player who
@@ -1508,13 +1511,8 @@ class Game:
                 self.audio.play('collect')
                 if kind == 'blue':
                     self.content.wallet += 1
-                    detail = ' · 먹이 +2'
                 elif kind == 'gold':
                     self.invincible = max(self.invincible, 1.25)
-                    detail = ' · 보호 1.2초'
-                else:
-                    detail = ''
-                self.feedback.emit(rect.center, f'+{FISH_TYPES[kind]}{detail}', (255,232,151), kind='fish')
             else:
                 remaining_fish.append((kind, rect))
         self.fish = remaining_fish
