@@ -44,6 +44,20 @@
                              color=(120, 200, 255), count=12, radius=20)
             return
 
+        was_grounded = getattr(self, 'was_grounded', self.on_ground)
+        if self.on_ground and not was_grounded and self.velocity_y >= 180:
+            self.spawn_dust(self.player.centerx, self.player.bottom + 2,
+                            count=10, radius=14, color=(206, 230, 240), gravity=150)
+        if self.on_ground and abs(self.velocity_x) > 120:
+            if not hasattr(self, 'dust_timer'):
+                self.dust_timer = 0.0
+            self.dust_timer -= 1.0 / 60.0
+            if self.dust_timer <= 0:
+                self.spawn_dust(self.player.centerx, self.player.bottom + 2,
+                                count=3, radius=8, color=(206, 230, 240), gravity=150)
+                self.dust_timer = 0.08
+        self.was_grounded = self.on_ground
+
     def shake_camera(self, amount, duration=0.2):
         self.camera_shake = max(getattr(self, 'camera_shake', 0.0), amount)
         self.camera_tremor = max(getattr(self, 'camera_tremor', 0.0), duration)
@@ -53,6 +67,12 @@
             self.particles = []
         self.particles.extend(burst_particles(x, y, count=count, radius=radius,
                                              color=color, gravity=gravity))
+
+    def spawn_dust(self, x, y, color=(206, 230, 240), count=6, radius=10, gravity=150):
+        if not hasattr(self, 'particles'):
+            self.particles = []
+        self.particles.extend(dust_particles(x, y, count=count, radius=radius,
+                                            color=color, gravity=gravity))
 
     def update_particles(self, dt):
         if not hasattr(self, 'particles'):

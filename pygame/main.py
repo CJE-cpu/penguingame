@@ -31,6 +31,10 @@ def make_burst(x, y, count=12, radius=32, color=(255, 220, 110), gravity=260):
     return particles
 
 
+def dust_particles(x, y, count=8, radius=12, color=(206, 230, 240), gravity=150):
+    return make_burst(x, y, count=count, radius=radius, color=color, gravity=gravity)
+
+
 def draw_particles(screen, particles, camera_x=0):
     for p in list(particles):
         if p.life <= 0:
