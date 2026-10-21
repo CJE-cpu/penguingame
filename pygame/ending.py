@@ -39,6 +39,21 @@ class EndingSequence:
         veil.fill((8, 28, 48, round(210*(1-age))))
         screen.blit(veil, (0, 0))
 
+    def _backdrop(self, game, screen, index):
+        """Draw one ending-specific panorama with a subtle cinematic finish."""
+        screen.blit(game.ending_backgrounds[index], (0, 0))
+        vignette = pg.Surface(screen.get_size(), pg.SRCALPHA)
+        pg.draw.rect(vignette, (3, 18, 38, 72), (0, 0, 800, 600), 22)
+        screen.blit(vignette, (0, 0))
+        # Sparse foreground snow gives the still paintings gentle motion.
+        count = 14 if game.quality == 'performance' else 24
+        for index in range(count):
+            x = round((index*97+self.time*(11+index%3*4))%840)-20
+            y = round((index*53+self.time*(19+index%4*3))%420)+4
+            shade = 190+index%3*20
+            pg.draw.circle(screen, (shade, shade+10, 255), (x, y),
+                           1+(index%7==0))
+
     def _challenge_badges(self, game, screen):
         """Show optional run goals without changing the ending score."""
         ui = game.ui
@@ -68,9 +83,7 @@ class EndingSequence:
                     'white' if index == self.choice else (25,57,76), center=True)
 
     def _home_scene(self, game, screen):
-        screen.blit(game.scene_backgrounds[5], (0, 0))
-        pg.draw.rect(screen, (219, 243, 248), (0, 420, 800, 180))
-        game.art.grounded(screen, game.igloo_image, (655, 422))
+        self._backdrop(game, screen, 0)
         progress = min(1.0, self.time/4.0)
         x = round(100+progress*385)
         bounce = round(abs(math.sin(self.time*6))*4)
@@ -97,26 +110,29 @@ class EndingSequence:
         self._caption(game, screen, self.title, lines[self.ending_type-1])
 
     def _feast_scene(self, game, screen):
-        screen.blit(game.scene_backgrounds[5], (0, 0))
+        self._backdrop(game, screen, 3 if self.ending_type == 4 else 1)
         glow = pg.Surface((800, 600), pg.SRCALPHA)
         for radius in range(180, 20, -20):
             pg.draw.circle(glow, (255, 210, 105, 5), (400, 285), radius)
+        if self.ending_type == 4:
+            pulse = 28+round(math.sin(self.time*3)*5)
+            pg.draw.circle(glow, (255, 230, 126, 72), (548, 357), pulse, 3)
         screen.blit(glow, (0, 0))
-        game.art.grounded(screen, game.igloo_image, (400, 365))
         frames = game.animation.cycles['idle']
         adult = frames[int(self.time/0.35)%len(frames)]
-        screen.blit(adult, adult.get_rect(midbottom=(400, 370)))
+        adult_y = 382 if self.ending_type == 4 else 370
+        screen.blit(adult, adult.get_rect(midbottom=(400, adult_y)))
         companion_x = (275, 325, 475)[:game.rescued]
         for index, x in enumerate(companion_x):
             state = 'jump' if int(self.time*2+index)%2 else 'idle'
             baby = game.art.baby(state, self.time+index*.3, index == 2)
-            screen.blit(baby, baby.get_rect(midbottom=(x, 373)))
+            screen.blit(baby, baby.get_rect(midbottom=(x, adult_y+3)))
         fish_count = min(4, game.total-len(game.fish))
         for index, x in enumerate((305, 365, 435, 495)[:fish_count]):
             fish = game.art.fish(('orange', 'blue', 'gold')[index%3], self.time+index)
             screen.blit(fish, fish.get_rect(center=(x, 300+round(math.sin(self.time*3+index)*4))))
         if self.ending_type == 4:
-            game.art.grounded(screen, game.chest_image, (548, 370))
+            game.art.grounded(screen, game.chest_image, (548, adult_y))
         lines = (
             ('작은 이글루에 조용한 저녁이 찾아왔습니다.', '빈자리를 기억한 펭귄은 다시 길을 나설 준비를 합니다.'),
             ('모은 물고기로 식탁을 채우자 긴 여행의 피로가 녹았습니다.', '다음에는 이 풍요를 함께 나눌 친구를 찾아야 합니다.'),
@@ -125,31 +141,13 @@ class EndingSequence:
         self._caption(game, screen, self.title, lines[self.ending_type-1])
 
     def _night_scene(self, game, screen):
-        # Reuse the painterly home landscape so the ending belongs to the same
-        # world instead of switching to flat vector mountains.
-        screen.blit(game.scene_backgrounds[5], (0, 0))
-        night = pg.Surface((800, 600), pg.SRCALPHA)
-        night.fill((5, 18, 48, 188))
-        screen.blit(night, (0, 0))
+        self._backdrop(game, screen, 2)
         for index in range(55):
             x = (index*149+37)%800
             y = 35+(index*71)%335
             radius = 1+(index%3==0)
             shade = 175+round(70*(math.sin(self.time*2+index)+1)/2)
             pg.draw.circle(screen, (shade, shade, 220), (x, y), radius)
-        aurora = pg.Surface((800, 380), pg.SRCALPHA)
-        for band, color in enumerate(((89, 240, 186, 85), (91, 190, 255, 65), (188, 126, 255, 50))):
-            points = []
-            for x in range(-20, 841, 20):
-                y = 100+band*35+round(math.sin(x*.012+self.time*.45+band)*34)
-                points.append((x, y))
-            pg.draw.lines(aurora, color, False, points, 18-band*3)
-        screen.blit(aurora, (0, 0))
-        snow_glow = pg.Surface((800, 170), pg.SRCALPHA)
-        for y in range(170):
-            alpha = max(0, 42-y//4)
-            pg.draw.line(snow_glow, (91, 171, 193, alpha), (0, y), (800, y))
-        screen.blit(snow_glow, (0, 385))
         group_size = 1+game.rescued
         positions = (335, 380, 420, 462)[:group_size]
         for index, x in enumerate(positions):

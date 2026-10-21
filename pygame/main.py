@@ -125,6 +125,17 @@ class Game:
             for name in ('cave-blue-interior-v1.png',
                          'cave-fracture-interior-v1.png')
         ]
+        ending_sheet = load_image('ending-backdrops-atlas-v1.png').convert()
+        ending_cell = (ending_sheet.get_width()//2,
+                       ending_sheet.get_height()//2)
+        self.ending_backgrounds = []
+        for row in range(2):
+            for column in range(2):
+                cell = ending_sheet.subsurface((column*ending_cell[0],
+                                                row*ending_cell[1],
+                                                *ending_cell))
+                self.ending_backgrounds.append(
+                    pg.transform.smoothscale(cell, (WIDTH, HEIGHT)).convert())
         self.feedback = InteractionEffects()
         self.combat = CombatMotion()
         self.companion = BabyCompanion()
