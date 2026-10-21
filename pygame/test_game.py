@@ -4,6 +4,7 @@ os.environ['SDL_VIDEODRIVER'] = 'dummy'
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
 import unittest
 import math
+import json
 import tempfile
 from pathlib import Path
 import pygame as pg
@@ -213,6 +214,29 @@ class AdventureChecks(unittest.TestCase):
         restored.player.midbottom = restored.checkpoints[2].midbottom
         restored.update_adventure(0)
         self.assertFalse(any(b['text']=='저장 완료' for b in restored.feedback.bursts))
+
+    def test_legacy_two_cave_save_maps_to_original_regions(self):
+        g = self.game
+        snapshot = g.progress.snapshot(g)
+        legacy_caves = []
+        for region in (2, 4):
+            state = next(entry for entry in snapshot['caves']
+                         if entry.get('region') == region)
+            state.pop('region')
+            legacy_caves.append(state)
+        legacy_caves[0]['found'] = True
+        legacy_caves[0]['treasure'] = True
+        legacy_caves[1]['found'] = True
+        progress_path = self.score_path.with_name('progress.json')
+        progress_path.write_text(json.dumps({**snapshot, 'caves': legacy_caves}),
+                                 encoding='utf-8')
+        restored = Game(score_path=self.score_path, progress_path=progress_path)
+        self.assertTrue(restored.progress.load_into(restored))
+        by_region = {cave['region']: cave for cave in restored.caves}
+        self.assertFalse(by_region[1]['found'])
+        self.assertTrue(by_region[2]['treasure'])
+        self.assertTrue(by_region[4]['found'])
+        self.assertFalse(by_region[4]['treasure'])
 
     def test_corrupt_checkpoint_is_backed_up_and_new_adventure_remains_available(self):
         path = self.score_path.with_name('progress.json')

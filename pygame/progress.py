@@ -54,6 +54,7 @@ class AdventureSave:
             'babies': [baby['rescued'] for baby in game.babies],
             'rescued': game.rescued,
             'caves': [{
+                'region': cave.get('region'),
                 'found': cave['found'],
                 'treasure': cave['treasure'],
                 'expedition': {
@@ -168,8 +169,25 @@ class AdventureSave:
             cave_states = data.get('caves', [])
             if not isinstance(cave_states, list) or len(cave_states) > len(game.caves):
                 raise ValueError('Invalid cave state')
-            for cave, saved in zip(game.caves, cave_states):
+            if not all(isinstance(saved, dict) for saved in cave_states):
+                raise ValueError('Invalid cave state')
+            caves_by_region = {cave.get('region'): cave for cave in game.caves}
+            if cave_states and all(type(saved.get('region')) is int for saved in cave_states):
+                cave_pairs = [(caves_by_region.get(saved['region']), saved)
+                              for saved in cave_states]
+                if any(cave is None for cave, _saved in cave_pairs):
+                    raise ValueError('Invalid cave region')
+            elif len(cave_states) == 2 and {2, 4} <= set(caves_by_region):
+                # Version-1 saves made before the third cavern stored only an
+                # ordered pair for regions 2 and 4. Preserve those exact caves.
+                cave_pairs = [(caves_by_region[region], saved)
+                              for region, saved in zip((2, 4), cave_states)]
+            else:
+                cave_pairs = list(zip(game.caves, cave_states))
+            for cave, saved in cave_pairs:
                 expedition = saved.get('expedition', {})
+                if not isinstance(expedition, dict):
+                    raise ValueError('Invalid cave expedition')
                 cave['found'] = bool(saved.get('found'))
                 cave['treasure'] = bool(saved.get('treasure'))
                 cave['expedition'] = {
