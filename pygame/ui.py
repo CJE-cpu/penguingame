@@ -121,7 +121,8 @@ class IceUI:
     def hud(self, game, screen, regions):
         self.panel(screen, (12, 12, 776, 62))
         region = min(len(regions)-1, game.player.centerx//game.region_width)
-        self.text(screen, regions[region][0], (28, 18), self.body)
+        self.text(screen, regions[region][0], (28, 18), self.body,
+                  max_width=180)
         self.text(screen, f'{region+1}/6 구역 · 저장 {game.checkpoint_index+1}', (28, 43), self.small, MUTED)
         # The expanded journey needs a persistent sense of distance without
         # adding another HUD panel. This slim bar tracks the whole overworld.
@@ -204,7 +205,8 @@ class IceUI:
         card = pg.Surface((298, 54), pg.SRCALPHA)
         self.panel(card, (0, 0, 290, 46), dark=True)
         self.text(card, f'{game.display_region+1}번째 탐험 · {regions[game.display_region][0]}',
-                  (145, 23), self.body, 'white', center=True)
+                  (145, 23), self.body, 'white', center=True,
+                  max_width=268)
         card.set_alpha(round(255*opacity))
         screen.blit(card, (490, 94-round(7*(1-opacity))))
 
@@ -218,7 +220,7 @@ class IceUI:
         self.text(card, data['title'], (276, 24), self.heading,
                   'white', center=True)
         self.text(card, data['hint'], (276, 53), self.small,
-                  (224, 247, 251), center=True)
+                  (224, 247, 251), center=True, max_width=510)
         card.set_alpha(round(255*opacity))
         screen.blit(card, (124, 157-round((1-opacity)*8)))
 
@@ -243,17 +245,19 @@ class IceUI:
             x, y = 54+(index%2)*352, 206+(index//2)*77
             self.panel(screen, (x,y,340,66))
             self.icon(screen, image, (x+30,y+32), (38,40))
-            self.text(screen, title, (x+60,y+10), self.body)
-            self.text(screen, detail, (x+60,y+38), self.small, MUTED)
-        self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료 확인', (400, 456), self.small, MUTED, center=True)
+            self.text(screen, title, (x+60,y+10), self.body,
+                      max_width=265)
+            self.text(screen, detail, (x+60,y+38), self.small, MUTED,
+                      max_width=265)
+        self.text(screen, '← → 이동   SPACE 점프   ↓ 활주   E 행동   TAB 일지   R 재시작   ESC 종료 확인', (400, 456), self.small, MUTED, center=True, max_width=690)
         for action, rect, label in self.intro_buttons(game):
             self.panel(screen, rect, dark=action != 'skip')
             self.text(screen, label, rect.center, self.body,
                       'white' if action != 'skip' else INK, center=True,
                       max_width=rect.width-14)
         if game.progress.error:
-            self.text(screen, game.progress.error, (400, 535), self.small, (194,91,74), center=True)
-        self.text(screen, 'F3 점수 기록 · F4 이름 변경(시작 전) · 설명창과 기록 창은 게임 정지', (400, 552), self.small, MUTED, center=True)
+            self.text(screen, game.progress.error, (400, 535), self.small, (194,91,74), center=True, max_width=690)
+        self.text(screen, 'F3 점수 기록 · F4 이름 변경(시작 전) · 설명창과 기록 창은 게임 정지', (400, 552), self.small, MUTED, center=True, max_width=690)
 
     def intro_buttons(self, game):
         choices = [('tutorial', 'ENTER 튜토리얼 보기'),
@@ -306,7 +310,8 @@ class IceUI:
             'M 음소거 · ← → 음량 · F6 / G 그래픽 품질'
         ]
         for i, txt in enumerate(hints):
-            self.text(screen, txt, (400, 190 + i*24), self.small, MUTED, center=True)
+            self.text(screen, txt, (400, 190 + i*24), self.small, MUTED,
+                      center=True, max_width=500)
         mute, quieter, louder = self.pause_audio_buttons()
         volume = round(game.audio.master_volume*100)
         self.text(screen, f'사운드 · 음량 {volume}%', (400, 256), self.body, BLUE, center=True)
@@ -351,7 +356,8 @@ class IceUI:
         self.icon(screen, game.igloo_image, (400, 174), (80, 58))
         self.text(screen, '모험을 마무리할까요?', (400, 224), self.heading, center=True)
         prospective = ENDING_LABELS[game.ending_result()-1]
-        self.text(screen, f'현재 결과: {prospective}', (400, 269), self.body, BLUE, center=True)
+        self.text(screen, f'현재 결과: {prospective}', (400, 269), self.body,
+                  BLUE, center=True, max_width=530)
         self.text(screen,
                   f'물고기 {game.total-len(game.fish)}/{game.total} · 친구 {game.rescued}/{len(game.babies)} · 동굴 보물 {sum(c["treasure"] for c in game.caves)}/{len(game.caves)}',
                   (400, 305), self.small, MUTED, center=True, max_width=530)
@@ -362,7 +368,7 @@ class IceUI:
             self.text(screen, label, rect.center, self.body,
                       'white' if selected else INK, center=True)
         self.text(screen, '← → 선택 · ENTER 확인 · ESC 계속 수집 · Y 엔딩 바로 보기',
-                  (400, 430), self.small, MUTED, center=True)
+                  (400, 430), self.small, MUTED, center=True, max_width=540)
 
     def restart_dialog(self, game, screen):
         self.veil(screen)
@@ -406,11 +412,11 @@ class IceUI:
                   center=True, max_width=490)
         self.text(screen, f'{game.score}점', (400, 305), self.title, BLUE, center=True)
         elapsed = max(0, round(game.time))
-        self.text(screen, f'완주 {elapsed//60:02}:{elapsed%60:02} · 시간 보너스 +{game.time_bonus}점', (400, 349), self.body, (177,95,36), center=True)
+        self.text(screen, f'완주 {elapsed//60:02}:{elapsed%60:02} · 시간 보너스 +{game.time_bonus}점', (400, 349), self.body, (177,95,36), center=True, max_width=490)
         collected = game.total-len(game.fish)
         self.text(screen, f'물고기 {collected}/{game.total} · 구조 {game.rescued}/{len(game.babies)} · 적 처치 {game.defeated}마리',
-                  (400, 376), self.small, MUTED, center=True)
-        self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,391),self.small,MUTED,center=True)
+                  (400, 376), self.small, MUTED, center=True, max_width=490)
+        self.text(screen, f'일지 {sum(j["found"] for j in game.content.journals)}/6 · 결정 {sum(c["found"] for c in game.content.crystals)}/6 · 의뢰 {sum(game.content.research_claimed)}/3 · 집 {game.content.upgrades}/3', (400,391),self.small,MUTED,center=True,max_width=490)
         self.panel(screen, (220, 407, 360, 45), dark=True)
         self.text(screen, 'ENTER 엔딩 보기 · F3 기록 · R 새 모험', (400, 429), self.body, 'white', center=True)
 

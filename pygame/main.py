@@ -1687,9 +1687,9 @@ class Game:
             self.ui.transition(self, screen, REGIONS)
             self.content.draw_hud(self,screen)
         if self.region_banner > 0 and not (self.boss.active or self.skua_boss.active):
-            label = self.region_hint_labels[self.display_region]
             self.ui.panel(screen,(490,149,298,31))
-            screen.blit(label,(499,154))
+            self.ui.text(screen, REGION_HINTS[self.display_region], (499,154),
+                         self.ui.small, max_width=280)
         if self.won and self.finish_open:
             self.ui.finish(self, screen)
         if self.content.book_open:

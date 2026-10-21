@@ -108,7 +108,7 @@ export default function Home() {
                 </span>
                 <div>
                   <strong>혼자 떠나, 함께 돌아와요.</strong>
-                  <span>물고기 30마리 · 친구 3마리 · 하나의 모험</span>
+                  <span>물고기 30마리 · 친구 3마리 · 네 가지 엔딩</span>
                 </div>
               </div>
             </div>
@@ -221,6 +221,9 @@ export default function Home() {
                 </span>
                 <span>
                   <Heart size={17} /> 세 친구의 구조 이야기
+                </span>
+                <span>
+                  <Sparkles size={17} /> 수집 결과에 따른 네 가지 엔딩
                 </span>
               </div>
               <Link to="/collection" className="text-link">

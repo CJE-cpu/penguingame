@@ -34,6 +34,14 @@ const chapters = [
       "로컬 이름별 기록을 추가하고, 웹에서는 로그인한 계정에 기록을 가져와 추이와 순위를 확인할 수 있게 만들었습니다.",
     image: "preview-ocean.png",
   },
+  {
+    number: "04",
+    title: "수집한 만큼 달라지는 마지막 장면.",
+    before: "모험을 끝내도 같은 배경과 짧은 문장만 보여 결말의 차이가 작았어요.",
+    after:
+      "새벽 귀환, 노을 만찬, 오로라 재회, 고대 얼음 성소로 네 엔딩을 나누고 동료·물고기·보물을 장면에 반영했습니다.",
+    image: "ending-backdrops-atlas-v1.png",
+  },
 ];
 export default function Story() {
   return (

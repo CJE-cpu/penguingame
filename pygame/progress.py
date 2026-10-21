@@ -205,7 +205,10 @@ class AdventureSave:
             game.content.ocean_fish = self._remaining(game.content.ocean_fish,
                                                        content.get('ocean_fish'))
             game.started = True
-            game.coach.enabled = True
+            # Continuing resumes the saved expedition immediately. Tutorial
+            # coaching is an explicit new-game choice and must not reopen here.
+            game.coach.enabled = False
+            game.coach.modal = None
             game.tutorial = None
             game.spawn = game.checkpoint_spawn(checkpoint)
             game.player.topleft = game.spawn
