@@ -589,7 +589,10 @@ class AdventureChecks(unittest.TestCase):
             self.assertIsNone(g.cave_expedition)
             self.assertEqual(g.score,score+250)
             self.assertEqual(g.content.wallet,wallet+3)
-            self.assertEqual(g.player.bottom,min(g.region_ledges[2 if index==0 else 4],key=lambda p:p.y).top)
+            return_platform = min(g.region_ledges[2 if index==0 else 4],key=lambda p:p.y)
+            self.assertEqual(g.player.bottom, return_platform.top)
+            self.assertGreaterEqual(g.player.centerx, return_platform.left+60)
+            self.assertLessEqual(g.player.centerx, return_platform.right-60)
             cave = CaveExpedition(g,index)
             g.cave_expedition = cave
             cave.player.midbottom = cave.chest.midbottom
@@ -1041,7 +1044,7 @@ class AdventureChecks(unittest.TestCase):
         self.assertGreater(g.feedback.player_image(g).get_height(),56)
         g.effects = {'grow':0,'speed':8,'shield':0}
         g.velocity_x = 270
-        g.feedback.update(0.05,g)
+        g.feedback.update(0.08,g)
         self.assertTrue(g.feedback.trails)
         g.feedback.draw_aura(g,self.screen)
         g.feedback.draw(g,self.screen)
@@ -1062,10 +1065,24 @@ class AdventureChecks(unittest.TestCase):
         for _ in range(30):
             g.feedback.update(0.05, g)
         self.assertLessEqual(len(g.feedback.trails), g.feedback.MAX_TRAILS)
+        self.assertTrue(all(len(trail) == 2 for trail in g.feedback.trails))
         g.feedback.draw_aura(g, self.screen)
-        ghost_count = len(g.feedback.ghost_cache)
         g.feedback.draw_aura(g, self.screen)
-        self.assertEqual(len(g.feedback.ghost_cache), ghost_count)
+
+    def test_grow_potions_stay_out_of_skua_boss_region(self):
+        g = self.game
+        region = 4
+        start = region*g.region_width
+        end = start+g.region_width
+        self.assertFalse(any(kind == 'grow' and start <= rect.centerx < end
+                             for kind, rect in g.items))
+
+    def test_region_platforms_have_distinct_surface_details(self):
+        g = self.game
+        textures = [g.platform_texture(kind, (180, 50), ground=True)
+                    for kind in ('snow', 'ice', 'cave', 'fracture', 'sunset')]
+        pixels = [pg.image.tobytes(texture, 'RGB') for texture in textures]
+        self.assertEqual(len(set(pixels)), len(pixels))
 
     def test_potions_leave_reaction_space_from_every_enemy_patrol(self):
         g = self.game
@@ -1345,6 +1362,9 @@ class AdventureChecks(unittest.TestCase):
                 break
         g.handle_key(pg.K_e)
         self.assertTrue(t.finished)
+        self.assertEqual(len(g.coach.modal[1]), 4)
+        self.assertTrue(any('X' in line for line in g.coach.modal[1]))
+        self.assertTrue(any('체크포인트' in line for line in g.coach.modal[1]))
         g.handle_key(pg.K_RETURN)
         self.assertIsNone(g.tutorial)
         self.assertTrue(g.started)
@@ -1798,6 +1818,9 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(boss.rect.contains(projectile))
         self.assertLess(body.width, projectile.width)
         self.assertLess(body.height, projectile.height)
+        near_miss = pg.Rect(boss.rect.left, boss.rect.centery-10, 20, 30)
+        self.assertTrue(near_miss.colliderect(boss.rect))
+        self.assertFalse(near_miss.colliderect(body))
 
     def test_skua_contact_only_hurts_during_active_attack_states(self):
         boss = self.game.skua_boss

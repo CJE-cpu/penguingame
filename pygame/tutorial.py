@@ -31,20 +31,26 @@ class Coach:
             return
         title, lines = self.modal
         game.ui.veil(screen)
-        game.ui.panel(screen,(80,163,640,272))
-        game.ui.text(screen,'모험 일시정지',(400,192),game.ui.small,center=True)
-        game.ui.text(screen,title,(400,232),game.ui.heading,center=True)
+        game.ui.panel(screen,(80,135,640,330))
+        game.ui.text(screen,'모험 일시정지',(400,164),game.ui.small,center=True)
+        game.ui.text(screen,title,(400,204),game.ui.heading,center=True)
         for index,line in enumerate(lines):
-            game.ui.text(screen,line,(400,282+index*29),game.ui.body,center=True)
-        game.ui.panel(screen,(221,377,358,40),dark=True)
-        game.ui.text(screen,'ENTER / SPACE로 확인 후 연습',(400,397),game.ui.body,'white',center=True)
+            game.ui.text(screen,line,(400,250+index*31),game.ui.body,center=True,
+                         max_width=570)
+        game.ui.panel(screen,(221,405,358,40),dark=True)
+        game.ui.text(screen,'ENTER / SPACE로 확인 후 연습',(400,425),game.ui.body,'white',center=True)
 
 
 class TutorialStage:
     STEPS = ['move','jump','slide','interact','book','swim']
-    TASKS = ['오른쪽 물고기까지 걸어가세요.', '왼쪽 발판 위 물고기를 향해 점프하세요.',
-             '↓를 누르며 낮은 얼음 통로를 지나세요.', '친구 옆에서 E → 오른쪽 이글루로 데려가기',
-             'TAB으로 연습 일지를 열고 다시 닫으세요.', '오른쪽 구멍에서 E → 수영해 물고기 획득 → 출구 E']
+    TASKS = [
+        '오른쪽 물고기까지 걸어가세요.  ← → 또는 A D',
+        '왼쪽 발판 위 물고기를 향해 점프하세요.  SPACE / ↑ / W',
+        '↓ 또는 S를 누른 채 낮은 얼음 통로를 통과하세요.',
+        '아기 펭귄 곁에서 E, 오른쪽 이글루까지 데려가세요.',
+        'TAB으로 탐험 일지를 열고 방향키로 읽은 뒤 TAB으로 닫으세요.',
+        '구멍에서 E → 물고기 획득 → 시작 지점에서 E로 귀환하세요.'
+    ]
 
     def __init__(self, game):
         self.step = 0
@@ -96,7 +102,12 @@ class TutorialStage:
                 elif self.diving and self.swim_fish and self.swimmer.distance_to((100,170))<85:
                     self.diving = False
                     self.finished = True
-                    game.coach.modal = ('튜토리얼 완료!', ['기본 조작을 모두 연습했어요. 이제 실제 모험을 시작합니다.', '처음 만나는 도전과 집 꾸미기도 설명창으로 안내합니다.'])
+                    game.coach.modal = ('튜토리얼 완료 · 실전 안내!', [
+                        '일반 적은 위에서 밟고, 보스가 던진 물체는 X로 반격하세요.',
+                        '물약은 성장·가속·보호 효과가 있으며 남은 시간은 왼쪽에 표시됩니다.',
+                        '체크포인트는 진행을 저장하고, 목숨을 모두 잃으면 게임 오버입니다.',
+                        '마지막 이글루에서 E를 누르면 수집 결과에 맞는 엔딩을 선택합니다.'
+                    ])
 
     def update(self, game, dt, direction, jump, slide, vertical, jump_held=None):
         if game.content.book_open:

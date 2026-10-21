@@ -351,9 +351,10 @@ class SkuaBoss:
         return False
 
     def body_hitbox(self):
-        """Smaller contact area matching the bird's torso and inner wings."""
-        box = pg.Rect(0, 0, 104, 54)
-        box.center = (self.rect.centerx, self.rect.centery+5)
+        """Contact follows the torso, excluding transparent wing span."""
+        size = (74, 38) if self.state == 'dive' else (70, 34)
+        box = pg.Rect(0, 0, *size)
+        box.center = (self.rect.centerx, self.rect.centery+9)
         return box
 
     def can_damage_player(self):

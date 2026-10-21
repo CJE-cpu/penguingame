@@ -136,7 +136,7 @@ class CaveExpedition:
     def leave(self, game, shortcut):
         if shortcut:
             platform = min(game.region_ledges[2 if self.index==0 else 4],key=lambda p:p.y)
-            game.player.midbottom = (platform.left+28,platform.top)
+            game.player.midbottom = (platform.centerx,platform.top)
             if not self.state['cleared']:
                 self.state['cleared'] = True
                 game.score += 150
@@ -145,7 +145,16 @@ class CaveExpedition:
             else:
                 game.content.say('개방한 지름길로 돌아왔어요.')
         else:
-            game.player.midbottom = self.return_position
+            region = 2 if self.index == 0 else 4
+            entrance = game.caves[self.index]['rect']
+            supports = [ground for ground in game.region_grounds[region]
+                        if ground.left <= entrance.centerx <= ground.right]
+            platform = min(supports, key=lambda ground: abs(ground.top-entrance.bottom))
+            # Stay within interaction range for an immediate re-entry while
+            # leaving ample ground between the player and the outer cliff.
+            safe_x = max(platform.left+90,
+                         min(platform.right-90, entrance.left-10))
+            game.player.midbottom = (safe_x, platform.top)
             game.content.say('동굴 입구로 귀환! 봉인석과 보물 기록은 유지됩니다.')
         game.x,game.y = map(float,game.player.topleft)
         game.velocity_x = game.velocity_y = 0

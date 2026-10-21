@@ -5,7 +5,7 @@ import pygame as pg
 
 class InteractionEffects:
     MAX_BURSTS = 8
-    MAX_TRAILS = 5
+    MAX_TRAILS = 4
 
     def __init__(self):
         self.bursts = []
@@ -16,7 +16,6 @@ class InteractionEffects:
         self.player_scale_cache = {}
         self.label_cache = {}
         self.icon_cache = {}
-        self.ghost_cache = {}
 
     def reset(self):
         self.bursts.clear()
@@ -35,15 +34,14 @@ class InteractionEffects:
         for burst in self.bursts:
             burst['life'] -= dt
         self.bursts = [burst for burst in self.bursts if burst['life']>0]
-        self.trails = [(pos,image,life-dt) for pos,image,life in self.trails if life>dt]
+        self.trails = [(pos,life-dt) for pos,life in self.trails if life>dt]
         if game is not None:
             target = 1.5 if game.effects['grow'] else 1.0
             self.size_scale += (target-self.size_scale)*(1-math.exp(-11*dt))
             self.trail_clock += dt
-            interval = 0.075 if getattr(game, 'quality', 'high') == 'performance' else 0.05
+            interval = 0.12 if getattr(game, 'quality', 'high') == 'performance' else 0.08
             if game.effects['speed'] and abs(game.velocity_x)>20 and self.trail_clock>=interval:
-                image = self.player_image(game)
-                self.trails.append((game.player.midbottom,image,0.3))
+                self.trails.append((game.player.midbottom,0.26))
                 self.trails = self.trails[-self.MAX_TRAILS:]
                 self.trail_clock %= interval
 
@@ -96,18 +94,6 @@ class InteractionEffects:
             self.icon_cache[key] = icon
         return icon
 
-    def _ghost(self, image, life):
-        alpha_step = max(1, min(4, round(life / 0.3 * 4)))
-        key = (id(image), alpha_step)
-        ghost = self.ghost_cache.get(key)
-        if ghost is None:
-            ghost = image.copy()
-            ghost.set_alpha(round(125 * alpha_step / 4))
-            self.ghost_cache[key] = ghost
-            if len(self.ghost_cache) > 64:
-                self.ghost_cache.clear()
-        return ghost
-
     def draw(self, game, screen):
         if not self.bursts:
             return
@@ -140,15 +126,22 @@ class InteractionEffects:
         screen.blit(layer,(0,0))
 
     def draw_aura(self, game, screen):
-        for pos,image,life in self.trails:
-            ghost = self._ghost(image, life)
-            screen.blit(ghost,ghost.get_rect(midbottom=(round(pos[0]-game.camera_x),pos[1])))
         active = [k for k,v in game.effects.items() if v>0]
-        if not active and game.grow_guard <= 0:
+        if not self.trails and not active and game.grow_guard <= 0:
             return
         colors = {'grow':(130,238,152), 'speed':(255,224,111), 'shield':(123,211,255)}
         layer = self.layer
         layer.fill((0, 0, 0, 0))
+        for pos, life in self.trails:
+            alpha = round(150*life/0.26)
+            x = round(pos[0]-game.camera_x)
+            y = pos[1]-18
+            direction = -1 if game.facing_right else 1
+            length = 18+round(22*(1-life/0.26))
+            pg.draw.line(layer, (255,226,125,alpha), (x,y),
+                         (x+direction*length,y), 3)
+            pg.draw.line(layer, (207,244,255,alpha//2), (x,y+10),
+                         (x+direction*(length-5),y+10), 2)
         cx = round(game.player.centerx-game.camera_x)
         cy = game.player.centery
         if game.grow_guard>0:

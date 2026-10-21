@@ -309,7 +309,7 @@ class Game:
         # Five spaced pickups; control-changing potions sit on optional upper paths.
         placements = [('grow',0,False,0,120), ('speed',1,True,0,95),
                       ('shield',2,True,-1,105), ('speed',3,True,-1,100),
-                      ('grow',4,False,0,120)]
+                      ('grow',5,True,1,90)]
         self.checkpoints = [pg.Rect(grounds[0].left + 30, grounds[0].top-60, 95, 60)
                             for grounds in self.region_grounds]
         self.checkpoint_index = 0
@@ -861,9 +861,15 @@ class Game:
             pg.draw.line(surface, (*shadow, 70),
                          (4, min(visual_height-3, inner_top+11)),
                          (width-5, min(visual_height-3, inner_top+9)), 1)
-            cap_points = [(0, 0), (width, 0), (width, dip-2),
-                          (width*3//4, dip), (width//2, dip-1),
-                          (width//4, dip+1), (0, dip-2)]
+            profiles = {
+                'snow': (0, 2, 1, 3), 'ice': (1, 4, 0, 2),
+                'cave': (3, 1, 4, 2), 'fracture': (2, 5, 1, 4),
+                'crumble': (4, 2, 5, 1), 'sunset': (1, 3, 2, 4),
+            }
+            q1, mid, q3, end = profiles[kind]
+            cap_points = [(0, 0), (width, 0), (width, dip-2+end),
+                          (width*3//4, dip+q3), (width//2, dip-1+mid),
+                          (width//4, dip+q1), (0, dip-2+end)]
             pg.draw.polygon(surface, cap, cap_points)
             pg.draw.lines(surface, (255, 255, 255, 190), False,
                           [(2, 1), (width//2, 2), (width-3, 1)], 2)
@@ -894,6 +900,36 @@ class Game:
                 pg.draw.lines(surface, (*shadow, 135), False,
                               [(seam_x, 12), (seam_x-5, 18),
                                (seam_x+2, seam_bottom)], 1)
+            # Distinct geology makes each region readable at a glance while
+            # preserving the solid collision-aligned silhouette.
+            detail_y = min(visual_height-5, dip+12)
+            if kind == 'snow':
+                for x in range(18, width, 42):
+                    pg.draw.arc(surface, (255,255,255),
+                                (x-11, 2, 22, 9), math.pi, math.tau, 2)
+            elif kind == 'ice':
+                for x in range(24, width, 55):
+                    pg.draw.lines(surface, cap, False,
+                                  [(x, detail_y+8), (x+9, detail_y-3),
+                                   (x+18, detail_y+7)], 2)
+            elif kind == 'cave':
+                for y in range(detail_y, visual_height-4, 11):
+                    offset = 12 if (y//11)%2 else 0
+                    pg.draw.line(surface, shadow, (4, y), (width-5, y), 1)
+                    for x in range(offset+28, width, 62):
+                        pg.draw.line(surface, shadow, (x, y),
+                                     (x-4, min(visual_height-3, y+7)), 1)
+            elif kind in ('fracture', 'crumble'):
+                crack_color = (108,91,169) if kind == 'crumble' else shadow
+                for x in range(32, width, 74):
+                    pg.draw.lines(surface, crack_color, False,
+                                  [(x, 4), (x-6, detail_y),
+                                   (x+4, min(visual_height-3, detail_y+10))], 2)
+            elif kind == 'sunset':
+                pg.draw.line(surface, (255,218,207), (5, detail_y),
+                             (width-6, max(3, detail_y-2)), 2)
+                for x in range(26, width, 64):
+                    pg.draw.circle(surface, cap, (x, detail_y+9), 3)
             self.platform_textures[key] = surface
         return self.platform_textures[key]
     def draw_background(self, screen):
