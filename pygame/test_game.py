@@ -814,6 +814,10 @@ class AdventureChecks(unittest.TestCase):
         g.enemies = []
         g.items = []
         g.babies = []
+        # This check measures terrain traversal independently from encounter
+        # gates; boss confinement deliberately blocks the far side in play.
+        g.boss.defeated = True
+        g.skua_boss.defeated = True
         g.fish = [('orange', pg.Rect(-1000, 0, 36, 24))]
         for region in range(len(REGIONS)):
             nodes = g.region_grounds[region] + g.region_ledges[region]
@@ -1256,7 +1260,7 @@ class AdventureChecks(unittest.TestCase):
     def test_research_rewards_and_crystal_persistence(self):
         g = self.game
         c = g.content
-        self.assertEqual(WORLD_WIDTH,10800)
+        self.assertEqual(WORLD_WIDTH,12600)
         for crystal in c.crystals:
             r = crystal['rect']
             self.assertFalse(any(r.colliderect(fish) for kind,fish in g.fish))

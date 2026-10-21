@@ -25,7 +25,10 @@ from boss import SealBoss, SkuaBoss
 
 WIDTH, HEIGHT = 800, 600
 NORMAL_PLAYER_SIZE = (40, 52)
-REGION_WIDTH = 1800
+# Keep every biome spacious enough for exploration and combat beats to breathe.
+# MAP_LAYOUTS use a 1,200 px authoring grid, so changing this value expands all
+# terrain and terrain-anchored objects together without introducing seams.
+REGION_WIDTH = 2100
 MAP_SCALE = REGION_WIDTH / 1200
 REGIONS = [('눈 덮인 해안', (109, 192, 226)), ('미끄러운 빙하', (80, 211, 239)),
            ('얼음 동굴', (106, 129, 179)), ('눈보라 고원', (159, 183, 202)),
@@ -331,7 +334,16 @@ class Game:
         self.sanctuary_seen = False
         self.max_score += len(self.babies) * 100 + len(self.caves) * 100
         self.content = AdventureContent(self)
-        boss_arena = pg.Rect(2*REGION_WIDTH+800, 350, 650, 200)
+        # Fit the seal arena into the open floor between the climbing route
+        # and the exit ledges. Deriving it from terrain keeps the lane clear
+        # when the world scale changes.
+        cave_offset = 2*REGION_WIDTH
+        cave_ledges = self.region_ledges[2]
+        left_route_edge = max(p.right for p in cave_ledges if p.left < cave_offset+REGION_WIDTH//2)
+        exit_route_edge = min(p.left for p in cave_ledges if p.left > cave_offset+REGION_WIDTH//2)
+        boss_left = left_route_edge+28
+        boss_right = exit_route_edge-28
+        boss_arena = pg.Rect(boss_left, 350, boss_right-boss_left, 200)
         self.boss = SealBoss(boss_arena, self.region_grounds[2][0].top,
                              self.boss_images)
         moved = 0
@@ -341,8 +353,12 @@ class Game:
                 moved += 1
         self.max_score += self.boss.SCORE
         skua_ground = self.region_grounds[4][-1]
+        skua_right_ledges = [p for p in self.region_ledges[4]
+                             if p.left > skua_ground.left]
+        skua_right = min(p.left for p in skua_right_ledges)-28
         skua_arena = pg.Rect(skua_ground.left+30, 330,
-                             skua_ground.width-300, skua_ground.top-330)
+                             skua_right-skua_ground.left-30,
+                             skua_ground.top-330)
         self.skua_boss = SkuaBoss(skua_arena, skua_ground.top,
                                   self.skua_boss_images)
         moved = 0
