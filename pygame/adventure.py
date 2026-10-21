@@ -506,10 +506,9 @@ class AdventureContent:
             color = (255, 224, 116) if beacon['active'] else (75, 151, 178)
             glow = 8+round(math.sin(game.time*4+index)*3)
             pg.draw.circle(screen, (*color, 80), rect.center, 18+glow, 2)
-            pg.draw.polygon(screen, color,
-                            [(rect.centerx,rect.top), (rect.right,rect.centery),
-                             (rect.centerx,rect.bottom), (rect.left,rect.centery)])
-            pg.draw.circle(screen, (231, 253, 255), rect.center, 5)
+            image = game.art.ocean_artifacts[
+                'beacon-on' if beacon['active'] else 'beacon-off']
+            screen.blit(image, image.get_rect(center=rect.center))
         # Animated flow marks expose the current tunnels before the player
         # enters them, turning movement into a readable navigation challenge.
         for zone_index, zone in enumerate((pg.Rect(360,150,250,330),
@@ -530,13 +529,11 @@ class AdventureContent:
         if not self.ocean_relic_found:
             unlocked = all(b['active'] for b in self.ocean_beacons)
             color = (255, 224, 123) if unlocked else (55, 103, 133)
-            pg.draw.ellipse(screen, color, relic)
-            pg.draw.arc(screen, (218, 247, 249), relic.inflate(-8,-8),
-                        0, math.tau, 2)
-            for index, beacon in enumerate(self.ocean_beacons):
-                if not beacon['active']:
-                    pg.draw.circle(screen, (36, 75, 103),
-                                   (relic.left+12+index*10,relic.centery), 3)
+            pg.draw.circle(screen, (*color, 70), relic.center,
+                           42+round(math.sin(game.time*3)*3), 2)
+            image = game.art.ocean_artifacts[
+                'relic-open' if unlocked else 'relic-locked']
+            screen.blit(image, image.get_rect(center=relic.center))
         bubble_count = {'performance':10, 'balanced':16, 'high':24}[game.quality]
         for i in range(bubble_count):
             x = round((i*83+math.sin(game.time+i)*9)%1800-camera)

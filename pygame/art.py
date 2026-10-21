@@ -128,6 +128,17 @@ class WorldArt:
         fish = atlas_cells(data/'fish-motion-atlas-v2.png',4,3)
         self.fishes = {kind:fit_cycle(fish[row*4:row*4+4],(36,24),padding=0,anchor='center')
                        for row,kind in enumerate(('orange','blue','gold'))}
+        artifacts = atlas_cells(data/'ocean-artifacts-atlas-v1.png', 2, 2)
+        self.ocean_artifacts = {
+            'beacon-off': fit_cycle([artifacts[0]], (66, 74), padding=1,
+                                    anchor='center')[0],
+            'beacon-on': fit_cycle([artifacts[1]], (66, 74), padding=1,
+                                   anchor='center')[0],
+            'relic-locked': fit_cycle([artifacts[2]], (78, 78), padding=1,
+                                      anchor='center')[0],
+            'relic-open': fit_cycle([artifacts[3]], (78, 78), padding=1,
+                                    anchor='center')[0],
+        }
 
     def fish(self, kind, clock):
         return self.fishes[kind][int(clock/0.2)%4]

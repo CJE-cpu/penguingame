@@ -1577,6 +1577,18 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(content.ocean_relic_found)
         self.assertEqual(g.score, starting_score+225)
 
+    def test_ocean_artifacts_use_distinct_transparent_sprites(self):
+        artifacts = self.game.art.ocean_artifacts
+        self.assertEqual(set(artifacts), {
+            'beacon-off', 'beacon-on', 'relic-locked', 'relic-open'})
+        for image in artifacts.values():
+            self.assertTrue(image.get_flags() & pg.SRCALPHA)
+            self.assertGreater(image.get_bounding_rect(128).width, 20)
+        self.assertNotEqual(pg.image.tobytes(artifacts['beacon-off'], 'RGBA'),
+                            pg.image.tobytes(artifacts['beacon-on'], 'RGBA'))
+        self.assertNotEqual(pg.image.tobytes(artifacts['relic-locked'], 'RGBA'),
+                            pg.image.tobytes(artifacts['relic-open'], 'RGBA'))
+
     def test_journals_shortcut_home_and_escape(self):
         g = self.game
         c = g.content
