@@ -58,10 +58,17 @@ class AdventureContent:
         self.ocean_fish = [(kind, pg.Rect(x,y,36,24)) for kind,x,y in
                            [('orange',300,230),('blue',550,390),('orange',800,220),
                             ('gold',1040,450),('blue',1300,280),('gold',1540,400)]]
-        self.ocean_beacons = [{'rect': pg.Rect(x, y, 34, 54), 'active': False}
-                              for x, y in ((430, 420), (930, 165), (1450, 365))]
-        self.ocean_relic = pg.Rect(1660, 455, 44, 42)
-        self.ocean_relic_found = False
+        beacon_positions = ((430, 420), (930, 165), (1450, 365))
+        self.dive_states = [
+            {
+                'beacons': [{'rect': pg.Rect(x, y, 34, 54), 'active': False}
+                            for x, y in beacon_positions],
+                'relic': pg.Rect(relic_x, relic_y, 44, 42),
+                'relic_found': False,
+            }
+            for relic_x, relic_y in ((1660, 455), (140, 180))
+        ]
+        self.active_dive_index = 0
         self.escape_active = False
         self.escape_cleared = False
         self.escape_left = ESCAPE_DURATION
@@ -104,12 +111,14 @@ class AdventureContent:
             self.quests[2] = True
             self.say('길 안내 깃발을 세웠어요! 마지막 친구에게 가세요.')
             return
-        dive_site = next((site for site in self.dive_sites
-                          if self.nearby(game, site['rect'], 65)), None)
-        if dive_site:
+        dive_match = next(((index, site) for index, site in enumerate(self.dive_sites)
+                           if self.nearby(game, site['rect'], 65)), None)
+        if dive_match:
+            dive_index, dive_site = dive_match
             if game.carried_baby is not None:
                 self.say('친구를 먼저 이글루에 데려다 주세요.')
             else:
+                self.active_dive_index = dive_index
                 self.diving = True
                 self.oxygen = OXYGEN_DURATION
                 self.swimmer.update(dive_site['ocean_start'])
@@ -120,6 +129,7 @@ class AdventureContent:
                 self.say(f'잠수! 방향키로 수영 · {self.ocean_exit_direction()} 구멍에서 E로 나가기')
                 game.coach.explain('swim')
             return
+
         if any(self.nearby(game,checkpoint) for checkpoint in game.checkpoints):
             progress = self.research_progress()
             for i,(name,goal,points,food) in enumerate(RESEARCH_TASKS):
@@ -158,6 +168,22 @@ class AdventureContent:
                 game.cave_expedition = CaveExpedition(game,index)
                 cave['found'] = True
                 return
+
+    @property
+    def ocean_beacons(self):
+        return self.dive_states[self.active_dive_index]['beacons']
+
+    @property
+    def ocean_relic(self):
+        return self.dive_states[self.active_dive_index]['relic']
+
+    @property
+    def ocean_relic_found(self):
+        return self.dive_states[self.active_dive_index]['relic_found']
+
+    @ocean_relic_found.setter
+    def ocean_relic_found(self, value):
+        self.dive_states[self.active_dive_index]['relic_found'] = bool(value)
 
     def leave_ocean(self, game):
         self.diving = False

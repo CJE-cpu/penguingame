@@ -1695,6 +1695,24 @@ class AdventureChecks(unittest.TestCase):
         self.assertTrue(content.ocean_relic_found)
         self.assertEqual(g.score, starting_score+225)
 
+    def test_dive_treasures_are_tracked_per_entrance(self):
+        g = self.game
+        content = g.content
+        content.active_dive_index = 0
+        for beacon in content.ocean_beacons:
+            beacon['active'] = True
+        content.swimmer.update(content.ocean_relic.center)
+        content.swim(g, 0, 0, 0)
+        self.assertTrue(content.ocean_relic_found)
+
+        content.active_dive_index = 1
+        self.assertFalse(content.ocean_relic_found)
+        self.assertFalse(any(beacon['active'] for beacon in content.ocean_beacons))
+        self.assertLess(content.ocean_relic.centerx, 900)
+
+        content.active_dive_index = 0
+        self.assertTrue(content.ocean_relic_found)
+
     def test_ocean_artifacts_use_distinct_transparent_sprites(self):
         artifacts = self.game.art.ocean_artifacts
         self.assertEqual(set(artifacts), {

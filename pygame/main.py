@@ -397,7 +397,7 @@ class Game:
                 moved += 1
         self.max_score += self.skua_boss.SCORE
         self.max_score += len(REGIONS) * 75  # Complete every region's fish set.
-        self.max_score += 6*60 + 170 + 200 + 6*40 + 500 + 225
+        self.max_score += 6*60 + 170 + 200 + 6*40 + 500 + 375
         self.max_score += 300 + 2*(30+50) + TIME_BONUS_MAX # Caverns, guardians and time bonus.
         self.arrange_potions(placements)
         self.life_items = []

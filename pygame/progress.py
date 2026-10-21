@@ -80,6 +80,10 @@ class AdventureSave:
                 'ocean_fish': [list(self._rect_key(entry)) for entry in game.content.ocean_fish],
                 'ocean_beacons': [entry['active'] for entry in game.content.ocean_beacons],
                 'ocean_relic': game.content.ocean_relic_found,
+                'dive_states': [{
+                    'beacons': [entry['active'] for entry in state['beacons']],
+                    'relic_found': state['relic_found'],
+                } for state in game.content.dive_states],
             },
         }
 
@@ -215,11 +219,29 @@ class AdventureSave:
                 else:
                     target[:] = [bool(value) for value in values]
             game.content.escape_cleared = bool(content.get('escape_cleared'))
-            beacon_states = content.get('ocean_beacons')
-            if isinstance(beacon_states, list) and len(beacon_states) == len(game.content.ocean_beacons):
-                for beacon, active in zip(game.content.ocean_beacons, beacon_states):
-                    beacon['active'] = bool(active)
-            game.content.ocean_relic_found = bool(content.get('ocean_relic', False))
+            dive_states = content.get('dive_states')
+            if (isinstance(dive_states, list)
+                    and len(dive_states) == len(game.content.dive_states)):
+                for state, saved_state in zip(game.content.dive_states, dive_states):
+                    if not isinstance(saved_state, dict):
+                        raise ValueError('Invalid dive state')
+                    beacon_states = saved_state.get('beacons')
+                    if (not isinstance(beacon_states, list)
+                            or len(beacon_states) != len(state['beacons'])):
+                        raise ValueError('Invalid dive beacon state')
+                    for beacon, active in zip(state['beacons'], beacon_states):
+                        beacon['active'] = bool(active)
+                    state['relic_found'] = bool(saved_state.get('relic_found'))
+            else:
+                # Older saves had one shared dive record. It belonged to the
+                # first entrance; keep that progress without completing dive 2.
+                first_state = game.content.dive_states[0]
+                beacon_states = content.get('ocean_beacons')
+                if (isinstance(beacon_states, list)
+                        and len(beacon_states) == len(first_state['beacons'])):
+                    for beacon, active in zip(first_state['beacons'], beacon_states):
+                        beacon['active'] = bool(active)
+                first_state['relic_found'] = bool(content.get('ocean_relic', False))
             game.content.ocean_fish = self._remaining(game.content.ocean_fish,
                                                        content.get('ocean_fish'))
             game.started = True
